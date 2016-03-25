@@ -1,0 +1,350 @@
+<!doctype html>
+<html><head>
+<title>Puzzle Master</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">unable to read any track</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">no errors, but copy just grinds</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">modified address epilogue (AD BB EB) modified data epilogue (ED BB EB)</p>
+    <p class="seen">Disk Fixer</p>
+    <p>["O" -> "Input/Output Control"] set Address Epilogue to "AD BB EB" set Data Epilogue to "ED BB EB" all tracks readable T00 -> looks like a DOS 3.3 RWTS T00-T02 -> looks like a full DOS 3.3 T01,S09 -> startup program is "PMM" T11 -> DOS 3.3 disk catalog</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">Why didn't my EDD copy work?</p>
+    <p class="seen">I don't know. Possibly a nibble check during boot?</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. AUTOTRACE to capture RWTS</p>
+    <p class="seen">2. Advanced Demuffin to convert disk to a standard format</p>
+    <p class="seen">3. Find that nibble check(?)</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Attempt To Use The Original Disk As A Weapon Against Itself</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+      <code>]BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>["5" to switch to slot 5]</code>
+      <code>["R" to load a new RWTS module]
+  --> At $B8, load "RWTS" from drive 1</code>
+      <code>["6" to switch to slot 6]</code>
+      <code>["C" to convert disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:...................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:...................................
+SC1:...................................
+SC2:...................................
+SC3:...................................
+SC4:...................................
+SC5:...................................
+SC6:...................................
+SC7:...................................
+SC8:...................................
+SC9:...................................
+SCA:...................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:...................................
+=======================================
+16SC $00,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+]CATALOG,S6,D2</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+002 FREE</code>
+      <code> B 025 PMM
+ B 028 B.PUZZLER
+ B 021 B.PLOAD
+ B 003 RA
+ B 033 RB
+ B 002 SR
+ B 003 HT
+ B 003 CR
+ B 020 IO
+ A 021 PUZZLE MAKER</code>
+    </div>
+    <div class="line_editing">
+      <code>]BRUN PMM
+...hangs...</code>
+    </div>
+    <div class="curses_input">
+      <code>[S5,D1=DOS 3.3 master disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+]BRUN PMM,S6,D1
+...works...</code>
+    </div>
+    <p>OK, it doesn't like Diversi-DOS 64K, but it's fine with standard DOS 3.3.</p>
+    <p>That's fine. It means it's accessing DOS functions directly, but it doesn't rely on anything from the original DOS.</p>
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...grinds...</code>
+    </div>
+    <p class="seen">Time to patch the RWTS.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Learn One Weird Trick To Protect Your Disks! Bit Copiers Hate It!</h3>
+
+    <div class="line_editing">
+      <code>]PR#5
+]BLOAD RWTS,A$2800
+]CALL -151
+*FE89G FE93G     ; disconnect DOS
+*B800<2800.2FFFM ; move RWTS into place
+*B92FL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">check data epilogue bytes</p>
+      <code>B92F-   BD 8C C0    LDA   $C08C,X
+B932-   10 FB       BPL   $B92F
+B934-   C9 ED       CMP   #$ED    ; $DE
+B936-   D0 0A       BNE   $B942
+B938-   EA          NOP
+B939-   BD 8C C0    LDA   $C08C,X
+B93C-   10 FB       BPL   $B939
+B93E-   C9 BB       CMP   #$BB    ; $AA
+B940-   F0 5C       BEQ   $B99E
+B942-   38          SEC
+B943-   60          RTS</code>
+    </div>
+    <div class="line_editing">
+      <code>*B98BL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">check address epilogue bytes</p>
+      <code>B98B-   BD 8C C0    LDA   $C08C,X
+B98E-   10 FB       BPL   $B98B
+B990-   C9 AD       CMP   #$AD    ; $DE
+B992-   D0 AE       BNE   $B942
+B994-   DD 8C C0    CMP   $C08C,X |
+B997-   D0 A9       BNE   $B942   |
+B999-   4C F0 BC    JMP   $BCF0   | WTF
+B99C-   D0 A4       BNE   $B942   |
+B99E-   18          CLC
+B99F-   60          RTS</code>
+    </div>
+    <p class="seen">That's unexpected. On a standard DOS</p>
+    <p class="seen">3.3 disk, the address epilogue checker looks like this:</p>
+    <div class="listing">
+      <code>B98B-   BD 8C C0    LDA   $C08C,X
+B98E-   10 FB       BPL   $B98B
+B990-   C9 DE       CMP   #$DE
+B992-   D0 AE       BNE   $B942
+B994-   EA          NOP           |
+B995-   BD 8C C0    LDA   $C08C,X |
+B998-   10 FB       BPL   $B995   |
+B99A-   C9 AA       CMP   #$AA    |
+B99C-   D0 A4       BNE   $B942
+B99E-   18          CLC
+B99F-   60          RTS</code>
+    </div>
+    <p class="seen">But instead of the straightforward compare for the second byte of the epilogue sequence, it jumps to $BCF0.</p>
+    <div class="line_editing">
+      <code>*BCF0L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">$FF58 is always an RTS, so this does nothing but kill time</p>
+      <code>BCF0-   20 58 FF    JSR   $FF58</code>
+      <p class="comment">now check for second epilogue byte</p>
+      <code>BCF3-   BD 8C C0    LDA   $C08C,X
+BCF6-   10 FB       BPL   $BCF3
+BCF8-   C9 BB       CMP   #$BB
+BCFA-   D0 02       BNE   $BCFE
+BCFC-   18          CLC
+BCFD-   60          RTS
+BCFE-   38          SEC
+BCFF-   60          RTS</code>
+    </div>
+    <p class="seen">Ah, this is one of those weird timing tricks... and it explains why my EDD 4 bit copy didn't work. The original disk was authored so that there are always a timing bit after the first address epilogue byte. Because of the extra waiting here ($FF58 is just an RTS, but calling it and returning takes 12 clock cycles), the RWTS actually requires those timing bits to be in the right place. Otherwise, the disk will spin too far while this routine is killing time, and when the RWTS goes to check the second epilogue byte (at $BCF8), it won't find it.</p>
+    <p class="seen">Never a dull moment in the land of</p>
+    <p class="seen">Apple II copy protection.</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which We Remove All Traces Of Copy Protection Using An Automated Tool That I Wrote For Just Such An Occasion</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+]BRUN PDP</code>
+    </div>
+    <p class="seen">; fix address epilogue checking code</p>
+    <p class="seen">T00,S03,$94 change DD8CC0D0A94CF0BC</p>
+    <p class="seen">to EABD8CC010FBC9AA</p>
+    <p class="seen">; fix other epilogue bytes</p>
+    <p class="seen">T00,S03,$91 change AD to DE T00,S03,$35 change ED to DE T00,S03,$3F change BB to AA T00,S02,$9E change ED to DE T00,S02,$A3 change BB to AA</p>
+    <div class="line_editing">
+      <code>]PR#6
+...works...</code>
+    </div>
+</section>
+
+<section>
+  <h2>Chapter 4</h2>
+  <h3>In Which We Discover A Subtle Bug Which Leads Us Down A Whole New Path</h3>
+
+    <p>...except when it doesn't. Work, that is.</p>
+    <p>There's a subtle bug somewhere, and it revolves around the program's use of data disks. You can create your own puzzles and save them off to a standard formatted DOS 3.3 disk. The original disk's RWTS isn't built to support both protected and non-protected disks, so the program needs to have some other way of writing to a standard data disk.</p>
+    <p>Here's how the bug manifests itself:</p>
+    <p>1. launch the program</p>
+    <p>2. select "disk" from the main menu</p>
+    <p>3. insert a blank DOS 3.3 formatted disk in drive 2</p>
+    <p>4. select "Load Puzzle in Progress"</p>
+    <p>5. it accesses drive 2, then says there are no puzzles on this disk</p>
+    <p>6. press <Esc> to return to the main menu</p>
+    <p>7. select "cartoons" from the menu</p>
+    <p>8. it tries to load a cartoon from the program disk, grinds the disk, then displays "DISK ERROR"</p>
+    <p>From then on, all program functions fail because the program disk is unable to read itself.</p>
+    <p>Based on this, I conclude that there is logic somewhere that is modifying the RWTS in memory. If the program had a separate copy of a standard RWTS to read and write data disks, it wouldn't be a problem. I mean, it would be wasteful, since the program disk now also uses a standard RWTS, but it would still work. But this can read the program disk, then read the data disk, the suddenly and mysteriously fails to read the program disk after that.</p>
+    <p>Something has changed, and I haven't accounted for it.</p>
+    <p>Not knowing where to start looking, and not being particularly keen on tracing the entire program, I turned to my trusty Disk Fixer sector editor. The first RWTS difference is the epilogue byte at $B991. Searching the disk for "91 B9" turned up several matches:</p>
+    <p>- T00,S00,$DD ($B6DD in memory) - T00,S04,$77 ($BA77 in memory) - T00,S04,$8D ($BA8D in memory)</p>
+    <div class="line_editing">
+      <code>]PR#5
+]BLOAD BOOT1,A$2600
+]CALL -151
+*FE89G FE93G
+*B600<2600.2FFFM
+*B600L
+.
+. (most of this is a copy of boot0, and
+.  most of the rest is DOS 3.3 patches)
+.
+B6C0-   A2 BB       LDX   #$BB
+B6C2-   A0 AD       LDY   #$AD
+B6C4-   D0 0A       BNE   $B6D0
+B6C6-   00          BRK
+B6C7-   00          BRK
+B6C8-   A2 AA       LDX   #$AA
+B6CA-   A0 DE       LDY   #$DE
+B6CC-   D0 02       BNE   $B6D0
+B6CE-   00          BRK
+B6CF-   00          BRK
+B6D0-   8D 35 B9    STA   $B935
+B6D3-   8D 9E B8    STA   $B89E
+B6D6-   8E 3F B9    STX   $B93F
+B6D9-   8E A3 B8    STX   $B8A3
+B6DC-   8C 91 B9    STY   $B991   <-- !
+B6DF-   18          CLC
+B6E0-   60          RTS</code>
+    </div>
+    <p>Bingo! This code is modifying the RWTS in memory, swapping out the custom epilogue bytes ($AD, $BB) for standard ones ($DE, $AA). The entry point at $B6C0 turns on "custom RWTS" mode, and $B6C8 turns on "standard RWTS" mode.</p>
+    <p>But those aren't the only RWTS changes required. There are other epilogue byte differences, plus that whole timing bit thing at $BCF0.</p>
+    <p>Another sector search for "C0 B6" finds one match at T00,S04,$7C. That's nearby the other matches I found for "91 B9", so let's take a look there.</p>
+    <div class="line_editing">
+      <code>*BA69L</code>
+    </div>
+    <div class="listing">
+      <code>BA69-   A0 07       LDY   #$07
+BA6B-   B9 DF BC    LDA   $BCDF,Y
+BA6E-   99 94 B9    STA   $B994,Y
+BA71-   88          DEY
+BA72-   10 F7       BPL   $BA6B
+BA74-   A9 AD       LDA   #$AD
+BA76-   8D 91 B9    STA   $B991
+BA79-   A9 ED       LDA   #$ED
+BA7B-   20 C0 B6    JSR   $B6C0
+BA7E-   60          RTS
+BA7F-   A0 07       LDY   #$07
+BA81-   B9 E7 BC    LDA   $BCE7,Y
+BA84-   99 94 B9    STA   $B994,Y
+BA87-   88          DEY
+BA88-   10 F7       BPL   $BA81
+BA8A-   A9 DE       LDA   #$DE
+BA8C-   8D 91 B9    STA   $B991
+BA8F-   A9 DE       LDA   #$DE
+BA91-   20 C8 B6    JSR   $B6C8
+BA94-   60          RTS</code>
+    </div>
+    <p>Again, this looks like two separate routines, one to go into "custom RWTS" mode and one to go into "standard RWTS" mode. $BA69 does some wholesale memory copy from $BCDF (8 bytes worth), then eventually calls $B6C0. The second routine that starts at $BA7F does a different memory copy (8 bytes from $BCE7) and eventually calls $B6C8.</p>
+    <div class="line_editing">
+      <code>*BCDFL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">snippet that goes at $B994 to detect timing bit after first epilogue byte</p>
+      <code>BCDF-   DD 8C C0    CMP   $C08C,X
+BCE2-   D0 A9       BNE   $BC8D
+BCE4-   4C F0 BC    JMP   $BCF0</code>
+    </div>
+    <div class="line_editing">
+      <code>*BCE7L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">snippet for $B994 to check second epilogue byte on a standard disk</p>
+      <code>BCE7-   EA          NOP
+BCE8-   BD 8C C0    LDA   $C08C,X
+BCEB-   10 FB       BPL   $BCE8
+BCED-   C9 AA       CMP   #$AA</code>
+    </div>
+    <p>These are the two primary entry points:</p>
+    <p>- $BA69: "custom RWTS" mode - $BA7F: "standard RWTS" mode</p>
+    <p>A sector search for "69 BA" yields multiple matches:</p>
+    <div class="terminal_output">
+      <code>  - T20,S0C,$EE
+  - T22,S07,$B0</code>
+    </div>
+    <p>And another search for "7F BA":</p>
+    <div class="terminal_output">
+      <code>  - T20,S0C,$EB
+  - T22,S07,$AD</code>
+    </div>
+    <p>Each of those is a "JMP $BA7F" followed by a "JMP $BA69". Copy ][+ "DISK MAP" says that T20,S0C is part of the file "B.PLOAD", and T22,S07 is part of the file "IO". "B.PLOAD" contains the string "PLEASE PUT YOUR OWN INITIALIZED DATA DISK IN THE SECOND DISK DRIVE", so</p>
+    <p>I'm pretty sure this is the program that was running when I tried to load my own puzzle.</p>
+    <p class="seen"></p>
+    <p>Now for the fix. Basically, the entire concept of switching RWTS modes is pointless now that the program disk uses a standard RWTS. So both routines, $BA69 and $BA7F, should simply do nothing.</p>
+    <p>T00,S04,$69 change "A0" to "60" T00,S04,$7F change "A0" to "60"</p>
+    <p>After extensive testing, loading and saving puzzles, and exercising other program functions, I'm confident that there is no further copy protection.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

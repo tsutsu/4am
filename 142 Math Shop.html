@@ -1,0 +1,324 @@
+<!doctype html>
+<html><head>
+<title>Math Shop</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+
+    <p>"Math Shop" is a 1986 educational game designed and programmed by Cary Hammer; contributing designer: Alice Wyman; distributed by Scholastic, Inc.</p>
+    <p>COPYA fails miserably and immediately. EDD 4 bit copy gives no errors, but the copy just reboots over and over. The original disk boots to ProDOS and might be entirely file-based (based on the pattern of disk activity while the game loads), but the copy never even gets as far as displaying the ProDOS splash screen.</p>
+    <p class="seen">In my experience, programs do not spontaneously reboot unless someone tells them to.</p>
+    <p class="seen">Turning to my trusty Disk Fixer sector editor, I press "O" to enter the Input/</p>
+    <p class="seen">Output Control, then set "CHECKSUM ENABLED" to "NO" to ignore address field checksums and epilogue bytes).</p>
+    <p class="seen">And behold! All tracks and sectors are readable.</p>
+    <p class="seen">Based on my limited experience cracking other disks, I would guess that this disk has</p>
+    <p class="seen">- Standard prologue bytes before the</p>
+    <p class="seen">address and data fields [otherwise my sector editor would give me read errors, even when ignoring checksums]</p>
+    <p class="seen">- Non-standard epilogue bytes after the</p>
+    <p class="seen">address and data fields [otherwise COPYA would work]</p>
+    <p class="seen">- Some secondary protection [otherwise</p>
+    <p class="seen">the bit copy created with EDD 4 would work]</p>
+    <p class="seen">Given the (relatively) weak structural protection, I used to turn to the DOS</p>
+    <p class="seen">3.3 master disk, patch the RWTS to ignore checksums and epilogue bytes (changing $B942 from "SEC" to "CLC"), and run COPYA. Then, one fine day, and completely by accident, I came across an original disk with a bad sector. I suppose this shouldn't surprise me.</p>
+    <p class="seen">These floppies are decades old by now; it's amazing any of them work at all.</p>
+    <p class="seen">The point is, I shouldn't be using tools that ignore potentially serious read errors. There are other tools, like Super Demuffin, that can convert a disk like this (with non-standard epilogue bytes) into a standard format.</p>
+    <p class="seen">It requires figuring out what the actual epilogue bytes are, but it has the advantage of surfacing a read error if the original disk actually has a read error.</p>
+    <p class="seen">So... no more COPYA+B942:18 patch. From now on, it's Super Demuffin or Advanced</p>
+    <p class="seen">Demuffin to convert disks to a standard format.</p>
+    <p>My AUTOTRACE program will only automate extraction of the RWTS from a DOS</p>
+    <p>3.3-shaped bootloader, so let's see if</p>
+    <p>I can use Super Demuffin.</p>
+    <p class="seen">Super Demuffin is a cracker's utility built on top of Locksmith Fast Disk</p>
+    <p class="seen">Copy. It takes a disk that uses non- standard but uniform address and data prologue and epilogue bytes, and it converts it to a standard disk format.</p>
+    <p class="seen">I've included a copy on my work disk.</p>
+    <p class="seen">First, I'll need to find exactly what those epilogue bytes are. Turning to the Copy ][+ nibble editor:</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK: 01  START: 2A55  LENGTH: 015F</code>
+    </div>
+    <div class="curses">
+      <code>2A30: FF FF FF FF FF FF FF FF   VIEW
+2A38: FF FF FF FF FF FF FF FF
+2A40: FF FF FF FF FF FF FF FF
+2A48: FF FF FF FF FF FF FF FF
+2A50: FF FF FF FF FF D5 AA 96  <-2A55
+                     ^^^^^^^^
+                 address prologue</code>
+      <code>2A58: FF FE AA AB AA AA FF FF
+2A60: FF FF EB E7 E7 F9 FE FF
+      ^^^^^^^^
+  address epilogue</code>
+      <code>2A68: FF FF FF FF D5 AA AD 9B
+                  ^^^^^^^^
+               data prologue</code>
+    </div>
+    <div class="terminal_output">
+      <code>2A70: 97 9B 9A 9B 9A 9B 9A 9B</code>
+      <code>---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">(Not shown in the above screenshot, but the data epilogue is also "FF FF EB".)</p>
+    <p class="seen">Some quick inspection suggests that all tracks on the disk use the same non- standard address and data epilogue bytes. Now I can plug this information into Super Demuffin.</p>
+    <p class="seen">When you first run Super Demuffin, it asks for the parameters of the original disk. In this case, the prologue bytes are the same, but the epilogues are "FF FF EB" instead of "DE AA EB".</p>
+    <div class="curses">
+      <code>      SUPER-DEMUFFIN AND FAST COPY
+Modified by: The Saltine/Coast to Coast</code>
+      <code>
+   Address prologue: D5 AA 96</code>
+      <code>   Address epilogue: FF FF EB    DISK
+                     ^^^^^     ORIGINAL
+             *change from "DE AA"</code>
+      <code>      Data prologue: D5 AA AD</code>
+      <code>      Data epilogue: FF FF EB
+                     ^^^^^
+             *change from "DE AA"</code>
+      <code>
+ Ignore write errors while demuffining!</code>
+      <code>
+  D - Edit parameters
+      <SPACE> - Advance to next parm
+      <RETURN> - Exit edit mode
+  R - Restore DOS 3.3 parameters
+  O - Edit Original disk's parameters
+  C - Edit Copy disk's parameters
+  G - Begin demuffin process</code>
+    </div>
+    <p class="seen">Pressing "G" switches to the Locksmith</p>
+    <p class="seen">Fast Disk Copy UI. It assumes that both disks are in slot 6, and that drive 1 is the original and drive 2 is the copy.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk, side A]
+[S6,D2=blank disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>     LOCKSMITH 7.0  FAST DISK BACKUP</code>
+      <code>
+   R...................................
+   W***********************************
+HEX 00000000000000001111111111111111222
+TRK 0123456789ABCDEF0123456789ABCDEF012
+   0...................................
+   1...................................
+   2...................................
+   3...................................
+   4...................................
+   5...................................
+   6...................................
+   7...................................
+   8...................................
+   9...................................
+   A...................................
+   B...................................
+   C...................................
+   D...................................
+12 E...................................
+   F...................................
+[               ] PRESS [RESET] TO EXIT</code>
+    </div>
+    <p>(I repeated this procedure with side B, which also gave no errors.)</p>
+    <p class="seen">There are two problems with this copy:</p>
+    <p class="seen">1. Depending on how the original disk</p>
+    <p class="seen">was written, this copy may or may not be able to read itself. I may need to patch the disk's RWTS to deal with the fact that the disk is now in a standard format.</p>
+    <p class="seen">2. Even if it can read itself, it won't</p>
+    <p class="seen">run. The copies I tried to make -- even the bit copies -- just rebooted endlessly, which means there is some code being executed during boot to check if the disk is original. (Hint: it's not.)</p>
+    <p class="seen">It's time for a little boot tracing.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk, side A]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0</code>
+      <code>]BLOAD BOOT0,A$800</code>
+      <code>]CALL -151</code>
+      <code>*801L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">This looks like the standard ProDOS boot0 code, which is unsurprising, since the original disk loads ProDOS</p>
+      <code>0801-   38          SEC
+0802-   B0 03       BCS   $0807
+0804-   4C 32 A1    JMP   $A132
+0807-   86 43       STX   $43
+0809-   C9 03       CMP   #$03
+080B-   08          PHP
+080C-   8A          TXA
+080D-   29 70       AND   #$70
+080F-   4A          LSR
+0810-   4A          LSR
+0811-   4A          LSR
+0812-   4A          LSR
+0813-   09 C0       ORA   #$C0
+0815-   85 49       STA   $49
+0817-   A0 FF       LDY   #$FF
+0819-   84 48       STY   $48
+081B-   28          PLP
+081C-   C8          INY
+081D-   B1 48       LDA   ($48),Y
+081F-   D0 3A       BNE   $085B
+0821-   B0 0E       BCS   $0831
+0823-   A9 03       LDA   #$03
+0825-   8D 00 08    STA   $0800
+0828-   E6 3D       INC   $3D
+082A-   A5 49       LDA   $49
+082C-   48          PHA
+082D-   A9 5B       LDA   #$5B
+082F-   48          PHA
+0830-   60          RTS</code>
+      <p class="comment">this is not standard</p>
+      <code>0831-   4C 00 09    JMP   $0900</code>
+    </div>
+    <p>Let's see what's lurking at $0900. To do this, I'll need to interrupt the boot process at $0831, after the code is loaded into memory but before it gets executed.</p>
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">ProDOS boot0 code is sensitive to the value of the accumulator on entry, so make sure we save it and restore it</p>
+      <code>96F8-   48          PHA</code>
+      <p class="comment">set up callback to call a routine under my control instead of continuing to $0900</p>
+      <code>96F9-   A9 07       LDA   #$07
+96FB-   8D 32 08    STA   $0832
+96FE-   A9 97       LDA   #$97
+9700-   8D 33 08    STA   $0833</code>
+      <p class="comment">restore the accumulator</p>
+      <code>9703-   68          PLA</code>
+      <p class="comment">start the boot</p>
+      <code>9704-   4C 01 08    JMP   $0801</code>
+      <p class="comment">callback is here -- relocate the code at $0900 to the graphics page so it will survive a reboot (my work disk auto-loads a HELLO program that would overwrite it at $0900)</p>
+      <code>9707-   A0 00       LDY   #$00
+9709-   B9 00 09    LDA   $0900,Y
+970C-   99 00 29    STA   $2900,Y
+970F-   C8          INY
+9710-   D0 F7       BNE   $9709</code>
+      <p class="comment">turn off the slot 6 drive motor</p>
+      <code>9712-   AD E8 C0    LDA   $C0E8</code>
+      <p class="comment">reboot to my work disk</p>
+      <code>9715-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*9600G
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]BSAVE BOOT1 0900-09FF,A$2900,L$100
+]CALL -151</code>
+      <code>*900<2900.29FFM</code>
+      <code>*900L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">the first few instructions here are what usually happen at $0831 (instead of jumping to $0900)</p>
+      <code>0900-   85 48       STA   $48
+0902-   85 40       STA   $40
+0904-   A9 00       LDA   #$00
+0906-   8D F4 03    STA   $03F4
+0909-   A9 0A       LDA   #$0A
+090B-   85 F4       STA   $F4
+090D-   A6 2B       LDX   $2B</code>
+      <p class="comment">turning on the drive motor manually (highly suspicious)</p>
+      <code>090F-   BD 89 C0    LDA   $C089,X
+0912-   BD 8E C0    LDA   $C08E,X</code>
+      <p class="comment">Set up some pointers and counters. ($F6) points to a data table used by the nibble check (see below).</p>
+      <code>0915-   A9 A5       LDA   #$A5
+0917-   85 F6       STA   $F6
+0919-   A9 09       LDA   #$09
+091B-   85 F7       STA   $F7
+091D-   A9 80       LDA   #$80
+091F-   85 F5       STA   $F5
+0921-   C6 F5       DEC   $F5</code>
+      <p class="comment">the failure path leads to $099B</p>
+      <code>0923-   F0 76       BEQ   $099B</code>
+      <p class="comment">this finds the next address prologue ("D5 AA 96") and skips over the address field</p>
+      <code>0925-   20 AD 09    JSR   $09AD</code>
+      <p class="comment">if that didn't work, fail</p>
+      <code>0928-   B0 71       BCS   $099B</code>
+      <code>092A-   A5 F1       LDA   $F1
+092C-   C9 07       CMP   #$07
+092E-   D0 F1       BNE   $0921</code>
+      <p class="comment">Search for a specific sequence of nibbles in the "dead zone" between the address field and data field.</p>
+      <p class="comment">This area is normally not important, so COPYA didn't copy it precisely because normal disks don't care. (Actually, it's even more evil than that, because the original disk is written with timing bits in specific non-standard places between the nibbles in the dead zone. This code not only requires the right nibbles in the right order, it reads them just slightly slower than normal. So the timing bits need to be in the right places too, or else this code will read the wrong nibble values while it's out of sync. This will trip up even the best bit copiers.</p>
+      <p class="comment">And you can forget about making a disk image for emulators -- those don't store timing bits at all.)</p>
+      <code>0930-   A0 00       LDY   #$00
+0932-   BD 8C C0    LDA   $C08C,X
+0935-   10 FB       BPL   $0932
+0937-   88          DEY</code>
+      <code>0938-   F0 61       BEQ   $099B  ; fail
+093A-   C9 D5       CMP   #$D5
+093C-   D0 F4       BNE   $0932
+093E-   A0 00       LDY   #$00
+0940-   BD 8C C0    LDA   $C08C,X
+0943-   10 FB       BPL   $0940
+0945-   88          DEY
+0946-   F0 53       BEQ   $099B  ; fail
+0948-   C9 E7       CMP   #$E7
+094A-   D0 F4       BNE   $0940
+094C-   BD 8C C0    LDA   $C08C,X
+094F-   10 FB       BPL   $094C
+0951-   C9 E7       CMP   #$E7
+0953-   D0 46       BNE   $099B  ; fail
+0955-   BD 8C C0    LDA   $C08C,X
+0958-   10 FB       BPL   $0955
+095A-   C9 E7       CMP   #$E7
+095C-   D0 3D       BNE   $099B  ; fail</code>
+      <p class="comment">kill some time to get out of sync with the "proper" start of nibbles)</p>
+      <code>095E-   BD 8D C0    LDA   $C08D,X
+0961-   A0 10       LDY   #$10
+0963-   24 06       BIT   $06</code>
+      <p class="comment">now start looking for nibbles that don't really exist (except they do, because we're out of sync and reading timing bits as data)</p>
+      <code>0965-   BD 8C C0    LDA   $C08C,X
+0968-   10 FB       BPL   $0965
+096A-   88          DEY
+096B-   F0 2E       BEQ   $099B  ; fail
+096D-   C9 EE       CMP   #$EE
+096F-   D0 F4       BNE   $0965</code>
+      <p class="comment">check for nibble sequence stored in reverse order at $09A5</p>
+      <code>0971-   A0 07       LDY   #$07
+0973-   BD 8C C0    LDA   $C08C,X
+0976-   10 FB       BPL   $0973
+0978-   D1 F6       CMP   ($F6),Y
+097A-   D0 1F       BNE   $099B  ; fail
+097C-   88          DEY
+097D-   10 F4       BPL   $0973</code>
+      <p class="comment">success path is here -- reuse the disk controller ROM routine to read the sector that was supposed to be at $0900 in the first place, then "return" to $0834</p>
+      <code>097F-   A2 60       LDX   #$60
+0981-   8E 01 08    STX   $0801
+0984-   A6 2B       LDX   $2B
+0986-   A9 0B       LDA   #$0B
+0988-   85 3D       STA   $3D
+098A-   A9 09       LDA   #$09
+098C-   85 27       STA   $27
+098E-   A9 08       LDA   #$08
+0990-   48          PHA
+0991-   A9 34       LDA   #$34
+0993-   48          PHA
+0994-   A5 49       LDA   $49
+0996-   48          PHA
+0997-   A9 5B       LDA   #$5B
+0999-   48          PHA
+099A-   60          RTS</code>
+      <p class="comment">if zero page $F4 hits 0, the nibble check has failed</p>
+      <code>099B-   C6 F4       DEC   $F4
+099D-   D0 03       BNE   $09A2</code>
+      <p class="comment">reboot on failure</p>
+      <code>099F-   4C 00 C6    JMP   $C600</code>
+      <p class="comment">or continue trying</p>
+      <code>09A2-   4C 1D 09    JMP   $091D</code>
+      <p class="comment">data table of nibbles</p>
+      <code>09A5-   FC EE EE FC
+09A9-   E7 EE FC E7</code>
+    </div>
+    <p class="seen">There are two ways to go here. I could wipe out this entire sector and replace it with the code that's supposed to be loaded at $0900 in the first place, then patch T00,S00 to do the standard ProDOS boot0 thing at $0831. Or, I could do the Simplest Thing That Could</p>
+    <p class="seen">Possibly Work by patching this sector to skip over the nibble check and jump directly to the success path.</p>
+    <p>I chose door #2: unconditionally jumping over the nibble check to $097F, which loads the real $0900 code and continues the boot.</p>
+    <p>T00,S0E,$0D change "A6 2B BD"</p>
+    <p>to "4C 7F 09"</p>
+    <p>Success! The game boots and loads without complaint. There doesn't appear to be any further copy protection, and the RWTS is liberal enough that I don't need to make any modifications to allow it to read from my unprotected copy.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

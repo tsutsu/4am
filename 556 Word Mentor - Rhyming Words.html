@@ -1,0 +1,190 @@
+<!doctype html>
+<html><head>
+<title>Word Mentor - Rhyming Words</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">fatal read error on first pass</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">can't read anything beyond track $00</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">works</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">T01+ use modified address prologue (AA D5 96)</p>
+    <p class="seen">Disk Fixer</p>
+    <p class="seen">["O" -> "Input/Output Control"] set Address Prologue to "AA D5 96"</p>
+    <p class="seen">Success! T01+ readable T01-02 -> looks like a full copy of DOS 3.3, but shifted so the entire thing is on tracks $01 and $02 T11 -> DOS 3.3 disk catalog T02,S02 -> startup program is "HELLO"</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p class="seen">modified address prologue</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">modified address prologue</p>
+    <p class="seen">EDD worked. What does that tell us?</p>
+    <p class="seen">no half or quarter tracks almost certainly no nibble check (just structural changes to prologues and epilogues)</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. capture RWTS with AUTOTRACE</p>
+    <p class="seen">2. convert disk to standard format with Advanced Demuffin</p>
+    <p class="seen">3. patch RWTS to read standard format</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Attempt To Use The Original Disk As A Weapon Against Itself</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS
+SAVING IOB</code>
+    </div>
+    <p class="seen">Ah! My automatic boot tracer detected that this RWTS is at $3800, not $B800, so we got an IOB module for free. The IOB module tells Advanced Demuffin how to call the RWTS. (See the docs on my work disk for more about IOB modules.)</p>
+    <div class="line_editing">
+      <code>]BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>["5" to switch to slot 5]</code>
+      <code>["R" to load a new RWTS module]
+  --> At $38, load "RWTS" from drive 1</code>
+      <code>[press "I" to load a new IOB module]
+  --> load "IOB" from drive 1</code>
+      <code>["6" to switch to slot 6]</code>
+      <code>["C" to convert disk]</code>
+      <code>[press "Y" to change default values]</code>
+    </div>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======================================</code>
+      <code>
+INPUT ALL VALUES IN HEX</code>
+      <code>
+SECTORS PER TRACK? (13/16) 16</code>
+    </div>
+    <div class="curses">
+      <code>START TRACK: $01        <-- change this
+START SECTOR: $00</code>
+    </div>
+    <div class="terminal_output">
+      <code>END TRACK: $22
+END SECTOR: $0F</code>
+      <code>INCREMENT: 1</code>
+      <code>MAX # OF RETRIES: 0</code>
+      <code>COPY FROM DRIVE 1
+TO DRIVE: 2
+=======================================
+16SC $01,$00-$22,$0F BY$01 S6,D1->S6,D2</code>
+    </div>
+    <p class="seen">And here we go...</p>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======================================
+TRK: ..................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0: ..................................
+SC1: ..................................
+SC2: ..................................
+SC3: ..................................
+SC4: ..................................
+SC5: ..................................
+SC6: ..................................
+SC7: ..................................
+SC8: ..................................
+SC9: ..................................
+SCA: ..................................
+SCB: ..................................
+SCC: ..................................
+SCD: ..................................
+SCE: ..................................
+SCF: ..................................
+=======================================
+16SC $01,$00-$22,$0F BY$01 S6,D1->S6,D2</code>
+    </div>
+    <p class="seen">This is the power and the genius of</p>
+    <p class="seen">Advanced Demuffin. Every disk must be able to read itself. So, let it read itself, then capture the data and write it out in a standard format.</p>
+    <div class="line_editing">
+      <code>]PR#5
+...
+]CATALOG,S6,D2</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+342 FREE</code>
+      <code> T 000 [02/24/85]
+*T 004 EXERCISE A
+*T 005 EXERCISE B
+*T 005 EXERCISE C
+*T 005 EXERCISE D
+*T 004 EXERCISE E
+*B 026 H.IIC
+ A 003 HELLO
+*B 002 LOMEM:
+ A 018 MGR
+*B 033 PI.RW
+ A 029 RHYMING WORDS.M
+ T 003 SFILE
+*B 002 ST.ALIEN
+*B 002 ST.UFO</code>
+    </div>
+    <div class="line_editing">
+      <code>]RUN HELLO
+...works...</code>
+    </div>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Finish The Job And Declare Victory(*)</h3>
+
+    <p class="seen">(*) take a nap</p>
+    <p class="seen">Of course my copy doesn't boot on its own yet, because I'm still missing track $00. Let's fix that. It is the only track that is not protected (even COPYA could copy it).</p>
+    <div class="curses_input">
+      <code>[Copy ][+ 8.4]
+  --> "COPY"
+    --> "BIT COPY"
+      --> "MANUAL SECTOR COPY"
+        --> from SLOT 6, DRIVE 1
+        -->   to SLOT 6, DRIVE 2
+        --> track $00 only</code>
+      <code>[S6,D1=my copy]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...grinds and crashes...</code>
+    </div>
+    <p class="seen">Now I have a new problem: my copy can't read itself because the RWTS is still looking for the non-standard address prologue on tracks $01 and above. This is not unusual. Never fear, I have a tool for that too.</p>
+    <div class="line_editing">
+      <code>]PR#5
+...
+]BRUN PDP</code>
+    </div>
+    <p class="seen">T00,S03,$55 change AA to D5 T00,S03,$5F change D5 to AA T00,S06,$7A change AA to D5 T00,S06,$7F change D5 to AA</p>
+    <p class="seen">After swapping the address prologue bytes back to their standard values, the disk boots on its own and seems as happy as a disk can be. There doesn't appear to be any further protection.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<section>
+  <h2>Acknowledgements</h2>
+
+    <p class="seen">Many thanks to LoGo for supplying the the original floppy disk.</p>
+</section>
+
+</body></html>

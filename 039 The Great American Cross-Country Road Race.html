@@ -1,0 +1,411 @@
+<!doctype html>
+<html><head>
+<title>The Great American Cross-Country Road Race</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+
+    <p>"The Great American Cross-Country Road</p>
+    <p>Race" is a 1985 arcade game designed by</p>
+    <p>Alex DeMeo, adapted for Apple II by</p>
+    <p>Ivan Manley of Synergistic Software, and distributed by Activision, Inc.</p>
+    <p>COPYA copies the disk, but the copy does not work. Booting the copy gets as far as saying "Please stand by while program is loading," then grinds the disk and crashes. EDD 4 bit copy fares no better.</p>
+    <p>The boot process does not sound like DOS 3.3, ProDOS, or Pascal. It loads sequential tracks (slowly), displays an animated "Activision" title screen with the "Please stand by" message, grinds the disk, and crashes.</p>
+    <p>There *is* a disk catalog on track $11 with a single file named "BOOT", but it does not appear to be a valid file.</p>
+    <p>Copy ][+ shows both its starting address and file length as 0:</p>
+    <div class="terminal_output">
+      <code>
+CATALOG DISK            SLOT 6  DRIVE 1
+DISK VOLUME 254</code>
+      <code>
+   B 004 BOOT
+         A0, L0  (A$0000, L$0000)</code>
+      <code>SECTORS FREE:144  USED:416   TOTAL:560</code>
+    </div>
+    <p class="seen"></p>
+    <p>Inspecting it with the Copy ][+ sector editor shows a mix of data and code, but nothing that could be construed as a boot process (no RWTS, nothing disk- related at all).</p>
+    <p class="seen">Time for boot tracing with AUTOTRACE.</p>
+    <div class="curses_input">
+      <code>[S6D1=original disk]
+[S5D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+    </div>
+    <p>Well that went swimmingly. Despite its custom loading process (and fake disk catalog), this disk appears to use a standard boot0 and DOS 3.3-derived RWTS routine. Let's find out where it all goes wrong.</p>
+    <div class="line_editing">
+      <code>]BLOAD BOOT1,A$2600</code>
+      <code>]CALL -151</code>
+      <code>*B600<2600.2EFFM</code>
+      <code>*B700L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">standard RWTS parameter table initialization</p>
+      <code>B700-   8E E9 B7    STX   $B7E9
+B703-   8E F7 B7    STX   $B7F7
+B706-   A9 01       LDA   #$01
+B708-   8D F8 B7    STA   $B7F8
+B70B-   8D EA B7    STA   $B7EA</code>
+      <p class="comment">I checked, and $B7E0 contains $03 at this point, so we're setting up to read 3 sectors</p>
+      <code>B70E-   AD E0 B7    LDA   $B7E0
+B711-   8D E1 B7    STA   $B7E1</code>
+      <p class="comment">start reading at T00,S0C</p>
+      <code>B714-   A9 00       LDA   #$00
+B716-   8D EC B7    STA   $B7EC
+B719-   A9 0C       LDA   #$0C
+B71B-   8D ED B7    STA   $B7ED</code>
+      <p class="comment">I checked, and $B7E7 contains $A3 at this point, so we'll be storing the sectors in $A000..$A2FF</p>
+      <code>B71E-   AC E7 B7    LDY   $B7E7
+B721-   88          DEY
+B722-   8C F1 B7    STY   $B7F1
+B725-   A9 01       LDA   #$01
+B727-   8D F4 B7    STA   $B7F4
+B72A-   8A          TXA
+B72B-   4A          LSR
+B72C-   4A          LSR
+B72D-   4A          LSR
+B72E-   4A          LSR
+B72F-   AA          TAX
+B730-   A9 00       LDA   #$00
+B732-   9D F8 04    STA   $04F8,X
+B735-   9D 78 04    STA   $0478,X
+B738-   8D EB B7    STA   $B7EB</code>
+      <p class="comment">standard multi-sector read routine</p>
+      <code>B73B-   20 93 B7    JSR   $B793
+B73E-   A2 FF       LDX   #$FF
+B740-   9A          TXS
+B741-   4C C8 BF    JMP   $BFC8
+B744-   20 89 FE    JSR   $FE89</code>
+      <p class="comment">jump to the code we just read</p>
+      <code>B747-   4C 00 A0    JMP   $A000</code>
+    </div>
+    <p>OK, this is where I need to interrupt the boot process, so I can inspect the code at $A000 instead of letting it run willy-nilly.</p>
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up a callback after boot0, so I can modify the routine at $B700 after it's loaded</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D 4A 08    STA   $084A
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D 4B 08    STA   $084B
+9702-   A9 97       LDA   #$97
+9704-   8D 4C 08    STA   $084C</code>
+      <p class="comment">start the boot</p>
+      <code>9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">first callback is here -- set up a second callback at $B747 so it goes to a routine under my control instead of $A000</p>
+      <code>970A-   A9 4C       LDA   #$4C
+970C-   8D 47 B7    STA   $B747
+970F-   A9 1C       LDA   #$1C
+9711-   8D 48 B7    STA   $B748
+9714-   A9 97       LDA   #$97
+9716-   8D 49 B7    STA   $B749</code>
+      <p class="comment">continue the boot</p>
+      <code>9719-   4C 00 B7    JMP   $B700</code>
+      <p class="comment">second callback is here -- relocate the code loaded into $A000 to a safe location that will survive a reboot</p>
+      <code>971C-   A2 03       LDX   #$03
+971E-   A0 00       LDY   #$00
+9720-   B9 00 A0    LDA   $A000,Y
+9723-   99 00 20    STA   $2000,Y
+9726-   C8          INY
+9727-   D0 F7       BNE   $9720
+9729-   EE 22 97    INC   $9722
+972C-   EE 25 97    INC   $9725
+972F-   CA          DEX
+9730-   D0 EE       BNE   $9720</code>
+      <p class="comment">turn off slot 6 disk motor</p>
+      <code>9732-   AD E8 C0    LDA   $C0E8</code>
+      <p class="comment">reboot to my work disk</p>
+      <code>9735-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE2,A$9600,L$138</code>
+      <code>*9600G
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]BSAVE BOOT2,A$2000,L$300</code>
+      <code>]CALL -151</code>
+      <code>*A000<2000.22FFM</code>
+      <code>*A000L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up reset vector</p>
+      <code>A000-   A9 00       LDA   #$00
+A002-   8D F2 03    STA   $03F2
+A005-   A9 A0       LDA   #$A0
+A007-   8D F3 03    STA   $03F3
+A00A-   49 A5       EOR   #$A5
+A00C-   8D F4 03    STA   $03F4
+A00F-   4C 23 A0    JMP   $A023</code>
+    </div>
+    <div class="line_editing">
+      <code>*A023L</code>
+    </div>
+    <div class="listing">
+      <code>A023-   A2 52       LDX   #$52
+A025-   20 13 A1    JSR   $A113</code>
+    </div>
+    <div class="line_editing">
+      <code>*A113L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">read a sector from disk (RWTS params at $A012 point to reading T00,S0C into $0800..$08FF)</p>
+      <code>A113-   8A          TXA
+A114-   48          PHA
+A115-   A9 A0       LDA   #$A0
+A117-   A0 12       LDY   #$12
+A119-   20 B5 B7    JSR   $B7B5
+A11C-   A9 00       LDA   #$00
+A11E-   85 48       STA   $48
+A120-   68          PLA
+A121-   AA          TAX
+A122-   60          RTS</code>
+    </div>
+    <p>Back to the caller...</p>
+    <div class="listing">
+      <code>A028-   EE 1B A0    INC   $A01B
+A02B-   EE 17 A0    INC   $A017
+A02E-   AD 17 A0    LDA   $A017
+A031-   29 0F       AND   #$0F
+A033-   8D 17 A0    STA   $A017
+A036-   D0 0F       BNE   $A047
+A038-   EE 16 A0    INC   $A016
+A03B-   AD 16 A0    LDA   $A016
+A03E-   C9 05       CMP   #$05
+A040-   D0 05       BNE   $A047
+A042-   A9 22       LDA   #$22
+A044-   8D 16 A0    STA   $A016
+A047-   CA          DEX
+A048-   D0 DB       BNE   $A025</code>
+    </div>
+    <p>OK, that explains why the boot process is so slow. This loop is reading sectors from disk in ascending order.</p>
+    <p>Due to the way sectors are stored on a track when a DOS 3.3 disk is formatted, it's much faster to read the sectors on each track in descending order (logical sector $0F down to logical sector $00).</p>
+    <p>Anyway, this code is harmless, copy- protection-wise.</p>
+    <div class="listing">
+      <p class="comment">memory move from $2000..$5AFF to $6000..$9AFF</p>
+      <code>A04A-   A9 00       LDA   #$00
+A04C-   85 FA       STA   $FA
+A04E-   85 FC       STA   $FC
+A050-   A9 20       LDA   #$20
+A052-   85 FB       STA   $FB
+A054-   A9 60       LDA   #$60
+A056-   85 FD       STA   $FD
+A058-   A2 3A       LDX   #$3A
+A05A-   A0 00       LDY   #$00
+A05C-   B1 FA       LDA   ($FA),Y
+A05E-   91 FC       STA   ($FC),Y
+A060-   C8          INY
+A061-   D0 F9       BNE   $A05C
+A063-   E6 FB       INC   $FB
+A065-   E6 FD       INC   $FD
+A067-   CA          DEX
+A068-   D0 F2       BNE   $A05C</code>
+    </div>
+    <p>If I'm reading this correctly, the read loop used the X-register as a sector counter, so it read a total of $52 sectors starting at T00,S0C and reading ascending tracks/sectors. That jibes with what the original disk sounds like while it's booting. The next thing that happens is the animated "Activision" title screen.</p>
+    <div class="listing">
+      <code>A06A-   20 00 08    JSR   $0800
+A06D-   4C 71 A0    JMP   $A071</code>
+    </div>
+    <p>I really should break the boot process here and see what's at $0800, but my intuition tells me that the code at $0800 is devoted entirely to the title screen animation. I'm not sure how to describe this intuition. It's some combination of "the boot code so far is straightforward and cleanly separated into distinct phases" and "disk stuff feels out of place in low memory" and "I bet the person who wrote the title animation is not the same person who wrote the copy protection." And that could all be entirely wrong, but I'm going to skip over $0800 for now.</p>
+    <div class="line_editing">
+      <code>*A071L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up RWTS parameter table at $A012 ...but there's a weird "PHA" in the middle for no apparent reason</p>
+      <code>A071-   A9 12       LDA   #$12
+A073-   85 FA       STA   $FA
+A075-   A9 A0       LDA   #$A0
+A077-   85 FB       STA   $FB
+A079-   A9 C5       LDA   #$C5
+A07B-   48          PHA
+A07C-   A9 00       LDA   #$00
+A07E-   85 FC       STA   $FC
+A080-   A2 03       LDX   #$03
+A082-   BC 99 A0    LDY   $A099,X
+A085-   91 FA       STA   ($FA),Y
+A087-   CA          DEX
+A088-   10 F8       BPL   $A082
+A08A-   18          CLC
+A08B-   90 10       BCC   $A09D</code>
+    </div>
+    <div class="line_editing">
+      <code>*A09DL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">pushing a second value to the stack ...at this point the X-register is $FF because the loop decremented X and looped with BPL, so the loop doesn't exit until X wraps around past $00</p>
+      <code>A09D-   8A          TXA</code>
+      <p class="comment">that means we've pushed $C5FF to the stack, presumably in preparation for leaving it there and "RTS"ing if anything goes wrong (which will pull this address off the stack and jump to the address immediately after it, which is $C600, which will reboot)</p>
+      <code>A09E-   48          PHA</code>
+      <p class="comment">see below, the subroutine at $A0AF just reads a sector from disk using the RWTS parameter table pointed to from ($FA), which -- not coincidentally -- was just set up</p>
+      <code>A09F-   20 AF A0    JSR   $A0AF</code>
+      <p class="comment">this gets the second byte of the RWTS parameter table, which is the slot number x 16, and puts it in X-reg</p>
+      <code>A0A2-   A0 01       LDY   #$01
+A0A4-   B1 FA       LDA   ($FA),Y
+A0A6-   AA          TAX</code>
+      <p class="comment">call... something evil</p>
+      <code>A0A7-   20 BF A0    JSR   $A0BF</code>
+      <p class="comment">pop the $C5FF off the stack and ignore it</p>
+      <code>A0AA-   68          PLA
+A0AB-   68          PLA</code>
+      <p class="comment">continue somewhere else</p>
+      <code>A0AC-   4C 23 A1    JMP   $A123</code>
+      <p class="comment">read a sector; RWTS parameter table is at ($FA)</p>
+      <code>A0AF-   A5 FB       LDA   $FB
+A0B1-   A4 FA       LDY   $FA
+A0B3-   20 B5 B7    JSR   $B7B5
+A0B6-   A9 00       LDA   #$00
+A0B8-   85 48       STA   $48
+A0BA-   90 02       BCC   $A0BE
+A0BC-   68          PLA
+A0BD-   68          PLA
+A0BE-   60          RTS</code>
+    </div>
+    <p>We're closing in on the copy protection routine. Can you feel it? I swear I can feel it. The random PHA instructions, the somewhat less-than-straightforward way that the RWTS parameter table was set up. Oh, and did you notice that the subroutine at $A0AF pops two bytes off the stack if the disk read fails? Which means it erases the address of the calling procedure (the instruction after $A09F) and will "return" to... $C5FF+1. Which reboots. That's kind of a harsh punishment for failing to read one sector, don't you think? Maybe try again, at least once? Or put up some sort of error message? If you're gonna f--- me up the ass, at least buy me dinner first.</p>
+    <div class="line_editing">
+      <code>*A0BFL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">Here we go, turning on the disk motor manually -- a sure sign that this code is up to no good.</p>
+      <code>A0BF-   BD 89 C0    LDA   $C089,X
+A0C2-   A9 56       LDA   #$56
+A0C4-   85 FD       STA   $FD
+A0C6-   A9 08       LDA   #$08
+A0C8-   C6 FC       DEC   $FC
+A0CA-   D0 04       BNE   $A0D0
+A0CC-   C6 FD       DEC   $FD</code>
+      <p class="comment">I've seen enough nibble checks to know that zero page $FD is being used as a sudden death counter. If it reaches 0, the check has failed.</p>
+      <code>A0CE-   F0 34       BEQ   $A104</code>
+      <p class="comment">look for a specific nibble sequence</p>
+      <code>A0D0-   BC 8C C0    LDY   $C08C,X
+A0D3-   10 FB       BPL   $A0D0
+A0D5-   C0 FB       CPY   #$FB
+A0D7-   D0 ED       BNE   $A0C6
+A0D9-   F0 00       BEQ   $A0DB
+A0DB-   EA          NOP
+A0DC-   EA          NOP
+A0DD-   BC 8C C0    LDY   $C08C,X
+A0E0-   C0 08       CPY   #$08
+A0E2-   2A          ROL
+A0E3-   B0 0B       BCS   $A0F0
+A0E5-   BC 8C C0    LDY   $C08C,X
+A0E8-   10 FB       BPL   $A0E5
+A0EA-   C0 FF       CPY   #$FF
+A0EC-   D0 D8       BNE   $A0C6
+A0EE-   F0 EB       BEQ   $A0DB
+A0F0-   BC 8C C0    LDY   $C08C,X
+A0F3-   10 FB       BPL   $A0F0
+A0F5-   84 FC       STY   $FC
+A0F7-   C9 0A       CMP   #$0A
+A0F9-   D0 CB       BNE   $A0C6
+A0FB-   BD 8C C0    LDA   $C08C,X
+A0FE-   10 FB       BPL   $A0FB</code>
+      <p class="comment">do some math</p>
+      <code>A100-   38          SEC
+A101-   2A          ROL
+A102-   25 FC       AND   $FC</code>
+      <p class="comment">Uh oh, there may be a side effect here. We're taking the result of the manipulation of the raw nibbles and storing it in $A070. That doesn't appear to be used anywhere in this current routine. Also interesting: if the nibble check fails (because zero page $FD hits 0), the code does not error out or immediately reboot.</p>
+      <p class="comment">It just branches to here and keeps going.</p>
+      <code>A104-   8D 70 A0    STA   $A070</code>
+      <p class="comment">zero out all evidence of this routine</p>
+      <code>A107-   A9 00       LDA   #$00
+A109-   A8          TAY
+A10A-   99 AF A0    STA   $A0AF,Y
+A10D-   C8          INY
+A10E-   C0 5B       CPY   #$5B
+A110-   D0 F8       BNE   $A10A
+A112-   60          RTS</code>
+    </div>
+    <p>And that's it. Whether the nibble check succeeds or fails, this routine returns to the caller. It doesn't even set a flag. (Lots of nibble checks clear the carry flag if they succeed and set it if they fail, following the convention of the DOS 3.3 RWTS routines.) The only difference is the value of $A070.</p>
+    <p>The next instruction after calling this routine is JMP $A123, so I'm going to take a look at that.</p>
+    <div class="line_editing">
+      <code>*A123L</code>
+    </div>
+    <div class="listing">
+      <code>A123-   A9 60       LDA   #$60
+A125-   8D 1B A0    STA   $A01B
+A128-   A9 01       LDA   #$01
+A12A-   8D 1E A0    STA   $A01E
+A12D-   A2 08       LDX   #$08
+A12F-   BD 90 A0    LDA   $A090,X
+A132-   18          CLC</code>
+      <p class="comment">Here we go -- the value of $A070 is used to calculate the next value of $A016. The last time I checked, that address is part of the RWTS parameter table (starting at $A012). $A016 is the track number to read.</p>
+      <code>A133-   6D 70 A0    ADC   $A070
+A136-   8D 16 A0    STA   $A016
+A139-   BD 91 A1    LDA   $A191,X
+A13C-   38          SEC</code>
+      <p class="comment">And again, the value of $A070 is critical in determining the next value of $A017, the sector number to read.</p>
+      <code>A13D-   ED 70 A0    SBC   $A070
+A140-   8D 17 A0    STA   $A017
+A143-   A9 00       LDA   #$00
+A145-   9D 90 A0    STA   $A090,X
+A148-   9D 91 A1    STA   $A191,X</code>
+      <p class="comment">I already know what $A113 does -- it reads a sector from disk using the RWTS parameter table at $A012.</p>
+      <code>A14B-   20 13 A1    JSR   $A113
+A14E-   EE 1B A0    INC   $A01B
+A151-   CA          DEX
+A152-   10 DB       BPL   $A12F</code>
+    </div>
+    <p>So even if the nibble check fails, the code intentionally lets execution continue and uses the wrong value at $A070 to calculate the next track and sector to read. That explains why my copy didn't load properly after the animated title screen. It was grinding and grinding, looking for a track and sector that were essentially random numbers. That's deliciously evil.</p>
+    <p>I need to capture the correct value of $A070.</p>
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">first callback</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D 4A 08    STA   $084A
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D 4B 08    STA   $084B
+9702-   A9 97       LDA   #$97
+9704-   8D 4C 08    STA   $084C
+9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">second callback</p>
+      <code>970A-   A9 4C       LDA   #$4C
+970C-   8D 47 B7    STA   $B747
+970F-   A9 1C       LDA   #$1C
+9711-   8D 48 B7    STA   $B748
+9714-   A9 97       LDA   #$97
+9716-   8D 49 B7    STA   $B749
+9719-   4C 00 B7    JMP   $B700</code>
+      <p class="comment">third callback</p>
+      <code>971C-   A9 4C       LDA   #$4C
+971E-   8D AC A0    STA   $A0AC
+9721-   A9 59       LDA   #$59
+9723-   8D AD A0    STA   $A0AD
+9726-   A9 FF       LDA   #$FF
+9728-   8D AE A0    STA   $A0AE
+972B-   4C 00 A0    JMP   $A000</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE CAPTURE A070,A$9600,L$12E</code>
+      <code>*9600G
+...reboots slot 6...
+<beep></code>
+      <code>*A070</code>
+    </div>
+    <div class="listing">
+      <code>A070- FF</code>
+    </div>
+    <p>Now I can replace the entire nibble check with three lines of custom code to put the correct value in $A070 and exit:</p>
+    <div class="listing">
+      <code>A0BF-   A9 FF       LDA   #$FF
+A0C1-   8D 70 A0    STA   $A070
+A0C4-   60          RTS</code>
+    </div>
+    <p>T00,S0A,$BF change "BD 89 C0 A9 56 85"</p>
+    <p>to "A9 FF 8D 70 A0 60"</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

@@ -1,0 +1,215 @@
+<!doctype html>
+<html><head>
+<title>ColorMe</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+
+    <p>ColorMe: The Computer Coloring Kit is a double hi-res paint program, marketed as "a computer coloring program especially for children." It was released in 1985 and distributed by</p>
+    <p>Mindscape, Inc. under the "Sprout" software brand ("Fun learning software for ages 4 and up").</p>
+    <p>COPYA immediately fails to read the disk. EDD 4 bit copy gives no read errors, but the copy does not work. It boots, ponders the meaning of life, then reboots. My trusty Copy ][+ nibble editor shows standard address and data prologue on all tracks, but a non-standard epilogue. My trusty Copy ][+ sector editor, when patched to ignore epilogues and checksums ("P" to get to "Sector Editor Patcher," then select "DOS 3.3 Patched"), is able to read every sector on every track. That means I should be able to convert this to a standard disk with a $B942 patch.</p>
+    <div class="curses_input">
+      <code>[S6D1=DOS 3.3 master disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+]CALL -151
+*B942:18   <-- ignore errors on address
+               and data epilogues
+*3D0G
+]RUN COPYA</code>
+    </div>
+    <div class="curses_input">
+      <code>[S6D1=original disk]
+[S6D2=blank disk]</code>
+    </div>
+    <p>...read read read... ...grind grind grind... ...write write write...</p>
+    <p>OK, COPYA finished successfully. COPYA is very proud of itself. COPYA is a good boy. COPYA gets a gold star and a participation trophy.</p>
+    <p>Of course, the copy that it creates doesn't actually work (it reboots, just like the bit copy I made with EDD 4), but COPYA is blissfully ignorant of its failure. The Dunning-Kruger effect in all its 8-bit glory.</p>
+    <p>Time to bring out the big guns.</p>
+    <div class="curses_input">
+      <code>[S6D1=original disk]
+[S5D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0</code>
+      <code>]CALL -151
+*800<2800.28FFM
+*801L</code>
+    </div>
+    <div class="listing">
+      <code>0801-   A5 27       LDA   $27
+0803-   C9 09       CMP   #$09
+0805-   D0 13       BNE   $081A
+0807-   8D 0C C0    STA   $C00C
+080A-   8D 00 C0    STA   $C000
+080D-   8A          TXA
+080E-   4A          LSR
+080F-   4A          LSR
+0810-   4A          LSR
+0811-   4A          LSR
+0812-   09 C0       ORA   #$C0
+0814-   85 3F       STA   $3F
+0816-   A9 5C       LDA   #$5C
+0818-   85 3E       STA   $3E
+081A-   CE 75 08    DEC   $0875
+081D-   30 03       BMI   $0822
+081F-   6C 3E 00    JMP   ($003E)
+0822-   4C 00 16    JMP   $1600</code>
+    </div>
+    <p>Interesting. An entirely custom boot0 routine. It reuses the disk controller ROM routine at $C65C to read more sectors from track 0, in ascending order, into ascending memory addresses.</p>
+    <div class="line_editing">
+      <code>*875</code>
+    </div>
+    <div class="listing">
+      <code>0875- 0F</code>
+    </div>
+    <p>Looks like it's reading the entire rest of track 0 into $0900..$17FF.</p>
+    <p>Let's see what's at $1600.</p>
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D 22 08    STA   $0822
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D 23 08    STA   $0823
+9702-   A9 97       LDA   #$97
+9704-   8D 24 08    STA   $0824
+9707-   4C 01 08    JMP   $0801
+970A-   AD E8 C0    LDA   $C0E8
+970D-   A2 10       LDX   #$10
+970F-   B9 00 08    LDA   $0800,Y
+9712-   99 00 28    STA   $2800,Y
+9715-   C8          INY
+9716-   D0 F7       BNE   $970F
+9718-   EE 11 97    INC   $9711
+971B-   EE 14 97    INC   $9714
+971E-   CA          DEX
+971F-   D0 EE       BNE   $970F
+9721-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE1,A$9600,L$124
+*9600G
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]BSAVE BOOT1,A$2800,L$1000
+]CALL -151
+*800<2800.37FFM
+*1600L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">save some zero page state</p>
+      <code>1600-   A2 FF       LDX   #$FF
+1602-   B5 00       LDA   $00,X
+1604-   9D 00 30    STA   $3000,X
+1607-   CA          DEX
+1608-   D0 F8       BNE   $1602
+160A-   A9 0A       LDA   #$0A
+160C-   85 50       STA   $50</code>
+      <p class="comment">turn on the disk motor and go into read mode</p>
+      <code>160E-   A6 2B       LDX   $2B
+1610-   BD 89 C0    LDA   $C089,X
+1613-   BD 8E C0    LDA   $C08E,X</code>
+      <code>1616-   A9 96       LDA   #$96
+1618-   85 48       STA   $48
+161A-   A9 16       LDA   #$16
+161C-   85 49       STA   $49
+161E-   A9 80       LDA   #$80
+1620-   85 51       STA   $51</code>
+      <p class="comment">looks like the beginnings of a nibble check, with the failure path leading to $168F</p>
+      <code>1622-   C6 51       DEC   $51
+1624-   F0 69       BEQ   $168F
+1626-   20 9E 16    JSR   $169E
+1629-   B0 64       BCS   $168F
+162B-   A5 2D       LDA   $2D
+162D-   C9 0D       CMP   #$0D
+162F-   D0 F1       BNE   $1622</code>
+      <p class="comment">search for "D5" nibble</p>
+      <code>1631-   A0 00       LDY   #$00
+1633-   BD 8C C0    LDA   $C08C,X
+1636-   10 FB       BPL   $1633
+1638-   88          DEY
+1639-   F0 54       BEQ   $168F
+163B-   C9 D5       CMP   #$D5
+163D-   D0 F4       BNE   $1633</code>
+      <p class="comment">several "E7" nibbles</p>
+      <code>163F-   A0 00       LDY   #$00
+1641-   BD 8C C0    LDA   $C08C,X
+1644-   10 FB       BPL   $1641
+1646-   88          DEY
+1647-   F0 46       BEQ   $168F
+1649-   C9 E7       CMP   #$E7
+164B-   D0 F4       BNE   $1641
+164D-   BD 8C C0    LDA   $C08C,X
+1650-   10 FB       BPL   $164D
+1652-   C9 E7       CMP   #$E7
+1654-   D0 39       BNE   $168F
+1656-   BD 8C C0    LDA   $C08C,X
+1659-   10 FB       BPL   $1656
+165B-   C9 E7       CMP   #$E7
+165D-   D0 30       BNE   $168F
+165F-   BD 8D C0    LDA   $C08D,X
+1662-   A0 10       LDY   #$10
+1664-   24 06       BIT   $06</code>
+      <p class="comment">"EE"</p>
+      <code>1666-   BD 8C C0    LDA   $C08C,X
+1669-   10 FB       BPL   $1666
+166B-   88          DEY
+166C-   F0 21       BEQ   $168F
+166E-   C9 EE       CMP   #$EE
+1670-   D0 F4       BNE   $1666</code>
+      <p class="comment">more nibbles (sequence is stored at $1696)</p>
+      <code>1672-   A0 07       LDY   #$07
+1674-   BD 8C C0    LDA   $C08C,X
+1677-   10 FB       BPL   $1674
+1679-   D1 48       CMP   ($48),Y
+167B-   D0 12       BNE   $168F
+167D-   88          DEY
+167E-   10 F4       BPL   $1674</code>
+      <p class="comment">restore zero page state</p>
+      <code>1680-   A2 FF       LDX   #$FF
+1682-   BD 00 30    LDA   $3000,X
+1685-   95 00       STA   $00,X
+1687-   CA          DEX
+1688-   D0 F8       BNE   $1682</code>
+    </div>
+    <p>; success path continues execution</p>
+    <p>$ at $1706 168A- A2 60 LDX #$60 168C- 4C 06 17 JMP $1706</p>
+    <div class="listing">
+      <p class="comment">failure path eventually reboots</p>
+      <code>168F-   C6 50       DEC   $50
+1691-   D0 8B       BNE   $161E
+1693-   4C 00 C6    JMP   $C600</code>
+    </div>
+    <p>That explains the behavior I saw on my non-working copy: boot, pause, reboot. The pause was a combination of the boot0 code reading track 0 (slowly and inefficiently) and this routine failing a nibble check (relatively quick, but still takes some time).</p>
+    <div class="line_editing">
+      <code>*1706L</code>
+    </div>
+    <div class="listing">
+      <code>1706-   A2 60       LDX   #$60
+1708-   9D 80 C0    STA   $C080,X
+170B-   A2 63       LDX   #$63
+170D-   9D 80 C0    STA   $C080,X
+1710-   A9 60       LDA   #$60
+1712-   20 76 0A    JSR   $0A76</code>
+    </div>
+    <p>That's manually moving the drive stepper motors, probably to advance to track 1 so it can load the rest of the disk. Interestingly, LDX is set to $60 twice in a row -- once at $168A (just before the jump) and once at $1706 (just after). Combine that with the fact that the nibble check has no long-term side effects, and I bet I can just bypass the whole thing by jumping to $1706 instead of $1600 back in the boot0 code in T00,S00.</p>
+    <p>T00,S00,$23 change "00 16" to "06 17"</p>
+    <p>Success! The rest of the program loads and runs without complaint. There doesn't appear to be any further copy protection.</p>
+    <p>I also have two picture disks designed to be used with ColorMe.</p>
+    <p>- ColorMe "Hugga Bunch" picture disk</p>
+    <p>(two sides)</p>
+    <p>- ColorMe "Tink!Tonk!" picture disk</p>
+    <p class="seen">(two sides)</p>
+    <p>These disks are not bootable (well, technically they boot long enough to display a message that they're just data disks and that you should boot the program disk instead), but they use the same non-standard epilogue sequences as the ColorMe program disk. Using the $B942:18 trick allows COPYA to convert each of the picture disks to a standard format.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

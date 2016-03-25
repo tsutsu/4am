@@ -1,0 +1,145 @@
+<!doctype html>
+<html><head>
+<title>Boppie's Great Word Chase</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+
+    <p>"Boppie's Great Word Chase" is a 1985 education game. It was designed by John</p>
+    <p>Phillips. The Apple II version was programmed by Stephen A. Schlapp of</p>
+    <p>Mirror Images Software, Inc. It was distributed by Developmental Learning</p>
+    <p>Materials (DLM).</p>
+    <p class="seen">COPYA fails miserably and immediately. EDD 4 bit copy works, and the copy boots and runs without complaint. This tells me that there is some structural protection (i.e. data is stored on the disk in a non-standard way) but probably no secondary protection (e.g. an assembly language routine that executes during the boot process to determine whether it's booting from the original disk).</p>
+    <p class="seen">The original disk appears to boot a modified DOS 3.3. Listening to the disk drive, it quickly moves out to track 2, then back to track 1, then track 0, then swings out to track $11 to read the disk catalog and load the startup program (HELLO or similar). You can hear a lot just by listening.</p>
+    <p class="seen">Turning to my trusty Disk Fixer sector editor, I go to "Input/Output Control" (press "O") and set CHECKSUM ENABLED = NO. This option ignores checksum bytes and epilogue sequences -- as long as the address and data prologue are standard ("D5 AA 96" and "D5 AA AD", respectively), this will allow me to read each sector. And lo and behold, it works! I can read the data from every sector on every track.</p>
+    <p class="seen">Given the (relatively) weak structural protection, I used to turn to the DOS</p>
+    <p class="seen">3.3 master disk, patch the RWTS to ignore checksums and epilogue bytes (changing $B942 from "SEC" to "CLC"), and run COPYA. Then, one fine day, and completely by accident, I came across an original disk with a bad sector. I suppose this shouldn't surprise me.</p>
+    <p class="seen">These floppies are decades old by now; it's amazing any of them work at all.</p>
+    <p class="seen">The point is, I shouldn't be using tools that ignore potentially serious read errors. So no more COPYA+B942:18 patch. From now on, it's Super Demuffin or Advanced Demuffin to convert disks to a standard format. Let's see if AUTOTRACE can capture the RWTS from the original disk. If not, I'll have to resort to manual investigation.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+    </div>
+    <p class="seen">For those of you just tuning in, my work disk uses a custom program that I affectionately call "AUTOTRACE" to automate the process of boot tracing as far as possible. For some disks, this just captures track 0, sector 0 (saved in a file called "BOOT0") and stops.</p>
+    <p class="seen">For other disks that load in the same way that an unprotected DOS 3.3 disk loads, it captures the next stage of the boot process as well (in a file called "BOOT1"). BOOT1 contains sectors 0-9 on track 0, which are loaded into memory at $B600..$BFFF. This generally contains the RWTS routines which the program uses to read the rest of the disk.</p>
+    <p class="seen">If the RWTS is fairly normal as well (and my AUTOTRACE program just spot- checks a few memory locations to guess at its "normalcy"), there's a good chance I'll be able to use a tool called Advanced Demuffin (written in 1983 by The Stack) to convert the disk from whatever weird format it uses to store its sector data into a standard disk readable by unprotected DOS 3.3 disks or any other third-party tools.</p>
+    <p class="seen">In this case, AUTOTRACE extracts the RWTS routines (generally loaded from track 0, sectors 2-9 into $B800..$BFFF) and saves *that* into a third file called "RWTS".</p>
+    <p class="seen">If anything looks fishy or non- standard, AUTOTRACE just stops, and I have to check the files it saved so far to determine why. But in this case, it ran all the way through, automatically capturing BOOT0, BOOT1, and RWTS files.</p>
+    <p class="seen">Now I use plug that RWTS file into</p>
+    <p class="seen">Advanced Demuffin and try to convert the data on this disk to a standard format.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk (side A)]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>[press "5" to switch to slot 5]</code>
+      <code>[press "R" to load a new RWTS module]
+  --> At $B8, load "RWTS" from drive 1</code>
+      <code>[press "6" to switch to slot 6]</code>
+      <code>[press "C" to convert disk]</code>
+    </div>
+    <p class="seen">This disk is 16 sectors, and the default options (copy the entire disk, all tracks, all sectors) don't need to be changed unless something goes horribly wrong.</p>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:...................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:...................................
+SC1:...................................
+SC2:...................................
+SC3:...................................
+SC4:...................................
+SC5:...................................
+SC6:...................................
+SC7:...................................
+SC8:...................................
+SC9:...................................
+SCA:...................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:...................................
+=======================================
+16SC $00,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <p class="seen">The disk's own RWTS gave no read errors on any track. This is the power and the genius of Advanced Demuffin. Every disk must be able to read itself. So, let it read itself, then capture the data and write it out in a standard format.</p>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]CATALOG,S6,D2</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+316 FREE</code>
+    </div>
+    <div class="line_editing">
+      <code>*B 004 LOADER
+*B 026 MODULE.1
+*B 061 MODULE.2
+*B 053 MODULE.3
+*B 018 MODULE.4
+*T 002 WL3.BOPPIE
+*T 002 WL3.BOPPIE2
+*T 002 WL4.BOPPIE
+*T 002 WL5.BOPPIE
+*T 002 WL5.BOPPIE5
+*T 002 WL6.BOPPIE
+*T 002 WL7.BOPPIE
+*T 002 WL8.BOPPIE
+*A 002 HELLO</code>
+      <code>]RUN HELLO</code>
+    </div>
+    <p>...crashes.</p>
+    <p>However, rebooting from the DOS 3.3 master disk (instead of my work disk, which runs 64K Diversi-DOS) and running the HELLO program does work; the game loads and runs without complaint. This tells me two things:</p>
+    <p>1. The application doesn't have any</p>
+    <p>runtime checks to ensure that it was booted from its the original disk's custom DOS.</p>
+    <p>2. It's calling some DOS functions</p>
+    <p>directly, without going through the vectors in page 3. Not a big deal, since it worked from a standard DOS</p>
+    <p>3.3 disk.</p>
+    <p class="seen">While that's excellent progress, I'm not quite done yet. Booting the demuffin'd disk directly just grinds endlessly, because it still has the original RWTS on it. That is, it still assumes that the data on the disk is stored in a non-standard format. But that's not true anymore, because</p>
+    <p class="seen">Advanced Demuffin just normalized the disk format. So I need to patch the RWTS on my copy so it can read itself.</p>
+    <p class="seen">A lot of disks need this sort of post- demuffin patching, and I got tired of doing it manually, so I wrote a program to do it for me. It is called, unsurprisingly, Post-Demuffin Patcher.</p>
+    <p class="seen">It prompts you to select a slot and drive, then reads the demuffin'd disk, checks for a modified DOS 3.3-shaped RWTS, and applies the necessary patches so the disk can read itself. (It can also detect and bypass some nibble checks.) I've included a copy of Post-</p>
+    <p class="seen">Demuffin Patcher on my work disk; the full source code is currently available at <https://archive.org/details/ PostDemuffinPatcher4am>.</p>
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]BRUN PDP</code>
+    </div>
+    <p>T00,S03,$91 change AA to DE T00,S03,$9B change DE to AA T00,S03,$35 change AA to DE T00,S03,$3F change DE to AA T00,S06,$AE change AA to DE T00,S06,$B3 change DE to AA T00,S02,$9E change AA to DE T00,S02,$A3 change DE to AA</p>
+    <p>This is the actual output of the program. Post-Demuffin Patcher prints out the changes it is going to make before it writes them to the disk. They all look like minor RWTS modifications.</p>
+    <p>The epilogue bytes (normally "DE AA") appear to have been switched ("AA DE"). PDP had no problem switching them back.</p>
+    <div class="line_editing">
+      <code>]PR#6</code>
+    </div>
+    <p class="seen">Success! The disk boots and runs with no complaint. There doesn't appear to be any further protection. Hooray for automation.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

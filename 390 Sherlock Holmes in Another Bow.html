@@ -1,0 +1,381 @@
+<!doctype html>
+<html><head>
+<title>Sherlock Holmes in Another Bow</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+
+    <p class="seen">Side A is protected but bootable.</p>
+    <p class="seen">Side B is unprotected but unbootable.</p>
+    <p class="seen">Life is like that.</p>
+    <p class="seen">This has not been a haiku.</p>
+</section>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p>Side B copies with COPYA. Side A, on the other hand...</p>
+    <p class="seen">COPYA</p>
+    <p>fails on last pass</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p>unable to read track $22; copy swings to a high track, then turns off the drive motor and hangs</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p>no errors, but copy displays same behavior as Locksmith FDB</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">there's definitely data on track $22, but it's not in any recognizable pattern</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK: 22  START: 37F9  LENGTH: 0F0F</code>
+      <code>37D8: B7 FF BA FA BB F7 BD F7   VIEW
+37E0: BE BF FB BE F6 FF FE BF
+37E8: BE BB EA EA FB AA BA EA
+37F0: EB EF DF BF FF F7 F6 EF
+37F8: EE AB AB AB FF D5 D5 D5  <-37F9
+3800: FF EA EA EA FF F5 F5 F5
+3808: FF FA FA FA FF FD FD FD
+3810: FF FE FE FE FF FF B6 FD
+3818: B7 FF BA FA BB F7 BD F7</code>
+      <code>---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">Disk Fixer</p>
+    <p>T00 -> looks like DOS 3.3 bootloader no sign of full DOS though no sign of a disk catalog anywhere no way to read track $22</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p>something strange in the neighborhood of track $22</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p>probably a nibble check that reads the uncopyable track $22</p>
+    <p class="seen">Why didn't my EDD copy work?</p>
+    <p class="seen">ditto</p>
+    <p class="seen">Next steps:</p>
+    <p>1. AUTOTRACE to trace the boot as far as possible</p>
+    <p class="seen">2. Find and disable the nibble check</p>
+    <p class="seen">3. Declare victory(*)</p>
+    <p>(*) take a nap(**) (**) we're not getting any younger, you</p>
+    <p>know</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Do Not Get Lucky</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+    </div>
+    <p>The RWTS probably won't be that useful, since I can already read most of the disk with third-party tools. I doubt that it contains anything that can read track $22. But maybe we'll get lucky.</p>
+    <div class="line_editing">
+      <code>]BLOAD BOOT1,A$2600
+]CALL -151</code>
+      <code>*B600<2600.2EFFM
+*B700L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">appears to be filling out a standard RWTS paramter table</p>
+      <code>B700-   8E E9 B7    STX   $B7E9
+B703-   8E F7 B7    STX   $B7F7
+B706-   A9 01       LDA   #$01
+B708-   8D F8 B7    STA   $B7F8
+B70B-   8D EA B7    STA   $B7EA
+B70E-   AD E0 B7    LDA   $B7E0
+B711-   8D E1 B7    STA   $B7E1</code>
+    </div>
+    <div class="line_editing">
+      <code>*B7E0</code>
+    </div>
+    <div class="listing">
+      <code>B7E0- 10</code>
+    </div>
+    <p>OK, reading 16 sectors.</p>
+    <div class="listing">
+      <p class="comment">track $16</p>
+      <code>B714-   A9 16       LDA   #$16
+B716-   8D EC B7    STA   $B7EC</code>
+      <p class="comment">sector $0F</p>
+      <code>B719-   A9 0F       LDA   #$0F
+B71B-   8D ED B7    STA   $B7ED
+B71E-   AC E7 B7    LDY   $B7E7
+B721-   88          DEY
+B722-   8C F1 B7    STY   $B7F1</code>
+    </div>
+    <div class="line_editing">
+      <code>*B7E7</code>
+    </div>
+    <div class="listing">
+      <code>B7E7- 50</code>
+    </div>
+    <p>So we'll end up filling $4000..$4FFF.</p>
+    <div class="listing">
+      <code>B725-   A9 01       LDA   #$01
+B727-   8D F4 B7    STA   $B7F4
+B72A-   8A          TXA
+B72B-   4A          LSR
+B72C-   4A          LSR
+B72D-   4A          LSR
+B72E-   4A          LSR
+B72F-   AA          TAX
+B730-   A9 00       LDA   #$00
+B732-   9D F8 04    STA   $04F8,X
+B735-   9D 78 04    STA   $0478,X</code>
+      <p class="comment">read it</p>
+      <code>B738-   20 93 B7    JSR   $B793
+B73B-   A2 FF       LDX   #$FF
+B73D-   9A          TXS
+B73E-   8E EB B7    STX   $B7EB
+B741-   20 A1 FE    JSR   $FEA1
+B744-   20 89 FE    JSR   $FE89</code>
+      <p class="comment">and jump to it</p>
+      <code>B747-   4C 00 40    JMP   $4000</code>
+    </div>
+    <p class="seen">And that's where I need to interrupt the boot.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which Luck Is What You Make It</h3>
+
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up callback after boot0 loads boot1</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D 4A 08    STA   $084A
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D 4B 08    STA   $084B
+9702-   A9 97       LDA   #$97
+9704-   8D 4C 08    STA   $084C</code>
+      <p class="comment">start the boot</p>
+      <code>9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">callback #1 is here -- boot1 is in memory, so patch it to call my code instead of continuing to $4000</p>
+      <code>970A-   A9 4C       LDA   #$4C
+970C-   8D 47 B7    STA   $B747
+970F-   A9 1C       LDA   #$1C
+9711-   8D 48 B7    STA   $B748
+9714-   A9 97       LDA   #$97
+9716-   8D 49 B7    STA   $B749</code>
+      <p class="comment">continue the boot</p>
+      <code>9719-   4C 00 B7    JMP   $B700</code>
+      <p class="comment">callback #2 is here -- just reboot to my work disk</p>
+      <code>971C-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE,A$9600,L$11F
+*9600G
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]BSAVE BOOT2 4000-4FFF,A$4000,L$1000
+]CALL -151</code>
+      <code>*4000L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">reset stack</p>
+      <code>4000-   A2 FF       LDX   #$FF
+4002-   9A          TXS
+4003-   D8          CLD</code>
+      <p class="comment">read/write language card RAM bank 1</p>
+      <code>4004-   AD 8B C0    LDA   $C08B
+4007-   AD 8B C0    LDA   $C08B</code>
+      <p class="comment">copy this code into it</p>
+      <code>400A-   A9 40       LDA   #$40
+400C-   85 70       STA   $70
+400E-   A9 D0       LDA   #$D0
+4010-   85 72       STA   $72
+4012-   A9 00       LDA   #$00
+4014-   85 6F       STA   $6F
+4016-   85 71       STA   $71
+4018-   A8          TAY
+4019-   B1 6F       LDA   ($6F),Y
+401B-   91 71       STA   ($71),Y
+401D-   88          DEY
+401E-   D0 F9       BNE   $4019
+4020-   E6 70       INC   $70
+4022-   E6 72       INC   $72
+4024-   A5 70       LDA   $70
+4026-   C9 50       CMP   #$50
+4028-   D0 EF       BNE   $4019</code>
+      <p class="comment">and jump there</p>
+      <code>402A-   4C 2D D0    JMP   $D02D</code>
+    </div>
+    <div class="line_editing">
+      <p class="comment">disconnect DOS (Diversi-DOS 64K on my work disk conflicts with what I'm about to do)</p>
+      <code>*FE89G FE93G</code>
+      <p class="comment">copy F8 ROM to RAM so we can continue poking around once the language card is active</p>
+      <code>*C08D C08D F800<F800.FFFFM</code>
+    </div>
+    <div class="listing">
+      <code>C08D- B0
+C08D- B0</code>
+    </div>
+    <div class="line_editing">
+      <p class="comment">patch this code to break to monitor after copying itself</p>
+      <code>*402A:4C 59 FF
+*4000G
+<beep></code>
+    </div>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which We Make Our Own Luck</h3>
+
+    <div class="line_editing">
+      <code>*D02DL</code>
+    </div>
+    <div class="listing">
+      <code>D02D-   20 A1 D9    JSR   $D9A1
+D030-   90 03       BCC   $D035
+D032-   4C 32 D0    JMP   $D032   <-- !</code>
+    </div>
+    <p>OK, without even seeing it, I'm gonna go out on a limb and say that it's really important for the subroutine at $D9A1 to clear the carry on exit. It's either that, or end up in an infinite loop at $D032.</p>
+    <p>(This may be where my non-functioning copies ended up.)</p>
+    <div class="line_editing">
+      <code>*D9A1L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">clear carry to start</p>
+      <code>D9A1-   18          CLC</code>
+      <p class="comment">turn on drive motor (hard-coded to slot 6, booooo)</p>
+      <code>D9A2-   A2 60       LDX   #$60
+D9A4-   BD 8A C0    LDA   $C08A,X
+D9A7-   BD 89 C0    LDA   $C089,X</code>
+    </div>
+    <p class="seen">A fun(*) thing to do is boot original floppies from slot 5. Lots of copy protection routines (including this one) hard-code slot 6, so you can find out when they're called because the slot 6 drive light will suddenly go on.</p>
+    <p class="seen">(*) not guaranteed, actual fun may vary</p>
+    <div class="listing">
+      <code>D9AA-   A9 0C       LDA   #$0C
+D9AC-   0A          ASL
+D9AD-   A0 00       LDY   #$00</code>
+      <p class="comment">subroutine moves the drive head based on the entry value of the accumulator and the current track -- since we're on track $16 and we're moving $0C tracks forward, we end up on the mysterious track $22</p>
+      <code>D9AF-   20 EF DA    JSR   $DAEF</code>
+      <p class="comment">reset data latch, skip some nibbles</p>
+      <code>D9B2-   A9 40       LDA   #$40
+D9B4-   85 FA       STA   $FA
+D9B6-   A2 60       LDX   #$60
+D9B8-   BD 8E C0    LDA   $C08E,X
+D9BB-   BD 8C C0    LDA   $C08C,X
+D9BE-   10 FB       BPL   $D9BB
+D9C0-   C6 F9       DEC   $F9
+D9C2-   D0 F7       BNE   $D9BB
+D9C4-   C6 FA       DEC   $FA
+D9C6-   D0 F3       BNE   $D9BB
+D9C8-   AD AB DA    LDA   $DAAB
+D9CB-   8D AC DA    STA   $DAAC
+D9CE-   20 45 DA    JSR   $DA45</code>
+      <p class="comment">initialize state</p>
+      <code>DA45-   A0 00       LDY   #$00
+DA47-   18          CLC
+DA48-   2A          ROL
+DA49-   85 FB       STA   $FB</code>
+      <p class="comment">get a nibble</p>
+      <code>DA4B-   AD EC C0    LDA   $C0EC
+DA4E-   10 FB       BPL   $DA4B</code>
+      <p class="comment">compute a rolling checksum</p>
+      <code>DA50-   AA          TAX
+DA51-   45 FB       EOR   $FB
+DA53-   2A          ROL
+DA54-   49 41       EOR   #$41
+DA56-   85 FB       STA   $FB</code>
+      <p class="comment">Y is the Death Counter -- if it rolls over to 0, branch to failure path which turns off the drive motor, sets the carry and exits</p>
+      <code>DA58-   C8          INY
+DA59-   F0 CD       BEQ   $DA28</code>
+    </div>
+    <div class="line_editing">
+      <code>*DA28L</code>
+    </div>
+    <div class="listing">
+      <code>DA28-   AD E8 C0    LDA   $C0E8
+DA2B-   38          SEC
+DA2C-   60          RTS</code>
+    </div>
+    <p>Continuing from $DA5B...</p>
+    <div class="listing">
+      <p class="comment">loop until we find an $F7 nibble</p>
+      <code>DA5B-   8A          TXA
+DA5C-   C9 F7       CMP   #$F7
+DA5E-   D0 EB       BNE   $DA4B</code>
+      <p class="comment">Now we get the next nibble, but wait!</p>
+      <p class="comment">We've spent so much time computing the checksum that we would ordinarily miss the next nibble. But on the original disk, there is a timing bit (an extra "0" bit) after the $F7, so that gives us just enough time to catch the next nibble before it goes whizzing by as the disk spins.</p>
+      <code>DA60-   AD EC C0    LDA   $C0EC
+DA63-   10 FB       BPL   $DA60
+DA65-   AA          TAX
+DA66-   45 FB       EOR   $FB
+DA68-   2A          ROL
+DA69-   49 41       EOR   #$41
+DA6B-   85 FB       STA   $FB
+DA6D-   C8          INY
+DA6E-   8A          TXA
+DA6F-   C9 F7       CMP   #$F7
+DA71-   F0 ED       BEQ   $DA60</code>
+      <p class="comment">that nibble must be $F6</p>
+      <code>DA73-   C9 F6       CMP   #$F6
+DA75-   D0 D4       BNE   $DA4B</code>
+      <p class="comment">get the next nibble (same deal -- there's a timing bit after the $F6)</p>
+      <code>DA77-   AD EC C0    LDA   $C0EC
+DA7A-   10 FB       BPL   $DA77
+DA7C-   AA          TAX
+DA7D-   45 FB       EOR   $FB
+DA7F-   2A          ROL
+DA80-   49 41       EOR   #$41
+DA82-   85 FB       STA   $FB
+DA84-   C8          INY
+DA85-   8A          TXA
+DA86-   C9 F7       CMP   #$F7
+DA88-   F0 D6       BEQ   $DA60</code>
+      <p class="comment">that nibble must be $EF</p>
+      <code>DA8A-   C9 EF       CMP   #$EF
+DA8C-   D0 BD       BNE   $DA4B</code>
+      <p class="comment">get the next nibble (same deal -- there's a timing bit after the $EF)</p>
+      <code>DA8E-   AD EC C0    LDA   $C0EC
+DA91-   10 FB       BPL   $DA8E
+DA93-   AA          TAX
+DA94-   45 FB       EOR   $FB
+DA96-   2A          ROL
+DA97-   49 41       EOR   #$41
+DA99-   85 FB       STA   $FB
+DA9B-   C8          INY
+DA9C-   8A          TXA
+DA9D-   C9 F7       CMP   #$F7
+DA9F-   F0 BF       BEQ   $DA60</code>
+      <p class="comment">that nibble must be $EE</p>
+      <code>DAA1-   C9 EE       CMP   #$EE
+DAA3-   D0 A6       BNE   $DA4B</code>
+      <p class="comment">get next nibble immediately</p>
+      <code>DAA5-   AD EC C0    LDA   $C0EC
+DAA8-   10 FB       BPL   $DAA5
+DAAA-   60          RTS</code>
+    </div>
+    <p>Continuing from $D9D1...</p>
+    <div class="listing">
+      <p class="comment">compare the nibble we just read (at $DAA5)</p>
+      <code>D9D1-   C9 AB       CMP   #$AB</code>
+      <p class="comment">if it's not $AB, jump to failure path</p>
+      <code>D9D3-   D0 53       BNE   $DA28</code>
+    </div>
+    <p class="seen">It goes on like this for a while, checking a whole sequence of nibbles after that, then doing it a few more times to ensure it wasn't just a fluke that it passed the first time. But my non-working copy has already failed, because it has no timing bits after the $F7, $F6, $EF, or $EE nibbles.</p>
+    <p>The original disk eventually falls through to $DA23 (not shown), which turns off the drive, *clears* the carry, and exits. My non-working copies always end up at $DA28, which turns off the drive, *sets* the carry, and exits.</p>
+    <p>The first instruction at $D9A1 is already a "CLC", which is convenient.</p>
+    <p class="seen">Let's change the second instruction to an "RTS" so this routine always signals unconditional success.</p>
+    <p>T16,S09,$A2 change "A2" to "60"</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

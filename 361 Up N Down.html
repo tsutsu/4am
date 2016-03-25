@@ -1,0 +1,164 @@
+<!doctype html>
+<html><head>
+<title>Up N Down</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">unable to read any track</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">works</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p>modified address and data epilogues ("AA DE EB" instead of "DE AA EB")</p>
+    <p class="seen">Disk Fixer</p>
+    <p>custom bootloader no sign of DOS, ProDOS, or any OS</p>
+    <p>Also, this:</p>
+    <div class="terminal_output">
+      <code>-------------- DISK EDIT --------------
+TRACK $00/SECTOR $0F/VOLUME $FE/BYTE$00
+---------------------------------------
+$00:  >H<E L L O   T H E R E   T H I S
+$10:     I S   T H E   C R E A T O R
+$20:   O F   U & D .   T H I S   S E C
+$30:   T O R   O N   T H E   D I S K
+$40:   I S   O F   N O   V A L U E   A
+$50:   N D   T H E R E   I S   N O   S
+$60:   E N S E   E V E N   L O O K I N
+$70:   G   A T   I T .   S O   W H A T
+$80:     A R E   Y O U   D O I N G ! .
+$90:       P R O G R A M   B Y   E R I
+$A0:   C   J .   P O P E J O Y   A N D
+$B0:     K E N   O .   J O R D A N .
+$C0:   K E N   A L S O   G O E S   B Y
+$D0:     ' K E Y B O A R D   O R   J O
+$E0:   Y S T I C K ' .   H A P P Y   C
+$F0:   R A C K I N G ! 0 0 0 0 0 .   H
+---------------------------------------
+BUFFER 0/SLOT 6/DRIVE 1/MASK OFF/NORMAL</code>
+      <code>---------------------------------------
+COMMAND :</code>
+    </div>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">EDD worked. What does that tell us?</p>
+    <p>no half or quarter tracks almost certainly no nibble check just structural changes to epilogues</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Super Demuffin</p>
+    <p class="seen">2. Patch RWTS</p>
+    <p class="seen">3. There is no step 3 (I hope)</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Choose The Right Tool For The Job</h3>
+
+    <p>I'm going to use Super Demuffin here (instead of my usual go-to conversion tool, Advanced Demuffin). The disk uses some custom bootloader that I've never seen before, so my automated tools can't capture the RWTS. Luckily, the RWTS modifications are minor (custom epilogue bytes, same on every track), so Super Demuffin will work just fine.</p>
+    <p>When you first run Super Demuffin, it asks for the parameters of the original disk. In this case, the prologue bytes are the same, but the epilogues are "AA DE EB" instead of "DE AA EB".</p>
+    <div class="curses">
+      <code>      SUPER-DEMUFFIN AND FAST COPY
+Modified by: The Saltine/Coast to Coast</code>
+      <code>
+   Address prologue: D5 AA 96</code>
+      <code>   Address epilogue: AA DE EB    DISK
+                     ^^^^^     ORIGINAL
+change from DE AA ---+++++</code>
+      <code>      Data prologue: D5 AA AD</code>
+      <code>      Data epilogue: AA DE EB
+                     ^^^^^
+change from DE AA ---+++++</code>
+      <code>
+ Ignore write errors while demuffining!</code>
+      <code>
+  D - Edit parameters
+      <SPACE> - Advance to next parm
+      <RETURN> - Exit edit mode
+  R - Restore DOS 3.3 parameters
+  O - Edit Original disk's parameters
+  C - Edit Copy disk's parameters
+  G - Begin demuffin process</code>
+    </div>
+    <p class="seen">Pressing "G" switches to the Locksmith</p>
+    <p class="seen">Fast Disk Copy UI. It assumes that both disks are in slot 6, and that drive 1 is the original and drive 2 is the copy.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>     LOCKSMITH 7.0  FAST DISK BACKUP</code>
+      <code>
+   R...................................
+   W***********************************
+HEX 00000000000000001111111111111111222
+TRK 0123456789ABCDEF0123456789ABCDEF012
+   0...................................
+   1...................................
+   2...................................
+   3...................................
+   4...................................
+   5...................................
+   6...................................
+   7...................................
+   8...................................
+   9...................................
+   A...................................
+   B...................................
+   C...................................
+   D...................................
+12 E...................................
+   F...................................
+[               ] PRESS [RESET] TO EXIT</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...boots to title screen then grinds...</code>
+    </div>
+    <p>Interesting. It booted much further than I would have expected. (Usually disks either work completely or fail much sooner.)</p>
+    <p>My semi-educated guess: the disk is using a flexible RWTS for most of the initial loading, but not all of it. At some point, it's switching to an RWTS RWTS that cares about epilogue bytes, and it grinds and fails because they've now been standardized.</p>
+    <p>Of course, I could be totally wrong about all of that.</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Confirm That Hard Work Pays Off Over Time, But Laziness Pays Off Right Now</h3>
+
+    <p>Before I jump to full-on boot tracing,</p>
+    <p>I turn to my trusty Disk Fixer sector editor and see if there is an RWTS in evidence.</p>
+    <div class="curses_input">
+      <code>[Disk Fixer]
+  ["F"ind]
+    ["H"ex]
+      "BD 8C C0"        ; "LDA $C08C,X"</code>
+    </div>
+    <p>There are several matches on track $00, but as I suspected, that RWTS doesn't care about epilogue bytes. But there are also more matches on track $03.</p>
+    <p>Let's see what that's about...</p>
+    <div class="terminal_output">
+      <code>T03,S03
+----------- DISASSEMBLY MODE ----------
+0040:A0 20          LDY   #$20
+0042:AE 25 0E       LDX   $0E25
+0045:88             DEY
+0046:F0 56          BEQ   $009E</code>
+    </div>
+    <p>; find data prologue ("D5 AA AD")</p>
+    <p>0048:BD 8C C0 LDA $C08C,X 004B:10 FB BPL $0048 004D:49 D5 EOR #$D5 004F:D0 F4 BNE $0045 0051:BD 8C C0 LDA $C08C,X 0054:10 FB BPL $0051 0056:C9 AA CMP #$AA 0058:D0 F3 BNE $004D 005A:A0 56 LDY #$56 005C:BD 8C C0 LDA $C08C,X 005F:10 FB BPL $005C 0061:C9 AD CMP #$AD 0063:D0 E8 BNE $004D . . . ; check one nibble of data epilogue 0095:BD 8C C0 LDA $C08C,X 0098:10 FB BPL $0095 009A:C9 AA CMP #$AA <-- ! 009C:F0 4E BEQ $00EC 009E:38 SEC 009F:60 RTS</p>
+    <p>; find address prologue ("D5 AA 96")</p>
+    <p>00A0:A0 00 LDY #$00 00A2:AE 25 0E LDX $0E25 00A5:C8 INY 00A6:F0 F6 BEQ $009E 00A8:BD 8C C0 LDA $C08C,X 00AB:10 FB BPL $00A8 00AD:C9 D5 CMP #$D5 00AF:D0 F4 BNE $00A5 00B1:BD 8C C0 LDA $C08C,X 00B4:10 FB BPL $00B1 00B6:C9 AA CMP #$AA 00B8:D0 F3 BNE $00AD 00BA:BD 8C C0 LDA $C08C,X 00BD:10 FB BPL $00BA 00BF:C9 96 CMP #$96 00C1:D0 EA BNE $00AD . . . ; check one nibble of address epilogue 00E3:BD 8C C0 LDA $C08C,X 00E6:10 FB BPL $00E3 00E8:C9 AA CMP #$AA <-- ! 00EA:D0 B2 BNE $009E 00EC:18 CLC 00ED:60 RTS</p>
+    <p>Jackpot! It looks like it only checks the first nibble of the address and data epilogues, so let's try patching those "AA" bytes to match the now- standardized epilogues on my copy.</p>
+    <p>T03,S03,$9B change "AA" to "DE" T03,S03,$E9 change "AA" to "DE"</p>
+    <div class="line_editing">
+      <code>]PR#6
+...works...</code>
+    </div>
+    <p class="seen">There doesn't appear to be any further protection.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

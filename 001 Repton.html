@@ -1,0 +1,139 @@
+<!doctype html>
+<html><head>
+<title>Repton</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+
+    <p>The original Apple II disk for Repton is encoded in a custom nibble scheme with a 4-4 encoding that stores 12 pages of data per track. There is no way to replicate this storage structure on a disk image or unprotected disk, so</p>
+    <p>I'm going to break down the entire RWTS and build it back up.</p>
+    <p>T0S0 loads the RWTS starting at $BA00, then jumps to $BA80.</p>
+    <p>$BA80 initializes a bunch of boring stuff, then starts loading tracks:</p>
+    <div class="listing">
+      <code>BAE5-   A9 02       LDA   #$02
+BAE7-   A0 05       LDY   #$05
+BAE9-   8D 07 BA    STA   $BA07
+BAEC-   8C 06 BA    STY   $BA06
+BAEF-   20 21 BB    JSR   $BB21</code>
+    </div>
+    <p>$BB21 is the entry point to read all data (12 pages worth) from a specific track (passed in the A register as track number x 2, as is common in these track-at-a-time RWTS). $BB95 contains a table of destination addresses, used by the read routine at $BB21 to decide where to put the data read from each track.</p>
+    <div class="listing">
+      <code>BB95- BA 04 10
+BB98- 14 60 6C 78 84 90 9C A8
+BBA0- 04 10 14</code>
+    </div>
+    <p>So track 1 gets put into $0400, track 2 into $1000, track 3 into $1400 (overwriting part of the data read in from track 2), and so on.</p>
+    <div class="listing">
+      <code>BAF2-   AD 07 BA    LDA   $BA07
+BAF5-   90 18       BCC   $BB0F
+BAF7-   AC 06 BA    LDY   $BA06
+BAFA-   88          DEY
+BAFB-   F0 0F       BEQ   $BB0C
+BAFD-   8C 06 BA    STY   $BA06
+; a complicated checksum routine
+BB00-   20 76 BA    JSR   $BA76
+BB03-   AC 06 BA    LDY   $BA06
+BB06-   AD 07 BA    LDA   $BA07
+BB09-   4C E9 BA    JMP   $BAE9
+; pray you never end up here
+BB0C-   4C 8E BD    JMP   $BD8E
+; advance to next track and repeat
+BB0F-   69 02       ADC   #$02
+BB11-   C9 1C       CMP   #$1C
+BB13-   D0 D2       BNE   $BAE7</code>
+    </div>
+    <p>All told, this loop reads data into $0400-$1FFF and $6000-$B3FF. The entire process is less efficient than it could be. The range $0400-$1FFF briefly contains code from tracks 01-03 before being overwritten with (different) code from tracks 0B-0D.</p>
+    <p>Once all the data is loaded, it seeks to the end of the disk to perform not one but two different nibble checks:</p>
+    <div class="listing">
+      <code>BB15-   20 A3 BB    JSR   $BBA3
+BB18-   20 5B BC    JSR   $BC5B</code>
+    </div>
+    <p>Experimentation shows that these calls can simply be NOP'd out. Then it turns off the disk motor and jumps to $0767 to start the title screen and instructions/demo.</p>
+    <div class="listing">
+      <code>BB1B-   BD 88 C0    LDA   $C088,X
+BB1E-   4C 67 07    JMP   $0767</code>
+    </div>
+    <p>If the space bar is pressed at any time during the demo (checked at $06A0), it jumps to $0764, which jumps to $BA00, which jumps to $BA08.</p>
+    <p>$BA08 loads the main game code from tracks 01-03 into $0400-$1FFF (overwriting the title screen code that was initially loaded from tracks 0B-0D) and jumps to $868C to start the game.</p>
+    <div class="listing">
+      <p class="comment">calibrate disk motor</p>
+      <code>BA08-   A6 FB       LDX   $FB
+BA0A-   20 5B BA    JSR   $BA5B
+; read track 1 (into $0400)
+BA0D-   A9 02       LDA   #$02
+BA0F-   20 21 BB    JSR   $BB21
+BA12-   B0 0E       BCS   $BA22
+; read track 2 (into $1000)
+BA14-   A9 04       LDA   #$04
+BA16-   20 21 BB    JSR   $BB21
+BA19-   B0 07       BCS   $BA22
+; read track 3 (into $1400)
+BA1B-   A9 06       LDA   #$06
+BA1D-   20 21 BB    JSR   $BB21
+BA20-   90 06       BCC   $BA28
+; pray you don't end up here
+BA22-   20 76 BA    JSR   $BA76
+BA25-   4C 0D BA    JMP   $BA0D
+; turn off disk motor and start game
+BA28-   BD 88 C0    LDA   $C088,X
+BA2B-   4C 8C 86    JMP   $868C</code>
+    </div>
+    <p>Once the main game code is loaded, $89B7 contains a jump to $BA03, which jumps to $BA2E, which reloads the title screen code into $0400-$1FFF and some data into $A800-$B3FF, and jumps to $0767 again.</p>
+    <div class="listing">
+      <p class="comment">calibrate disk motor</p>
+      <code>BA2E-   A6 FB       LDX   $FB
+BA30-   20 5B BA    JSR   $BA5B
+; read track 0A (into $0400)
+BA33-   A9 14       LDA   #$14
+BA35-   20 21 BB    JSR   $BB21
+BA38-   B0 15       BCS   $BA4F
+; read track 0B (into $1000)
+BA3A-   A9 16       LDA   #$16
+BA3C-   20 21 BB    JSR   $BB21
+BA3F-   B0 0E       BCS   $BA4F
+; read track 0C (into $1400)
+BA41-   A9 18       LDA   #$18
+BA43-   20 21 BB    JSR   $BB21
+BA46-   B0 07       BCS   $BA4F
+; read track 0D (into $A800)
+BA48-   A9 1A       LDA   #$1A
+BA4A-   20 21 BB    JSR   $BB21
+BA4D-   90 06       BCC   $BA55
+; pray you don't end up here
+BA4F-   20 76 BA    JSR   $BA76
+BA52-   4C 33 BA    JMP   $BA33
+; turn off disk motor and show title
+BA55-   BD 88 C0    LDA   $C088,X
+BA58-   4C 67 07    JMP   $0767</code>
+    </div>
+    <p>According to my calculations, there's just enough room to save this as a single-load game WITH the title screen. Which is great, because that saves me the trouble of futzing with an RWTS.</p>
+    <p>Here's the file layout:</p>
+    <p>$07FD jumps to a custom initialization routine at $9406.</p>
+    <p>$0800-$1FFF contains the title screen code that belongs there.</p>
+    <p>$2000-$3FFF holds $20 pages of common code (to be moved into $9400-$B3FF).</p>
+    <p>$4000-$43FF holds $04 pages of title screen code (to be moved into $0400-$07FF).</p>
+    <p>$4400-$5FFF holds $1C pages of game code (to be moved into auxiliary RAM and later moved into $0400-$1FFF).</p>
+    <p>$6000-$93FF contains the code that belongs there.</p>
+    <p>$9400-$95FF is free space where I can write the custom initialization routine that moves everything into the right memory locations.</p>
+    <p>To eliminate the disk read when switching between the title screen and the actual game, I can store the game code ($0400-$1FFF) in auxiliary RAM at $D000. When the time comes to read the game code from disk, I can simply copy it down to main memory instead.</p>
+    <p>This clever plan is complicated somewhat by the fact that I *also* need to store the title screen code somewhere, since the original disk re-reads the title screen code from tracks 0B-0D every time the game ends (or when the player presses Ctrl-Q).</p>
+    <p>Luckily, I can simulate this as well by swapping that code out as I swap the game code in.</p>
+    <p>Thus, in pseudo-code, the custom initialization routine needs to work something like this:</p>
+    <p>copy $02 pages from $9400 to $BA00 and jump there to continue MEMCPY(X=20, A=20, Y=94) ; copy $20 pages from $2000 to $9400 activate aux RAM bank 2 for writing MEMCPY(X=1C, A=44, Y=D0) ; copy $1C pages from $4400 to $D000 MEMCPY(X=0C, A=A8, Y=EC) ; copy $0C pages from $A800 to $EC00 deactivate aux RAM bank 2 clear $20 pages at $2000 show HGR page 1 MEMCPY(X=04, A=40, Y=04) ; copy $04 pages from $4000 to $0400 set up zero page the same way the original disk does JMP $0767</p>
+    <p>The original game jumps to $BA00 to load the game code after the title screen is done. This should instead jump to a custom routine that copies that code from aux RAM:</p>
+    <p>JSR .SWAPCODE ; see below JMP $868C ; start the game</p>
+    <p>Similarly, once the game ends, it jumps to $BA03 to re-load the title screen code. This should instead jump to a custom routine that copies that code from aux RAM:</p>
+    <p>JSR .SWAPCODE ; see below activate aux RAM bank 2 for reading MEMCPY(X=0C, A=EC, Y=A8) ; copy $0C pages from $EC00 to $A800 deactivate aux RAM bank 2 JMP $0767 ; start the title/demo</p>
+    <p>The shared code here is a routine that swaps one block of code out and the other one in. During the transition from title to game or game to title, HGR page 2 is unused and can be safely clobbered. So I can use that as a temporary buffer to make the swapping easier.</p>
+    <p>.SWAPCODE</p>
+    <p>show HGR page 1 MEMCPY(X=1C, A=04, Y=40) ; copy $1C pages from $0400 to $4000 activate RAM bank 2 for reading MEMCPY(X=1C, A=D0, Y=04) ; copy $1C pages from $D000 to $0400 activate RAM bank 2 for writing MEMCPY(X=1C, A=40, Y=D0) ; copy $1C pages from $4000 to $D000 deactivate RAM bank 2</p>
+    <p>Finally, a MEMCPY routine used by my custom initialization and simulated disk read routines:</p>
+    <p>.MEMCPY</p>
+    <p>X-reg = # of pages to copy</p>
+    <p>A-reg = first source page</p>
+    <p>Y-reg = first destination page copy memory (duh) OK to clobber all registers</p>
+    <p>The final binary file is 144 sectors, requires 64K (due to the use of the aux RAM for storage), and can be BRUN from any DOS 3.3-compatible disk. I've chosen to actually distribute it with a modified CompatiBoot loader that starts the game as quickly and as silently as possible, but you can copy the binary file to another disk and BRUN it manually. These softdocs are also distributed on the disk, viewable with any text file viewer.</p>
+</section>
+
+</body></html>

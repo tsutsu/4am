@@ -1,0 +1,299 @@
+<!doctype html>
+<html><head>
+<title>Lock N Chase</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+
+    <p>Lock 'N' Chase is a 1982 arcade game distributed by Data East USA, Inc. and</p>
+    <p>Mattel Electronics.</p>
+    <p>COPYA gives no read errors, but the copy boots to an "UNABLE TO LOAD GAME" message and hangs. There is no VTOC on track $11 and no other clues to go on.</p>
+    <p>Time for boot tracing!</p>
+    <div class="curses_input">
+      <code>[S6D1=original disk]
+[S5D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0</code>
+      <code>]CALL-151</code>
+      <code>*800<2800.28FFM
+*801L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">relatively normal boot0 loop to load more sectors from track $00</p>
+      <code>0801-   A5 27       LDA   $27
+0803-   C9 09       CMP   #$09
+0805-   D0 3D       BNE   $0844
+0807-   A5 2B       LDA   $2B
+0809-   8D F4 03    STA   $03F4</code>
+      <p class="comment">figure out what slot we're booting in</p>
+      <code>080C-   4A          LSR
+080D-   4A          LSR
+080E-   4A          LSR
+080F-   4A          LSR
+0810-   09 C0       ORA   #$C0
+0812-   85 3F       STA   $3F
+0814-   A9 5C       LDA   #$5C
+0816-   85 3E       STA   $3E
+0818-   18          CLC</code>
+      <p class="comment">$08F9 contains high byte of address to load boot1 code (-1, due to how the math works out -- regular DOS 3.3 does this too, except at $08FE and $08FF)</p>
+      <code>0819-   AD F9 08    LDA   $08F9</code>
+      <p class="comment">$08FA contains number of sectors to read</p>
+      <code>081C-   6D FA 08    ADC   $08FA
+081F-   8D F9 08    STA   $08F9</code>
+      <p class="comment">clear hi-res screen 2 and display it</p>
+      <code>0822-   A0 40       LDY   #$40
+0824-   84 01       STY   $01
+0826-   A9 00       LDA   #$00
+0828-   85 00       STA   $00
+082A-   A8          TAY
+082B-   91 00       STA   ($00),Y
+082D-   C8          INY
+082E-   D0 FB       BNE   $082B
+0830-   E6 01       INC   $01
+0832-   A6 01       LDX   $01
+0834-   E0 60       CPX   #$60
+0836-   D0 F3       BNE   $082B
+0838-   2C 52 C0    BIT   $C052
+083B-   2C 55 C0    BIT   $C055
+083E-   2C 57 C0    BIT   $C057
+0841-   2C 50 C0    BIT   $C050</code>
+      <p class="comment">translate physical sector numbers to logical sector numbers</p>
+      <code>0844-   AE FA 08    LDX   $08FA</code>
+      <p class="comment">when out of sectors to read, execution continues at $085E</p>
+      <code>0847-   F0 15       BEQ   $085E
+0849-   BD FB 08    LDA   $08FB,X
+084C-   85 3D       STA   $3D
+084E-   CE FA 08    DEC   $08FA
+0851-   AD F9 08    LDA   $08F9
+0854-   85 27       STA   $27
+0856-   CE F9 08    DEC   $08F9
+0859-   A6 2B       LDX   $2B</code>
+      <p class="comment">jump back to disk controller routine at $Cx5C (will be $C65C if we're booting from slot 6)</p>
+      <code>085B-   6C 3E 00    JMP   ($003E)</code>
+    </div>
+    <p>; done reading sectors, execution</p>
+    <p>continues 085E- A9 00 LDA #$00 0860- 85 06 STA $06 0862- 85 83 STA $83 0864- 85 00 STA $00 0866- 8D 78 02 STA $0278 0869- A9 09 LDA #$09 086B- 85 07 STA $07 086D- 85 01 STA $01</p>
+    <div class="listing">
+      <p class="comment">don't know what this does yet</p>
+      <code>086F-   20 00 04    JSR   $0400</code>
+    </div>
+    <p>So we're loading track $00, sectors $01..$04 into $400..$7FF, then calling $0400. Let's interrupt the boot there and see evil lurks in the hearts of men who write copy protection routines.</p>
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">interrupt boot at $086F and jump to a routine under my control instead (at $970A)</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D 6F 08    STA   $086F
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D 70 08    STA   $0870
+9702-   A9 97       LDA   #$97
+9704-   8D 71 08    STA   $0871</code>
+      <p class="comment">start boot</p>
+      <code>9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">execution redirected here after loading 4 sectors into $0400..$07FF</p>
+      <code>970A-   AD E8 C0    LDA   $C0E8</code>
+      <p class="comment">capture that code before rebooting wipes out the text page</p>
+      <code>970D-   A2 04       LDX   #$04
+970F-   B9 00 04    LDA   $0400,Y
+9712-   99 00 24    STA   $2400,Y
+9715-   C8          INY
+9716-   D0 F7       BNE   $970F
+9718-   EE 11 97    INC   $9711
+971B-   EE 14 97    INC   $9714
+971E-   CA          DEX
+971F-   D0 EE       BNE   $970F</code>
+      <p class="comment">reboot to my work disk</p>
+      <code>9721-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE1,A$9600,L$124
+*9600G
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]BSAVE BOOT1,A$2400,L$400
+]CALL -151</code>
+    </div>
+    <p>(For the purposes of this write-up, let's assume that the code is really in its original location at $0400..$07FF instead of $2400..$27FF.)</p>
+    <div class="line_editing">
+      <code>*400L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">just some initialization</p>
+      <code>0400-   A6 2B       LDX   $2B</code>
+      <p class="comment">$04AA is uninteresting (I checked)</p>
+      <code>0402-   20 AA 04    JSR   $04AA
+0405-   A9 00       LDA   #$00
+0407-   99 78 02    STA   $0278,Y
+040A-   99 88 02    STA   $0288,Y
+040D-   8D 78 02    STA   $0278
+0410-   A9 83       LDA   #$83
+0412-   85 76       STA   $76
+0414-   A9 11       LDA   #$11
+0416-   85 80       STA   $80
+0418-   A9 07       LDA   #$07
+041A-   85 81       STA   $81
+041C-   85 82       STA   $82</code>
+      <p class="comment">don't know what this does yet</p>
+      <code>041E-   20 FE 05    JSR   $05FE</code>
+    </div>
+    <div class="line_editing">
+      <code>*5FEL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">$0446 is uninteresting (I checked)</p>
+      <code>05FE-   20 46 04    JSR   $0446
+0601-   A6 2B       LDX   $2B
+0603-   20 3B 06    JSR   $063B
+0606-   C9 00       CMP   #$00</code>
+      <p class="comment">hmm, a branch</p>
+      <code>0608-   F0 2F       BEQ   $0639</code>
+      <p class="comment">The Badlands (code from which there is no return)</p>
+      <code>060A-   A4 2B       LDY   $2B
+060C-   B9 88 C0    LDA   $C088,Y
+060F-   A9 A0       LDA   #$A0
+0611-   A2 00       LDX   #$00
+0613-   9D 00 08    STA   $0800,X
+0616-   E8          INX
+0617-   D0 FA       BNE   $0613
+0619-   EE 15 06    INC   $0615
+061C-   AC 15 06    LDY   $0615
+061F-   C0 0C       CPY   #$0C
+0621-   D0 F0       BNE   $0613</code>
+      <p class="comment">copy message to text page 2</p>
+      <code>0623-   A0 00       LDY   #$00
+0625-   B9 CA 06    LDA   $06CA,Y
+0628-   99 00 09    STA   $0900,Y
+062B-   C8          INY
+062C-   C0 28       CPY   #$28
+062E-   D0 F5       BNE   $0625</code>
+      <p class="comment">show text page 2</p>
+      <code>0630-   AD 51 C0    LDA   $C051
+0633-   AD 55 C0    LDA   $C055</code>
+      <p class="comment">infinite loop</p>
+      <code>0636-   4C 36 06    JMP   $0636</code>
+    </div>
+    <p>OK, we definitely want to avoid THAT code. That means that we definitely DO want to take that BEQ branch from $0608 to $0639 (past The Badlands). And that means that the routine at $063B (called from $0603) is the copy protection.</p>
+    <div class="line_editing">
+      <code>*63BL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">turning on the disk motor by hand -- always suspicious</p>
+      <code>063B-   BD 89 C0    LDA   $C089,X
+063E-   A9 56       LDA   #$56
+0640-   85 11       STA   $11
+0642-   D0 01       BNE   $0645
+0644-   D0 C6       BNE   $060C</code>
+      <p class="comment">um, what?</p>
+      <code>0646-   12          ???
+0647-   F0 03       BEQ   $064C
+0649-   D0 0A       BNE   $0655
+064B-   D0 C6       BNE   $0613
+064D-   11 D0       ORA   ($D0),Y
+064F-   05 A9       ORA   $A9
+0651-   FF          ???
+0652-   D0 74       BNE   $06C8
+0654-   D0 BD       BNE   $0613
+0656-   8C C0 10    STY   $10C0
+0659-   FB          ???
+065A-   D0 01       BNE   $065D
+065C-   D0 C9       BNE   $0627
+065E-   D5 F0       CMP   $F0,X
+0660-   03          ???</code>
+    </div>
+    <p>Oh, I see what's going on. Fake instructions and sneaky branches designed to confuse, well, people like me from doing, well, the exact thing</p>
+    <p>I'm doing now -- deciphering this code and bypassing it. Take another look at the branch instruction at $0642. It goes to $0645, which is "in the middle" of the next instruction in the disassembly listing. That "BNE $060C" at $0644? Never happens. Execution never gets to $0644; it always goes from $0642 to $0645.</p>
+    <p>Changing the byte at $0644 from "D0" to "EA" (NOP) will clean up the listing. (I had to do this several times at different locations.) The final result looks like this:</p>
+    <div class="listing">
+      <code>063B-   BD 89 C0    LDA   $C089,X
+063E-   A9 56       LDA   #$56
+0640-   85 11       STA   $11
+0642-   D0 01       BNE   $0645
+0644-   EA          NOP
+0645-   C6 12       DEC   $12
+0647-   F0 03       BEQ   $064C
+0649-   D0 0A       BNE   $0655
+064B-   EA          NOP
+064C-   C6 11       DEC   $11
+064E-   D0 05       BNE   $0655
+0650-   A9 FF       LDA   #$FF
+0652-   D0 74       BNE   $06C8
+0654-   EA          NOP
+0655-   BD 8C C0    LDA   $C08C,X
+0658-   10 FB       BPL   $0655
+065A-   D0 01       BNE   $065D
+065C-   EA          NOP
+065D-   C9 D5       CMP   #$D5
+065F-   F0 03       BEQ   $0664
+0661-   D0 E2       BNE   $0645
+0663-   EA          NOP
+0664-   BD 8C C0    LDA   $C08C,X
+0667-   10 FB       BPL   $0664
+0669-   D0 01       BNE   $066C
+066B-   EA          NOP
+066C-   C9 AA       CMP   #$AA
+066E-   F0 03       BEQ   $0673
+0670-   D0 D3       BNE   $0645
+0672-   EA          NOP
+0673-   BD 8C C0    LDA   $C08C,X
+0676-   10 FB       BPL   $0673
+0678-   D0 01       BNE   $067B
+067A-   EA          NOP
+067B-   C9 96       CMP   #$96
+067D-   F0 03       BEQ   $0682
+067F-   D0 C4       BNE   $0645
+0681-   EA          NOP
+0682-   A0 0A       LDY   #$0A
+0684-   BD 8C C0    LDA   $C08C,X
+0687-   10 FB       BPL   $0684
+0689-   D0 01       BNE   $068C
+068B-   EA          NOP
+068C-   C9 FF       CMP   #$FF
+068E-   F0 03       BEQ   $0693
+0690-   D0 B3       BNE   $0645
+0692-   EA          NOP
+0693-   F0 01       BEQ   $0696
+0695-   EA          NOP
+0696-   BD 8C C0    LDA   $C08C,X
+0699-   C9 08       CMP   #$08
+069B-   B0 A8       BCS   $0645
+069D-   D0 01       BNE   $06A0
+069F-   EA          NOP
+06A0-   BD 8C C0    LDA   $C08C,X
+06A3-   10 FB       BPL   $06A0
+06A5-   D0 01       BNE   $06A8
+06A7-   EA          NOP
+06A8-   85 10       STA   $10
+06AA-   88          DEY
+06AB-   D0 03       BNE   $06B0
+06AD-   F0 10       BEQ   $06BF
+06AF-   EA          NOP
+06B0-   BD 8C C0    LDA   $C08C,X
+06B3-   10 FB       BPL   $06B0
+06B5-   D0 01       BNE   $06B8
+06B7-   EA          NOP
+06B8-   45 10       EOR   $10
+06BA-   D0 EC       BNE   $06A8
+06BC-   F0 EA       BEQ   $06A8
+06BE-   EA          NOP
+06BF-   A5 10       LDA   $10
+06C1-   49 60       EOR   #$60
+06C3-   D0 80       BNE   $0645
+06C5-   F0 01       BEQ   $06C8
+06C7-   EA          NOP
+06C8-   60          RTS</code>
+    </div>
+    <p>Look ma, a nibble check. I'm shocked. (Not really.) More importantly, though, is what happens if the nibble check succeeds: nothing. Well, there's a zero in the accumulator, which is checked at $0606. But nothing else. No decryption loop based on raw nibbles, no storing secret values in zero page. Just enough for the BEQ check at $0606.</p>
+    <p>I should be able to put an RTS at $0603 and bypass the entire copy protection.</p>
+    <p>T00,S03,$03 change "20" to "60"</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

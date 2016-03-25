@@ -1,0 +1,204 @@
+<!doctype html>
+<html><head>
+<title>Commando</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">unable to read any track</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">no errors, but copy displays the</p>
+    <p>Quick-DOS title screen then hangs</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p>all tracks use standard prologues (address: D5 AA 96, data: D5 AA AD) but modified epilogues (address: FF FF EB, data: FF FF EB)</p>
+    <p class="seen">Disk Fixer</p>
+    <p>["O" -> "Input/Output Control"] set Address Epilogue to "FF FF EB" set Data Epilogue to "FF FF EB"</p>
+    <p>Success! All tracks readable! T00 -> Quick-DOS bootloader (loads in language card) T11 -> DOS 3.3 disk catalog</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">Why didn't my EDD copy work?</p>
+    <p class="seen">probably a nibble check during boot</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Super Demuffin</p>
+    <p class="seen">2. Patch RWTS</p>
+    <p>3. Find nibble check and bypass it</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Choose The Right Tool For The Job</h3>
+
+    <div class="curses">
+      <code>      SUPER-DEMUFFIN AND FAST COPY
+Modified by: The Saltine/Coast to Coast</code>
+      <code>
+   Address prologue: D5 AA 96</code>
+      <code>   Address epilogue: FF FF EB    DISK
+                     ^^^^^     ORIGINAL
+change from DE AA ---+++++</code>
+      <code>      Data prologue: D5 AA AD</code>
+      <code>      Data epilogue: FF FF EB
+                     ^^^^^
+change from DE AA ---+++++</code>
+      <code>
+ Ignore write errors while demuffining!</code>
+      <code>
+  D - Edit parameters
+      <SPACE> - Advance to next parm
+      <RETURN> - Exit edit mode
+  R - Restore DOS 3.3 parameters
+  O - Edit Original disk's parameters
+  C - Edit Copy disk's parameters
+  G - Begin demuffin process</code>
+    </div>
+    <p class="seen">Pressing "G" switches to the Locksmith</p>
+    <p class="seen">Fast Disk Copy UI. It assumes that both disks are in slot 6, and that drive 1 is the original and drive 2 is the copy.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>     LOCKSMITH 7.0  FAST DISK BACKUP</code>
+      <code>
+   R...................................
+   W***********************************
+HEX 00000000000000001111111111111111222
+TRK 0123456789ABCDEF0123456789ABCDEF012
+   0...................................
+   1...................................
+   2...................................
+   3...................................
+   4...................................
+   5...................................
+   6...................................
+   7...................................
+   8...................................
+   9...................................
+   A...................................
+   B...................................
+   C...................................
+   D...................................
+12 E...................................
+   F...................................
+[               ] PRESS [RESET] TO EXIT</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...displays Quick-DOS title screen
+   then hangs...</code>
+    </div>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Learn That Hard Work Pays Off Over Time, But Laziness Pays Off Right Now</h3>
+
+    <p>My EDD bit copy didn't work. Now my demuffin'd copy doesn't work either.</p>
+    <p>Where's that nibble check?</p>
+    <div class="curses_input">
+      <code>[Disk Fixer]
+  --> "F"ind
+    --> "H"ex
+      --> "BD 89 C0"</code>
+    </div>
+    <p>One thing that virtually all nibble checks have in common is turning on the drive motor by accessing a specific address in the $C0xx range. For slot 6, it's $C0E9, but to allow disks to boot from any slot, developers usually use code like this:</p>
+    <p class="seen">LDX <slot number x 16> LDA $C089,X</p>
+    <p class="seen">There's nothing that says where the slot number has to be, although the disk controller ROM routine uses zero page $2B and lots of disks just reuse that. There's also nothing that says you have to use the X-register as the index, or that you must use the accumulator as the load register. But most RWTS code does, out of convention</p>
+    <p class="seen">I suppose (or possibly fear of messing up such low-level code in subtle ways).</p>
+    <p>Here's the irony: depending on when the nibble check is invoked, turning on the drive motor is completely superfluous, because it's already guaranteed to be on. So you've provided a lazy way for me to find the very code that you don't want me to find.</p>
+    <p>Always search for "BD 89 C0". Always always always.</p>
+    <p>Anyway, I found it on T00,S06. It looks like this in Disk Fixer's disassembler:</p>
+    <p>T00,S06 ----------- DISASSEMBLY MODE ---------- ; save zero page 0000:A0 00 LDY #$00 0002:B9 00 00 LDA $0000,Y 0005:91 36 STA ($36),Y 0007:88 DEY 0008:D0 F8 BNE $0002</p>
+    <div class="terminal_output">
+      <p class="comment">initialize death counter</p>
+      <code>000A:A9 0A          LDA   #$0A
+000C:85 50          STA   $50</code>
+      <p class="comment">turn on drive motor manually</p>
+      <code>000E:A6 2B          LDX   $2B
+0010:BD 89 C0       LDA   $C089,X
+0013:BD 8E C0       LDA   $C08E,X</code>
+      <p class="comment">an address (assuming this page is loaded at $D800)</p>
+      <code>0016:A9 9F          LDA   #$9F
+0018:85 48          STA   $48
+001A:A9 D8          LDA   #$D8
+001C:85 49          STA   $49
+001E:A9 80          LDA   #$80
+0020:85 51          STA   $51
+0022:C6 51          DEC   $51</code>
+      <p class="comment">if death counter hits 0, give up</p>
+      <code>0024:F0 66          BEQ   $008C</code>
+      <p class="comment">find next address field</p>
+      <code>0026:20 A7 D8       JSR   $D8A7</code>
+      <p class="comment">if that failed, give up</p>
+      <code>0029:B0 61          BCS   $008C</code>
+      <p class="comment">check if sector is $0D</p>
+      <code>002B:A5 2E          LDA   $2E
+002D:C9 0D          CMP   #$0D</code>
+      <p class="comment">if not, loop back until we find it</p>
+      <code>002F:D0 F1          BNE   $0022</code>
+      <p class="comment">look for $D5 nibble</p>
+      <code>0031:A0 00          LDY   #$00
+0033:BD 8C C0       LDA   $C08C,X
+0036:10 FB          BPL   $0033
+0038:88             DEY
+0039:F0 51          BEQ   $008C
+003B:C9 D5          CMP   #$D5
+003D:D0 F4          BNE   $0033</code>
+    </div>
+    <p>; Search for a specific sequence of ; nibbles in the "dead zone" between ; the address field and data field. ; This area is normally not important, ; so COPYA didn't copy it precisely ; because normal disks don't care. ; (Actually, it's even more evil than ; that, because the original disk is ; written with timing bits in specific ; non-standard places between the ; nibbles in the dead zone. This code ; not only requires the right nibbles ; in the right order, it reads them ; just slightly slower than normal. So ; the timing bits need to be in the ; right places too, or else this code ; will read the wrong nibble values ; while it's out of sync. This will ; trip up even the best bit copiers. ; And you can forget about making a ; disk image for emulators -- those ; don't store timing bits at all.)</p>
+    <p>003F:A0 00 LDY #$00 0041:BD 8C C0 LDA $C08C,X 0044:10 FB BPL $0041 0046:88 DEY 0047:F0 43 BEQ $008C 0049:C9 E7 CMP #$E7 004B:D0 F4 BNE $0041 004D:BD 8C C0 LDA $C08C,X 0050:10 FB BPL $004D 0052:C9 E7 CMP #$E7 0054:D0 36 BNE $008C ; fail 0056:BD 8C C0 LDA $C08C,X 0059:10 FB BPL $0056 005B:C9 E7 CMP #$E7 005D:D0 2D BNE $008C ; fail</p>
+    <div class="terminal_output">
+      <p class="comment">kill some time to get out of sync with the "proper" start of nibbles)</p>
+      <code>005F:BD 8D C0       LDA   $C08D,X
+0062:A0 10          LDY   #$10
+0064:24 06          BIT   $06</code>
+    </div>
+    <p>; now start looking for nibbles that ; don't really exist (except they do, ; because we're out of sync and reading ; timing bits as data)</p>
+    <p>0066:BD 8C C0 LDA $C08C,X 0069:10 FB BPL $0066 006B:88 DEY 006C:F0 1E BEQ $008C ; fail 006E:C9 EE CMP #$EE 0070:D0 F4 BNE $0066</p>
+    <div class="terminal_output">
+      <p class="comment">check for nibble sequence stored in reverse order at $D89F</p>
+      <code>0072:A0 07          LDY   #$07
+0074:BD 8C C0       LDA   $C08C,X
+0077:10 FB          BPL   $0074
+0079:D1 48          CMP   ($48),Y
+007B:D0 0F          BNE   $008C
+007D:88             DEY
+007E:10 F4          BPL   $0074</code>
+      <p class="comment">(nibble check passed) restore zero page</p>
+      <code>0080:A0 00          LDY   #$00
+0082:B1 36          LDA   ($36),Y
+0084:99 00 00       STA   $0000,Y
+0087:88             DEY
+0088:D0 F8          BNE   $0082</code>
+      <p class="comment">clear carry and exit</p>
+      <code>008A:18             CLC
+008B:60             RTS</code>
+      <p class="comment">all failures end up here -- try a few more times then give up completely</p>
+      <code>008C:C6 50          DEC   $50
+008E:F0 03          BEQ   $0093
+0090:4C 1E D8       JMP   $D81E</code>
+      <p class="comment">(nibble check failed) restore zero page</p>
+      <code>0093:A0 00          LDY   #$00
+0095:B1 36          LDA   ($36),Y
+0097:99 00 00       STA   $0000,Y
+009A:88             DEY
+009B:D0 F8          BNE   $0095</code>
+      <p class="comment">set carry and exit</p>
+      <code>009D:38             SEC
+009E:60             RTS</code>
+    </div>
+    <p>So it's a nibble check that clears the carry on success and sets it on failure. There are no other side effects. The quickest way to bypass it is to change the start of the routine to clear the carry unconditionally and exit.</p>
+    <p>T00,S06,$00 change "A0 00" to "18 60"</p>
+    <p>(The RWTS appears to be flexible enough to read the demuffin'd disk, so no RWTS patches are required.)</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

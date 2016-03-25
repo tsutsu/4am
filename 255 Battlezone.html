@@ -1,0 +1,190 @@
+<!doctype html>
+<html><head>
+<title>Battlezone</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">unable to read any track</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">works</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p>T01 unformatted T00, T02+ -> modified address and data epilogue bytes ("AA DE EB")</p>
+    <p class="seen">Disk Fixer</p>
+    <p>["O" -> "Input/Output Control"] set Address Epilogue to "AA DE EB" set Data Epilogue to "AA DE EB" T00, T02+ readable T01 still unreadable T00,S00 -> looks like DOS 3.3 boot0 T00,S01+ -> definitely not a standard DOS 3.3 RWTS though no sign of a full DOS no sign of a disk catalog</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p>modified epilogue bytes (all tracks)</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">modified epilogue bytes (all tracks)</p>
+    <p class="seen">Next steps:</p>
+    <p>1. Super Demuffin</p>
+    <p>2. Patch RWTS</p>
+    <p>3. There is no step 3 (I hope)</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Choose The Right Tool For The Job</h3>
+
+    <div class="curses">
+      <code>      SUPER-DEMUFFIN AND FAST COPY
+Modified by: The Saltine/Coast to Coast</code>
+      <code>
+   Address prologue: D5 AA 96</code>
+      <code>   Address epilogue: AA DE EB    DISK
+                     ^^^^^     ORIGINAL
+change from DE AA ---+++++</code>
+      <code>      Data prologue: D5 AA AD</code>
+      <code>      Data epilogue: AA DE EB
+                     ^^^^^
+change from DE AA ---+++++</code>
+      <code>
+ Ignore write errors while demuffining!</code>
+      <code>
+  D - Edit parameters
+      <SPACE> - Advance to next parm
+      <RETURN> - Exit edit mode
+  R - Restore DOS 3.3 parameters
+  O - Edit Original disk's parameters
+  C - Edit Copy disk's parameters
+  G - Begin demuffin process</code>
+    </div>
+    <p class="seen">Pressing "G" switches to the Locksmith</p>
+    <p class="seen">Fast Disk Copy UI. It assumes that both disks are in slot 6, and that drive 1 is the original and drive 2 is the copy.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>     LOCKSMITH 7.0  FAST DISK BACKUP</code>
+      <code>
+   R...................................
+   W***********************************
+HEX 00000000000000001111111111111111222
+TRK 0123456789ABCDEF0123456789ABCDEF012
+   0.A.................................
+   1.A.................................
+   2.A.................................
+   3.A.................................
+   4.A.................................
+   5.A.................................
+   6.A.................................
+   7.A.................................
+   8.A.................................
+   9.A.................................
+   A.A.................................
+   B.A.................................
+   C.A.................................
+   D.A.................................
+12 E.A.................................
+   F.A.................................
+[               ] PRESS [RESET] TO EXIT</code>
+    </div>
+    <p class="seen">Track 1 is unreadable, but I knew that already. Let's hope it doesn't matter.</p>
+    <div class="line_editing">
+      <code>]PR#6
+...grinds...</code>
+    </div>
+    <p class="seen">The demuffin'd disk can't read itself.</p>
+    <p class="seen">This is not unusual.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Patch The RWTS And Our Adventure Comes To A Quick But Satisfying End</h3>
+
+    <p>Looking through track 0 with my trusty</p>
+    <p>Disk Fixer sector editor, I see an RWTS much like the one used in ProDOS. Here is the code that matches the address prologue, then decodes the address field:</p>
+    <div class="terminal_output">
+      <code>T00,S05
+----------- DISASSEMBLY MODE ----------
+0098:A0 FC          LDY   #$FC
+009A:8C 6B A4       STY   $A46B
+009D:C8             INY
+009E:D0 05          BNE   $00A5
+00A0:EE 6B A4       INC   $A46B
+00A3:F0 56          BEQ   $00FB
+00A5:BD 8C C0       LDA   $C08C,X
+00A8:10 FB          BPL   $00A5
+00AA:C9 D5          CMP   #$D5    <- OK
+00AC:D0 EF          BNE   $009D
+00AE:EA             NOP
+00AF:BD 8C C0       LDA   $C08C,X
+00B2:10 FB          BPL   $00AF
+00B4:C9 AA          CMP   #$AA    <- OK
+00B6:D0 F2          BNE   $00AA
+00B8:A0 03          LDY   #$03
+00BA:BD 8C C0       LDA   $C08C,X
+00BD:10 FB          BPL   $00BA
+00BF:C9 96          CMP   #$96    <- OK
+00C1:D0 E7          BNE   $00AA</code>
+    </div>
+    <p>After decoding the address field, it checks for two nibbles of the epilogue:</p>
+    <div class="terminal_output">
+      <code>T00,S05
+----------- DISASSEMBLY MODE ----------
+00E6:BD 8C C0       LDA   $C08C,X
+00E9:10 FB          BPL   $00E6
+00EB:C9 AA          CMP   #$AA    <-- !
+00ED:D0 0C          BNE   $00FB
+00EF:EA             NOP
+00F0:BD 8C C0       LDA   $C08C,X
+00F3:10 FB          BPL   $00F0
+00F5:C9 DE          CMP   #$DE    <-- !
+00F7:D0 02          BNE   $00FB
+00F9:18             CLC
+00FA:60             RTS
+00FB:38             SEC
+00FC:60             RTS</code>
+    </div>
+    <p>Those CMPs need to be reversed; $AA should be $DE and vice-versa.</p>
+    <p>And here is the code that matches the data prologue, then decodes the data field:</p>
+    <div class="terminal_output">
+      <code>T00,S06
+----------- DISASSEMBLY MODE ----------
+0031:A0 20          LDY   #$20
+0033:88             DEY
+0034:F0 37          BEQ   $006D
+0036:BD 8C C0       LDA   $C08C,X
+0039:10 FB          BPL   $0036
+003B:49 D5          EOR   #$D5    <- OK
+003D:D0 F4          BNE   $0033
+003F:EA             NOP
+0040:BD 8C C0       LDA   $C08C,X
+0043:10 FB          BPL   $0040
+0045:C9 AA          CMP   #$AA    <- OK
+0047:D0 F2          BNE   $003B
+0049:EA             NOP
+004A:BD 8C C0       LDA   $C08C,X
+004D:10 FB          BPL   $004A
+004F:C9 AD          CMP   #$AD    <- OK
+0051:D0 E8          BNE   $003B</code>
+    </div>
+    <p>Later in that sector, it checks one byte of the data epilogue (also like ProDOS):</p>
+    <div class="terminal_output">
+      <code>T00,S06
+----------- DISASSEMBLY MODE ----------
+00C0:A6 3E          LDX   $3E
+00C2:BD 8C C0       LDA   $C08C,X
+00C5:10 FB          BPL   $00C2
+00C7:C9 AA          CMP   #$AA    <-- !
+00C9:18             CLC
+00CA:F0 01          BEQ   $00CD
+00CC:38             SEC
+00CD:68             PLA
+00CE:A0 55          LDY   #$55
+00D0:91 44          STA   ($44),Y
+00D2:60             RTS</code>
+    </div>
+    <p>That CMP needs to be $DE, the first nibble of the standard data epilogue sequence.</p>
+    <p>T00,S06,$C8 change "AA" to "DE" T00,S05,$EC change "AA" to "DE" T00,S05,$F6 change "DE" to "AA"</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

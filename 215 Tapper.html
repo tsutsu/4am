@@ -1,0 +1,146 @@
+<!doctype html>
+<html><head>
+<title>Tapper</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">can't read any track</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">works</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">modified address and data epilogues (AA DE EB)</p>
+    <p class="seen">Disk Fixer</p>
+    <p>["O" -> "Input/Output Control"] set Address Epilogue to "AA DE EB" set Data Epilogue to "AA DE EB" all tracks readable</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p class="seen">modified epilogue bytes</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">ditto</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Convert disk to standard format with Super Demuffin</p>
+    <p class="seen">2. Patch RWTS to read standard format (if necessary)</p>
+    <p class="seen">3. Disable nibble check (if any)</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which It's All Over Before It Begins</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+]BRUN SUPER DEMUFFIN</code>
+    </div>
+    <div class="curses">
+      <code>      SUPER-DEMUFFIN AND FAST COPY
+Modified by: The Saltine/Coast to Coast</code>
+      <code>
+   Address prologue: D5 AA 96</code>
+      <code>   Address epilogue: AA DE EB    DISK
+                     ^^^^^     ORIGINAL
+   was "DE AA"-------+++++</code>
+      <code>      Data prologue: D5 AA AD</code>
+      <code>      Data epilogue: AA DE EB
+                     ^^^^^
+   was "DE AA"-------+++++</code>
+      <code>
+ Ignore write errors while demuffining!</code>
+      <code>
+  D - Edit parameters
+      <SPACE> - Advance to next parm
+      <RETURN> - Exit edit mode
+  R - Restore DOS 3.3 parameters
+  O - Edit Original disk's parameters
+  C - Edit Copy disk's parameters
+  G - Begin demuffin process</code>
+    </div>
+    <p class="seen">Pressing "G" switches to the Locksmith</p>
+    <p class="seen">Fast Disk Copy UI.</p>
+    <div class="terminal_output">
+      <code>     LOCKSMITH 7.0  FAST DISK BACKUP</code>
+      <code>
+   R...................................
+   W***********************************
+HEX 00000000000000001111111111111111222
+TRK 0123456789ABCDEF0123456789ABCDEF012
+   0...................................
+   1...................................
+   2...................................
+   3...................................
+   4...................................
+   5...................................
+   6...................................
+   7...................................
+   8...................................
+   9...................................
+   A...................................
+   B...................................
+   C...................................
+   D...................................
+12 E...................................
+   F...................................
+[               ] PRESS [RESET] TO EXIT</code>
+    </div>
+    <div class="curses_input">
+      <code>[S6,D1=Super Demuffin'd copy]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...grinds...</code>
+    </div>
+    <p class="seen">OK, the copy can't read itself yet.</p>
+    <div class="curses_input">
+      <code>[Disk Fixer]
+  --> "F"ind
+    --> "H"ex
+      --> "BD 8C C0"      ; LDA $C08C,X</code>
+    </div>
+    <p class="seen">Looks like the disk uses a custom RWTS.</p>
+    <p class="seen">Here's the relevant code that checks the epilogue sequences, on T00,S03:</p>
+    <div class="terminal_output">
+      <code>----------- DISASSEMBLY MODE ----------
+0093:BD 8C C0       LDA   $C08C,X
+0096:10 FB          BPL   $0093
+0098:C9 AA          CMP   #$AA
+009A:D0 0A          BNE   $00A6
+009C:EA             NOP
+009D:BD 8C C0       LDA   $C08C,X
+00A0:10 FB          BPL   $009D
+00A2:C9 DE          CMP   #$DE
+00A4:F0 5C          BEQ   $0102
+00A6:38             SEC
+00A7:60             RTS
+.
+.
+.
+----------- DISASSEMBLY MODE -----------
+00EF:BD 8C C0       LDA   $C08C,X
+00F2:10 FB          BPL   $00EF
+00F4:C9 AA          CMP   #$AA
+00F6:D0 AE          BNE   $00A6
+00F8:EA             NOP
+00F9:BD 8C C0       LDA   $C08C,X
+00FC:10 FB          BPL   $00F9
+00FE:C9 DE          CMP   #$DE</code>
+    </div>
+    <p>T00,S03,$99 change "AA" to "DE" T00,S03,$A3 change "DE" to "AA" T00,S03,$F5 change "AA" to "DE" T00,S03,$FF change "DE" to "AA"</p>
+    <div class="line_editing">
+      <code>]PR#6
+...works...</code>
+    </div>
+    <p class="seen">There doesn't appear to be any further protection.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

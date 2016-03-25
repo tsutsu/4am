@@ -1,0 +1,334 @@
+<!doctype html>
+<html><head>
+<title>Decimal Discovery</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+
+    <p>Decimal Discovery is a 1986 educational game created by Bill Maxwell and Jerry</p>
+    <p>Chaffin, and distributed by DLM, Inc.</p>
+    <p>COPYA fails immediately with a disk read error. EDD 4 bit copy appears to work, but the copy does not boot. From listening to the boot, it sounds like it's loading DOS from tracks 2, 1, and 0, then the drive head swings out. But the BASIC prompt never appears, and the disk hangs with the drive motor on.</p>
+    <p>Turning to my trusty Copy ][+ sector editor, I find the "DOS 3.3 PATCHED" option (press "P" to go to the Sector</p>
+    <p>Editor Patcher) allows me to read every sector on every track. Track 0 feels like a DOS 3.3 RWTS, and I see a VTOC on track $11.</p>
+    <p>Based on my experience with other disks, this evidence suggests that this disk has</p>
+    <p>- Standard prologue bytes before the</p>
+    <p>address and data fields [otherwise</p>
+    <p>Copy ][+ sector editor would give read errors, even with the "DOS 3.3 PATCHED" option]</p>
+    <p>- Non-standard epilogue bytes after the</p>
+    <p>address and data fields [otherwise COPYA would work]</p>
+    <p>- Some secondary protection [otherwise</p>
+    <p>the bit copy created with EDD 4 would work]</p>
+    <p>The easiest way to convert the disk to standard epilogue bytes is to use COPYA with a patched RWTS that accepts any epilogue bytes on read but includes standard epilogue bytes on write.</p>
+    <div class="curses_input">
+      <code>[S6D1=DOS 3.3 master disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...
+]CALL -151
+*B942:18
+*3D0G
+]RUN COPYA</code>
+    </div>
+    <div class="curses_input">
+      <code>[S6D1=original disk]
+[S6D2=blank disk]</code>
+    </div>
+    <p class="seen">...read read read... ...grind grind grind... ...write write write...</p>
+    <p>OK, now I have a copy in standard disk format that can be read by any tools. i.e. I can copy the disk that's in drive 2 with COPYA without patching the RWTS beforehand. I can sector edit the disk without messing with the</p>
+    <p>Sector Editor Patcher.</p>
+    <p>There are two problems with this copy:</p>
+    <p>1. Depending on how the original disk</p>
+    <p>was written, this copy may or may not be able to read itself. I may need to patch the disk's RWTS to deal with the fact that the disk is now in a standard format.</p>
+    <p>2. Even if it can read itself, it won't</p>
+    <p>get very far, because it still has some sort of secondary protection checking if the disk is original. (Hint: it's not.)</p>
+    <p>Just by booting the copy, I can rule out problem #1. The disk seems to read itself just fine. It makes it exactly as far as my unsuccessful bit copy -- it tries to load DOS, then swings the drive head out, then hangs.</p>
+    <p>To find out why it's hanging, I will need to do a little boot tracing.</p>
+    <div class="curses_input">
+      <code>[S6D1=original disk]
+[S5D1=my work disk]</code>
+    </div>
+    <p>(You *do* have a floppy disk controller in slot 5, don't you? It's 2014. They are not that expensive. I think eBay sellers give them away for free in</p>
+    <p>Crackerjack boxes or something. Or get a modern marvel like a CFFA 3000 card that creates virtual floppy drives and loads disk images from a USB stick.</p>
+    <p>They make 64GB USB drives that are small enough to swallow. That's enough storage space to hold all the Apple II programs ever made, and you could swallow it.)</p>
+    <div class="terminal_output">
+      <code>(CAUTION: DO NOT ACTUALLY SWALLOW A USB
+DRIVE, WHETHER OR NOT IT CONTAINS EVERY
+APPLE II PROGRAM EVER MADE.)</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+    </div>
+    <p>It looks like my AUTOTRACE program captured as much as it knows how to capture (boot0 code from T00,S00, boot1 code from T00,S01-09, and the disk's RWTS from T00,S02-09). I don't actually need the RWTS since I've already converted the disk to a standard format, but it's useful to know that it's in the standard place. That tells me I should start looking at the beginning of the boot1 code to see where things go awry.</p>
+    <div class="line_editing">
+      <code>]BLOAD BOOT1,A$2600
+]CALL -151
+*B600<2600.2EFFM
+*B700L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">normal RWTS initialization</p>
+      <code>B700-   8E E9 B7    STX   $B7E9
+B703-   8E F7 B7    STX   $B7F7
+B706-   A9 01       LDA   #$01
+B708-   8D F8 B7    STA   $B7F8
+B70B-   8D EA B7    STA   $B7EA
+B70E-   AD E0 B7    LDA   $B7E0
+B711-   8D E1 B7    STA   $B7E1</code>
+      <p class="comment">preparing to load DOS backwards from track 2, sector 4 (totally normal)</p>
+      <code>B714-   A9 02       LDA   #$02
+B716-   8D EC B7    STA   $B7EC
+B719-   A9 04       LDA   #$04
+B71B-   8D ED B7    STA   $B7ED
+B71E-   AC E7 B7    LDY   $B7E7
+B721-   88          DEY
+B722-   8C F1 B7    STY   $B7F1
+B725-   A9 01       LDA   #$01
+B727-   8D F4 B7    STA   $B7F4
+B72A-   8A          TXA
+B72B-   4A          LSR
+B72C-   4A          LSR
+B72D-   4A          LSR
+B72E-   4A          LSR
+B72F-   AA          TAX
+B730-   A9 00       LDA   #$00
+B732-   9D F8 04    STA   $04F8,X
+B735-   9D 78 04    STA   $0478,X</code>
+      <p class="comment">read DOS from disk (normal)</p>
+      <code>B738-   20 93 B7    JSR   $B793
+B73B-   A2 FF       LDX   #$FF
+B73D-   9A          TXS
+B73E-   8E EB B7    STX   $B7EB</code>
+      <p class="comment">still completely normal (I double- checked, it just does the usual language card initialization and jumps back to $B744)</p>
+      <code>B741-   4C C8 BF    JMP   $BFC8
+B744-   20 89 FE    JSR   $FE89</code>
+      <p class="comment">not the slightest bit normal</p>
+      <code>B747-   4C 00 B4    JMP   $B400</code>
+    </div>
+    <p>The boot1 stage usually ends at $B747, but not by jumping to $B400. DOS 3.3 jumps to $9D84 here to initialize the rest of DOS and read the disk catalog and run the HELLO program and whatnot.</p>
+    <p>So this is where I need to interrupt the boot process, to see what evil lurks at $B400.</p>
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up callback after boot0 so I can inject some code into boot1 once it's loaded</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D 4A 08    STA   $084A
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D 4B 08    STA   $084B
+9702-   A9 97       LDA   #$97
+9704-   8D 4C 08    STA   $084C</code>
+      <p class="comment">start the boot</p>
+      <code>9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">first callback is here -- set up another callback after boot1 (at $B747) to jump to a routine under my control instead of that mystery routine at $B400</p>
+      <code>970A-   A9 17       LDA   #$17
+970C-   8D 48 B7    STA   $B748
+970F-   A9 97       LDA   #$97
+9711-   8D 49 B7    STA   $B749</code>
+      <p class="comment">continue the boot</p>
+      <code>9714-   4C 00 B7    JMP   $B700</code>
+      <p class="comment">second callback is here -- relocate all of boot2 to the hi-res screen so it will survive a reboot, then reboot to my work disk in slot 5</p>
+      <code>9717-   A2 23       LDX   #$23
+9719-   A0 00       LDY   #$00
+971B-   B9 00 9D    LDA   $9D00,Y
+971E-   99 00 2D    STA   $2D00,Y
+9721-   C8          INY
+9722-   D0 F7       BNE   $971B
+9724-   EE 1D 97    INC   $971D
+9727-   EE 20 97    INC   $9720
+972A-   CA          DEX
+972B-   D0 EE       BNE   $971B
+972D-   AD E8 C0    LDA   $C0E8
+9730-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE2,A$9600,L$133
+*9600G
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]BSAVE BOOT2,A$2D00,L$2300
+]CALL-151
+*9D00<2D00.4EFFM</code>
+    </div>
+    <p>Now I can see what's at $B400.</p>
+    <div class="line_editing">
+      <code>*B400L</code>
+    </div>
+    <div class="listing">
+      <code>B400-   A0 00       LDY   #$00
+B402-   B9 12 B4    LDA   $B412,Y
+B405-   49 4C       EOR   #$4C
+B407-   99 12 B4    STA   $B412,Y
+B40A-   C8          INY
+B40B-   C0 FF       CPY   #$FF
+B40D-   D0 F3       BNE   $B402
+B40F-   EA          NOP
+B410-   EA          NOP
+B411-   EA          NOP
+B412-   E5 6F       SBC   $6F
+B414-   C1 A0       CMP   ($A0,X)
+B416-   FB          ???
+B417-   E5 4C       SBC   $4C
+B419-   C9 48       CMP   #$48
+B41B-   C1 B8       CMP   ($B8,X)
+B41D-   FB          ???
+B41E-   C1 A7       CMP   ($A7,X)
+B420-   FB          ???
+B421-   6C A7 F8    JMP   ($F8A7)</code>
+    </div>
+    <p>Ah, self-decrypting code. Love it.</p>
+    <p>Definitely not suspicious at all. (Ha!)</p>
+    <p>Luckily, the decryption loop ends at $B40E and the encrypted code doesn't start until $B412, so there's enough room to insert an RTS and run the decryption manually.</p>
+    <div class="line_editing">
+      <code>*B40F:60
+*B400G
+*B412L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">Hmm, reading from track $23? That's past the usual end of the disk, but virtually every disk drive can handle it. A fine place to hide a nibble check.</p>
+      <code>B412-   A9 23       LDA   #$23
+B414-   8D EC B7    STA   $B7EC
+B417-   A9 00       LDA   #$00
+B419-   85 04       STA   $04
+B41B-   8D F4 B7    STA   $B7F4
+B41E-   8D EB B7    STA   $B7EB
+B421-   20 EB B4    JSR   $B4EB</code>
+    </div>
+    <div class="line_editing">
+      <code>*B4EBL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">get the address of the RWTS parameter table</p>
+      <code>B4EB-   AD C2 AA    LDA   $AAC2
+B4EE-   AC C1 AA    LDY   $AAC1
+B4F1-   60          RTS</code>
+    </div>
+    <div class="line_editing">
+      <code>*B424L</code>
+    </div>
+    <div class="listing">
+      <code>B424-   20 F2 B4    JSR   $B4F2</code>
+    </div>
+    <div class="line_editing">
+      <code>*B4F2L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">read the sector</p>
+      <code>B4F2-   4C B5 B7    JMP   $B7B5</code>
+    </div>
+    <div class="line_editing">
+      <code>*B427L</code>
+    </div>
+    <div class="listing">
+      <code>B427-   A9 00       LDA   #$00
+B429-   85 48       STA   $48</code>
+      <p class="comment">turning on the drive motor manually is always a sign of impending copy protection</p>
+      <code>B42B-   BD 89 C0    LDA   $C089,X
+B42E-   BD 8E C0    LDA   $C08E,X
+B431-   20 44 B9    JSR   $B944
+B434-   A5 2D       LDA   $2D
+B436-   C5 04       CMP   $04
+B438-   D0 F7       BNE   $B431</code>
+      <p class="comment">skip past "FF" sync bytes</p>
+      <code>B43A-   BD 8E C0    LDA   $C08E,X
+B43D-   BD 8C C0    LDA   $C08C,X
+B440-   10 FB       BPL   $B43D
+B442-   C9 FF       CMP   #$FF
+B444-   D0 F4       BNE   $B43A
+B446-   A0 00       LDY   #$00
+B448-   C8          INY
+B449-   BD 8E C0    LDA   $C08E,X
+B44C-   BD 8C C0    LDA   $C08C,X
+B44F-   10 FB       BPL   $B44C</code>
+      <p class="comment">look for a specific nibble signature that I don't care about all that much since I'm not trying to replicate it</p>
+      <code>B451-   C9 D5       CMP   #$D5
+B453-   D0 F3       BNE   $B448
+B455-   C0 07       CPY   #$07
+B457-   D0 B9       BNE   $B412
+B459-   E6 04       INC   $04
+B45B-   A9 10       LDA   #$10
+B45D-   C5 04       CMP   $04
+B45F-   D0 D0       BNE   $B431
+B461-   A9 00       LDA   #$00
+B463-   85 04       STA   $04
+B465-   20 44 B9    JSR   $B944
+B468-   A5 2D       LDA   $2D
+B46A-   C5 04       CMP   $04
+B46C-   D0 F7       BNE   $B465
+B46E-   BD 8C C0    LDA   $C08C,X
+B471-   10 FB       BPL   $B46E
+B473-   C9 AA       CMP   #$AA
+B475-   D0 F7       BNE   $B46E
+B477-   BD 8C C0    LDA   $C08C,X
+B47A-   10 FB       BPL   $B477
+B47C-   C9 EB       CMP   #$EB
+B47E-   D0 EE       BNE   $B46E
+B480-   BD 8C C0    LDA   $C08C,X
+B483-   10 FB       BPL   $B480
+B485-   C9 FF       CMP   #$FF
+B487-   D0 F7       BNE   $B480
+B489-   A0 00       LDY   #$00
+B48B-   C8          INY
+B48C-   BD 8E C0    LDA   $C08E,X
+B48F-   BD 8C C0    LDA   $C08C,X
+B492-   10 FB       BPL   $B48F
+B494-   C9 D5       CMP   #$D5
+B496-   D0 F3       BNE   $B48B
+B498-   C0 10       CPY   #$10
+B49A-   D0 C5       BNE   $B461
+B49C-   E6 04       INC   $04
+B49E-   A9 0A       LDA   #$0A
+B4A0-   20 A8 FC    JSR   $FCA8
+B4A3-   A9 04       LDA   #$04
+B4A5-   C5 04       CMP   $04
+B4A7-   D0 04       BNE   $B4AD
+B4A9-   E6 04       INC   $04
+B4AB-   D0 B8       BNE   $B465
+B4AD-   A9 0F       LDA   #$0F
+B4AF-   C5 04       CMP   $04
+B4B1-   D0 BB       BNE   $B46E
+B4B3-   20 44 B9    JSR   $B944
+B4B6-   A5 2D       LDA   $2D
+B4B8-   C9 0F       CMP   #$0F
+B4BA-   D0 F7       BNE   $B4B3
+B4BC-   20 DC B8    JSR   $B8DC
+B4BF-   A0 00       LDY   #$00
+B4C1-   C8          INY
+B4C2-   BD 8E C0    LDA   $C08E,X
+B4C5-   BD 8C C0    LDA   $C08C,X
+B4C8-   10 FB       BPL   $B4C5
+B4CA-   C9 A5       CMP   #$A5
+B4CC-   D0 F3       BNE   $B4C1
+B4CE-   C0 2B       CPY   #$2B
+B4D0-   D0 E1       BNE   $B4B3
+B4D2-   A0 00       LDY   #$00
+B4D4-   C8          INY
+B4D5-   BD 8E C0    LDA   $C08E,X
+B4D8-   BD 8C C0    LDA   $C08C,X
+B4DB-   10 FB       BPL   $B4D8
+B4DD-   C9 D5       CMP   #$D5
+B4DF-   D0 F3       BNE   $B4D4
+B4E1-   C0 5D       CPY   #$5D
+B4E3-   D0 CE       BNE   $B4B3</code>
+      <p class="comment">success path lands here -- turn off the drive motor and jump to the usual $9D84 entry point for the next stage of loading DOS</p>
+      <code>B4E5-   BD 88 C0    LDA   $C088,X
+B4E8-   4C 84 9D    JMP   $9D84</code>
+    </div>
+    <p>The important thing here is that there are no side effects to the nibble check. No flags are set, no bits are twiddled. If the nibble check passes, the only thing that happens is that it continues the boot process at $9D84. If it fails, the boot hangs. This matches the behavior I saw on my unsuccessful bit copy way back at the beginning.</p>
+    <p>That means I can safely bypass this entire routine at $B400 and change the jump at $B747 to go straight to $9D84.</p>
+    <p>T00,S01,$48 change "00 B4" to "84 9D"</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

@@ -1,0 +1,399 @@
+<!doctype html>
+<html><head>
+<title>Mathematics Problem Solving Software Level 2</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">unable to read any track</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">no errors, but copy reboots endlessly</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">all tracks use standard prologues (address: D5 AA 96, data: D5 AA AD) but modified epilogues (address: FF FF FF, data: FF FF FF)</p>
+    <p class="seen">Disk Fixer</p>
+    <p class="seen">["O" -> "Input/Output Control"] set Address Epilogue to "FF FF FF" set Data Epilogue to "FF FF FF" all tracks readable T00 -> looks like a DOS 3.3 RWTS no other signs of DOS though no disk catalog on any track</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">Why didn't my EDD copy work?</p>
+    <p class="seen">probably a nibble check during boot (disks do not reboot unless someone tells them to)</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. capture RWTS with AUTOTRACE</p>
+    <p class="seen">2. convert disk to standard format with Advanced Demuffin</p>
+    <p class="seen">3. find nibble check and bypass it</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Attempt To Use The Original Disk As A Weapon Against Itself</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS
+/!\ NIBBLE CHECK AT $BB00</code>
+      <code>]BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>["5" to switch to slot 5]</code>
+      <code>["R" to load a new RWTS module]
+  --> At $B8, load "RWTS" from drive 1</code>
+      <code>["6" to switch to slot 6]</code>
+      <code>["C" to convert disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:...................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:...................................
+SC1:...................................
+SC2:...................................
+SC3:...................................
+SC4:...................................
+SC5:...................................
+SC6:...................................
+SC7:...................................
+SC8:...................................
+SC9:...................................
+SCA:...................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:...................................
+=======================================
+16SC $00,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...reboots endlessly...</code>
+    </div>
+    <p class="seen">Let's go find that nibble check.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Go Code Spelunking And Get Bounced Around</h3>
+
+    <div class="line_editing">
+      <code>]PR#5
+]BLOAD BOOT1,A$2600
+]CALL -151
+*FE89G FE93G     ; disconnect DOS
+*B600<2600.2FFFM ; move RWTS into place
+*B700L</code>
+    </div>
+    <div class="listing">
+      <code>B700-   20 1A BC    JSR   $BC1A
+B703-   8E F7 B7    STX   $B7F7
+B706-   A9 01       LDA   #$01
+B708-   8D F8 B7    STA   $B7F8
+B70B-   8D EA B7    STA   $B7EA
+B70E-   AD E0 B7    LDA   $B7E0
+B711-   8D E1 B7    STA   $B7E1
+B714-   A9 08       LDA   #$08
+B716-   8D EC B7    STA   $B7EC
+B719-   A9 07       LDA   #$07
+B71B-   8D ED B7    STA   $B7ED
+B71E-   AC E7 B7    LDY   $B7E7
+B721-   88          DEY
+B722-   8C F1 B7    STY   $B7F1
+B725-   A9 01       LDA   #$01
+B727-   8D F4 B7    STA   $B7F4
+B72A-   8A          TXA
+B72B-   4A          LSR
+B72C-   4A          LSR
+B72D-   4A          LSR</code>
+    </div>
+    <p class="seen">Most of that looks relatively normal.</p>
+    <p class="seen">I mean, it's reading from track $08, sector $07, which is unusual, but it appears to be setting up a standard RWTS parameter table to do so.</p>
+    <p class="seen">That first line is definitely unusual, though. That jumped out to me right away.</p>
+    <div class="line_editing">
+      <code>*BC1AL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">this is the instruction I was expecting at $B700 (but it called this subroutine instead)</p>
+      <code>BC1A-   8E E9 B7    STX   $B7E9</code>
+      <p class="comment">initialize current track for RWTS</p>
+      <code>BC1D-   A9 00       LDA   #$00
+BC1F-   8D 78 04    STA   $0478
+BC22-   48          PHA
+BC23-   A6 2B       LDX   $2B</code>
+      <p class="comment">seek to track $00 (we're already there, but OK)</p>
+      <code>BC25-   A9 00       LDA   #$00
+BC27-   20 A0 B9    JSR   $B9A0</code>
+      <p class="comment">more on this later</p>
+      <code>BC2A-   20 03 BB    JSR   $BB03</code>
+      <p class="comment">now clean up and restore everything</p>
+      <code>BC2D-   68          PLA
+BC2E-   08          PHP</code>
+      <p class="comment">seek to track $00 again</p>
+      <code>BC2F-   A6 2B       LDX   $2B
+BC31-   20 A0 B9    JSR   $B9A0
+BC34-   28          PLP
+BC35-   60          RTS</code>
+    </div>
+    <p class="seen">The meat of this is at $BB03.</p>
+    <div class="line_editing">
+      <code>*BB03L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">save zero page</p>
+      <code>BB03-   A2 00       LDX   #$00
+BB05-   B5 00       LDA   $00,X
+BB07-   9D 00 50    STA   $5000,X
+BB0A-   CA          DEX
+BB0B-   10 F8       BPL   $BB05</code>
+      <p class="comment">more on this later</p>
+      <code>BB0D-   20 00 BC    JSR   $BC00</code>
+      <p class="comment">save flags</p>
+      <code>BB10-   08          PHP</code>
+      <p class="comment">restore zero page</p>
+      <code>BB11-   A2 00       LDX   #$00
+BB13-   B9 00 50    LDA   $5000,Y
+BB16-   95 00       STA   $00,X
+BB18-   CA          DEX
+BB19-   10 F8       BPL   $BB13</code>
+      <p class="comment">restore flags</p>
+      <code>BB1B-   28          PLP</code>
+      <p class="comment">check the carry bit that came out of the routine at $BC00 (we pushed it at $BB10 and pulled it back at $BB1B)</p>
+      <code>BB1C-   90 0F       BCC   $BB2D</code>
+      <p class="comment">if carry bit was set coming out of $BC00, push the $Cx00 address onto the stack and "return" to it (i.e. reboot)</p>
+      <code>BB1E-   A5 2B       LDA   $2B
+BB20-   4A          LSR
+BB21-   4A          LSR
+BB22-   4A          LSR
+BB23-   4A          LSR
+BB24-   09 C0       ORA   #$C0
+BB26-   A8          TAY
+BB27-   88          DEY
+BB28-   98          TYA
+BB29-   48          PHA
+BB2A-   A9 FF       LDA   #$FF
+BB2C-   48          PHA
+BB2D-   A6 2B       LDX   $2B
+BB2F-   60          RTS</code>
+    </div>
+    <p class="seen">This is still just a wrapper around the real meat, which is at $BC00. But I'm already seeing the general pattern -- if that routine sets the carry, we end up rebooting. (This is what my non- working copy did.) If that routine clears the carry, we end up returning (to $B703) to continue the boot.</p>
+    <p class="seen">Let's look at $BC00.</p>
+    <div class="line_editing">
+      <code>*BC00L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set an unfriendly reset vector</p>
+      <code>BC00-   A5 2B       LDA   $2B
+BC02-   4A          LSR
+BC03-   4A          LSR
+BC04-   4A          LSR
+BC05-   4A          LSR
+BC06-   09 C0       ORA   #$C0
+BC08-   8D F3 03    STA   $03F3
+BC0B-   49 A5       EOR   #$A5
+BC0D-   8D F4 03    STA   $03F4
+BC10-   A9 00       LDA   #$00
+BC12-   8D F2 03    STA   $03F2</code>
+      <p class="comment">and continue elsewhere</p>
+      <code>BC15-   A6 2B       LDX   $2B
+BC17-   4C 30 BB    JMP   $BB30</code>
+    </div>
+    <p class="seen">OK, the real real meat is at $BB30.</p>
+    <div class="line_editing">
+      <code>*BB30L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">here we go -- turn on the drive motor manually</p>
+      <code>BB30-   A6 2B       LDX   $2B
+BB32-   BD 89 C0    LDA   $C089,X
+BB35-   BD 8E C0    LDA   $C08E,X</code>
+      <p class="comment">probably an address, ($1E) -> $BBAE</p>
+      <code>BB38-   A9 AE       LDA   #$AE
+BB3A-   85 1E       STA   $1E
+BB3C-   A9 BB       LDA   #$BB
+BB3E-   85 1F       STA   $1F</code>
+      <p class="comment">probably a Death Counter</p>
+      <code>BB40-   A9 0A       LDA   #$0A
+BB42-   85 09       STA   $09
+BB44-   A9 80       LDA   #$80
+BB46-   85 08       STA   $08</code>
+      <p class="comment">if Death Counter hits 0, jump to</p>
+      <p class="comment">The Badlands @ $BBA8</p>
+      <code>BB48-   C6 08       DEC   $08
+BB4A-   F0 5C       BEQ   $BBA8</code>
+      <p class="comment">read next available address field</p>
+      <code>BB4C-   20 44 B9    JSR   $B944</code>
+      <p class="comment">if that failed, off to The Badlands</p>
+      <code>BB4F-   B0 57       BCS   $BBA8</code>
+      <p class="comment">check sector number (set by $B944)</p>
+      <code>BB51-   A5 2D       LDA   $2D</code>
+      <p class="comment">is it the sector we wanted?</p>
+      <code>BB53-   C9 0A       CMP   #$0A</code>
+      <p class="comment">nope, loop back and try again</p>
+      <code>BB55-   D0 F1       BNE   $BB48</code>
+      <p class="comment">look for $D5 nibble</p>
+      <code>BB57-   A0 00       LDY   #$00
+BB59-   BD 8C C0    LDA   $C08C,X
+BB5C-   10 FB       BPL   $BB59
+BB5E-   88          DEY</code>
+      <p class="comment">no $D5, off to The Badlands with you</p>
+      <code>BB5F-   F0 47       BEQ   $BBA8
+BB61-   C9 D5       CMP   #$D5
+BB63-   D0 F4       BNE   $BB59</code>
+      <p class="comment">look for $E7 nibble</p>
+      <code>BB65-   A0 00       LDY   #$00
+BB67-   BD 8C C0    LDA   $C08C,X
+BB6A-   10 FB       BPL   $BB67
+BB6C-   88          DEY</code>
+      <p class="comment">no $E7, off to The Badlands with you</p>
+      <code>BB6D-   F0 39       BEQ   $BBA8
+BB6F-   C9 E7       CMP   #$E7
+BB71-   D0 F4       BNE   $BB67</code>
+      <p class="comment">look for two more $E7 nibbles</p>
+      <code>BB73-   BD 8C C0    LDA   $C08C,X
+BB76-   10 FB       BPL   $BB73
+BB78-   C9 E7       CMP   #$E7</code>
+      <p class="comment">no $E7, guess where you're going</p>
+      <code>BB7A-   D0 2C       BNE   $BBA8
+BB7C-   BD 8C C0    LDA   $C08C,X
+BB7F-   10 FB       BPL   $BB7C
+BB81-   C9 E7       CMP   #$E7</code>
+      <p class="comment">no $E7, off to The Badlands with you</p>
+      <code>BB83-   D0 23       BNE   $BBA8</code>
+      <p class="comment">kill some time to get out of sync with the "proper" start of nibbles</p>
+      <code>BB85-   BD 8D C0    LDA   $C08D,X
+BB88-   A0 10       LDY   #$10
+BB8A-   24 FF       BIT   $FF</code>
+    </div>
+    <p class="seen">A short digression here into some super low-level disk stuff, because this wasn't low-level enough already...</p>
+    <p class="seen">$E7 $E7 $E7 $E7. What would that nibble sequence look like on disk? The answer is, "It depends." $E7 in hexadecimal is 11100111 in binary, so here is the simplest possible answer:</p>
+    <div class="terminal_output">
+      <code>   |--E7--||--E7--||--E7--||--E7--|
+   11100111111001111110011111100111</code>
+    </div>
+    <p class="seen">But wait. Every nibble read from disk must have its high bit set. In theory, you could insert one or two "0" bits after any of those nibbles. (Two is the maximum, due to hardware limitations.)</p>
+    <p class="seen">These extra "0" bits would be swallowed by the standard "wait for data latch to have its high bit set" loop, which you see over and over in any RWTS code:</p>
+    <div class="terminal_output">
+      <code>  :1   LDA $C08C,X
+       BPL :1</code>
+    </div>
+    <p class="seen">Now consider the following bitstream:</p>
+    <p class="seen">|--E7--| |--E7--| |--E7--||--E7--| 11100111011100111001110011111100111 ^ ^^ (extra) (extra)</p>
+    <p class="seen">The first $E7 has one extra "0" bit after it, and the second $E7 has two extra "0" bits after it. Totally legal, works on any Apple II computer and any floppy drive. A "LDA $C08C,X; BPL" loop would still interpret this bitstream as a sequence of four $E7 nibbles. Each of the extra "0" bits appear after we've just read a nibble and we're waiting for the high bit to be set again.</p>
+    <p class="seen">Now, what if we miss the first few bits of this bitstream, then start looking?</p>
+    <p class="seen">The disk is always spinning, whether we're reading from it or not. If we waste too much time doing something other than reading, we'll literally miss some bits as the disk spins by.</p>
+    <p class="seen">This is why the timing of low-level RWTS code is so critical.</p>
+    <p class="seen">Let's say we waste 12 CPU cycles before we start reading this bitstream. Each bit takes 4 CPU cycles to go by, so after 12 cycles, we would have missed the first 3 bits (marked with an X).</p>
+    <p class="seen">(normal start)</p>
+    <div class="terminal_output">
+      <code>  |--E7--| |--E7--|  |--E7--||--E7--|
+  11100111011100111001110011111100111
+  XXX  |--EE--| |--E7--|  |--FC--|</code>
+    </div>
+    <p class="seen">(delayed start)</p>
+    <p class="seen">Ah! It's interpreted as a completely different nibble sequence if you delay just a few CPU cycles before you start reading. Also note that some of those "extra" bits are no longer being ignored; now they're being interpreted as data, as part of the nibbles that are being returned to the higher level code. Meanwhile, other bits that were part of the $E7 nibbles are now being swallowed.</p>
+    <p class="seen">Now, let's go back to the first stream, which had no extra bits between the nibbles, and see what happens when we waste those same 12 CPU cycles.</p>
+    <p class="seen">(normal start)</p>
+    <div class="terminal_output">
+      <code>   |--E7--||--E7--||--E7--||--E7--|
+   11100111111001111110011111100111
+   XXX  |--FC--||--FC--||--FC--|</code>
+    </div>
+    <p class="seen">(delayed start)</p>
+    <p class="seen">After skipping the first three bits, the stream is interpreted as a series of $FC $FC $FC repeating endlessly -- not $EE $E7 $FC like the other stream.</p>
+    <p>Here's the kicker: generic bit copiers didn't preserve these extra "0" bits between nibbles. Even the most advanced bit copier wouldn't be able to preserve the difference between the $E7 followed by one extra "0" bit and the $E7 followed by two extra "0" bits. And any variation in the number or placement of the extra bits will result in a different nibble stream after a delayed start.</p>
+    <p>By "desynchronizing" (wasting just the right number of CPU cycles at just the right time), then interpreting the bits on the disk in mid-stream, developers could determine at runtime whether you had an original disk. And that is precisely the code we just saw.</p>
+    <p class="seen">Here is the complete "E7 bitstream," annotated to show both the synchronized and desynchronized nibble sequences.</p>
+    <div class="terminal_output">
+      <code> |--E7--| |--E7--|  |--E7--||--E7--|
+ 111001110111001110011100111111001110
+ XXX  |--EE--| |--E7--|  |--FC--||--E</code>
+      <code> |--E7--|  |--E7--||--E7--| |--E7--|
+ 111001110011100111111001110111001110
+ E--| |--E7--|  |--FC--||--EE--| |--E</code>
+      <code> |--E7--||--E7--|
+ 1110011111100111
+ E--| |--FC--|</code>
+    </div>
+    <p class="seen">We now return you to the actual code...</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which Things Are Restored To Their Proper Place, And Our Adventure Ends With A Satisfying Kerplunk</h3>
+
+    <div class="line_editing">
+      <code>*BB8CL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">now start looking for nibbles that don't really exist (except they do, because we're out of sync and reading timing bits as data)</p>
+      <code>BB8C-   BD 8C C0    LDA   $C08C,X
+BB8F-   10 FB       BPL   $BB8C
+BB91-   88          DEY
+BB92-   F0 14       BEQ   $BBA8
+BB94-   C9 EE       CMP   #$EE
+BB96-   D0 F4       BNE   $BB8C</code>
+      <p class="comment">compare the next 8 nibbles to an array stored at ($1E) [= $BBAE] in reverse order</p>
+      <code>BB98-   A0 07       LDY   #$07
+BB9A-   BD 8C C0    LDA   $C08C,X
+BB9D-   10 FB       BPL   $BB9A
+BB9F-   D1 1E       CMP   ($1E),Y</code>
+      <p class="comment">if any nibble doesn't match, off to</p>
+      <p class="comment">The Badlands</p>
+      <code>BBA1-   D0 05       BNE   $BBA8
+BBA3-   88          DEY
+BBA4-   10 F4       BPL   $BB9A</code>
+      <p class="comment">success falls through to here -- we are now satisfied that the disk is original, so clear the carry and return (to $BB1C)</p>
+      <code>BBA6-   18          CLC
+BBA7-   60          RTS</code>
+      <p class="comment">The Badlands (all failures go here) decrement the Death Counter and eventually give up, set the carry, and return (to $BB1C)</p>
+      <code>BBA8-   C6 09       DEC   $09
+BBAA-   D0 98       BNE   $BB44
+BBAC-   38          SEC
+BBAD-   60          RTS</code>
+    </div>
+    <p class="seen">Finally, the array of desynchronized nibbles (the E7 bitstream, in reverse order):</p>
+    <div class="listing">
+      <code>BBAE-  [FC EE EE FC E7 EE FC E7]</code>
+    </div>
+    <p class="seen">This nibble check has no side effects.</p>
+    <p class="seen">I can simply bypass it by patching $B700 to restore the STX instruction that was supposed to be there in the first place.</p>
+    <div class="line_editing">
+      <code>]PR#5
+...
+]BRUN PDP</code>
+    </div>
+    <p class="seen">T00,S01,$00 change 201ABC to 8EE9B7</p>
+    <div class="line_editing">
+      <code>]PR#6
+...works...</code>
+    </div>
+    <p class="seen">The RWTS is flexible enough to read my copy, even in a standard format, so no RWTS patches are required.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

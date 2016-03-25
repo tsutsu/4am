@@ -1,0 +1,761 @@
+<!doctype html>
+<html><head>
+<title>Map Skills</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">read error on first pass</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">fails to read T01,S0F; copy hangs during boot</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">no read errors, but copy still hangs during boot</p>
+    <p class="seen">Disk Fixer</p>
+    <p class="seen">unable to read T01,S0F by any obvious combination of parameters</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p class="seen">intentionally bad sector on track $01</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">probably a nibble check during boot that centers around the bad sector</p>
+    <p class="seen">Why didn't my EDD copy work?</p>
+    <p class="seen">ditto</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Trace the boot</p>
+    <p class="seen">2. Find the nibble check and skip it</p>
+    <p class="seen">3. There is no step 3 (I hope)</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Abuse The Stack For Fun And Profit (Mostly Fun)</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+      <code>]BLOAD BOOT1,A$2600
+]CALL -151</code>
+      <code>*B600<2600.2EFFM ; move RWTS into place
+                 ; (but don't overwrite
+                 ; Diversi-DOS @ $BF00)
+*B700L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">clear hi-res graphics screen 1</p>
+      <code>B700-   A9 00       LDA   #$00
+B702-   A8          TAY
+B703-   85 10       STA   $10
+B705-   A2 20       LDX   #$20
+B707-   86 11       STX   $11
+B709-   91 10       STA   ($10),Y
+B70B-   C8          INY
+B70C-   D0 FB       BNE   $B709
+B70E-   E6 11       INC   $11
+B710-   CA          DEX
+B711-   D0 F6       BNE   $B709</code>
+      <p class="comment">hmm, a JSR followed by garbage code</p>
+      <code>B713-   20 5D B6    JSR   $B65D
+B716-   01 0E       ORA   ($0E,X)
+B718-   00          BRK
+B719-   08          PHP
+B71A-   18          CLC</code>
+      <code>B71B-   4C 00 08    JMP   $0800</code>
+    </div>
+    <div class="line_editing">
+      <code>*B65DL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">Ah! This subroutine uses the stack to pass in multiple arguments and store them in zero page</p>
+      <code>B65D-   68          PLA
+B65E-   85 F0       STA   $F0
+B660-   68          PLA
+B661-   85 F1       STA   $F1
+B663-   A0 01       LDY   #$01
+B665-   B1 F0       LDA   ($F0),Y
+B667-   85 54       STA   $54
+B669-   C8          INY
+B66A-   B1 F0       LDA   ($F0),Y
+B66C-   85 55       STA   $55
+B66E-   C8          INY
+B66F-   B1 F0       LDA   ($F0),Y
+B671-   85 58       STA   $58
+B673-   C8          INY
+B674-   B1 F0       LDA   ($F0),Y
+B676-   85 59       STA   $59
+B678-   C8          INY
+B679-   B1 F0       LDA   ($F0),Y
+B67B-   85 67       STA   $67
+B67D-   18          CLC
+B67E-   A5 F0       LDA   $F0
+B680-   69 05       ADC   #$05
+B682-   A8          TAY
+B683-   A5 F1       LDA   $F1
+B685-   69 00       ADC   #$00</code>
+      <p class="comment">then munges the stack pointer to "return" to the next real instruction after the parameters</p>
+      <code>B687-   48          PHA
+B688-   98          TYA
+B689-   48          PHA</code>
+      <code>B68A-   A9 00       LDA   #$00
+B68C-   85 5A       STA   $5A
+B68E-   85 5B       STA   $5B
+B690-   85 5E       STA   $5E
+B692-   85 53       STA   $53
+B694-   A9 01       LDA   #$01
+B696-   85 50       STA   $50
+B698-   85 52       STA   $52
+B69A-   85 60       STA   $60
+B69C-   85 62       STA   $62
+B69E-   A9 60       LDA   #$60
+B6A0-   85 51       STA   $51
+B6A2-   85 5F       STA   $5F
+B6A4-   A9 00       LDA   #$00
+B6A6-   85 57       STA   $57
+B6A8-   A9 61       LDA   #$61
+B6AA-   85 56       STA   $56
+B6AC-   A9 EF       LDA   #$EF
+B6AE-   85 63       STA   $63
+B6B0-   A9 D8       LDA   #$D8
+B6B2-   85 64       STA   $64
+B6B4-   A5 67       LDA   $67
+B6B6-   D0 01       BNE   $B6B9
+B6B8-   60          RTS
+B6B9-   A9 01       LDA   #$01
+B6BB-   85 5C       STA   $5C
+B6BD-   A9 00       LDA   #$00
+B6BF-   A0 50       LDY   #$50
+B6C1-   20 B5 B7    JSR   $B7B5
+B6C4-   E6 59       INC   $59
+B6C6-   C6 67       DEC   $67
+B6C8-   C6 55       DEC   $55
+B6CA-   10 E8       BPL   $B6B4
+B6CC-   A9 0F       LDA   #$0F
+B6CE-   85 55       STA   $55
+B6D0-   E6 54       INC   $54
+B6D2-   D0 E0       BNE   $B6B4</code>
+    </div>
+    <p class="seen">This is a multi-sector read loop. It calls the regular $B7B5 entry point to read sectors (at $B6C1). Interestingly, the RWTS parameter table is actually on zero page, starting at $50. That would mean that the parameters passed in (on the stack, after the JSR $B65D) are</p>
+    <p class="seen">1. start track ($54)</p>
+    <p class="seen">2. start sector ($55)</p>
+    <p class="seen">3. start address - low ($58)</p>
+    <p class="seen">4. start address - high ($59)</p>
+    <p class="seen">5. sector count ($67)</p>
+    <p class="seen">It uses logical sectors (via the RWTS).</p>
+    <p class="seen">Sectors count down from $0F to $00, and tracks are decremented once the sector wraps around to $0F. The target address is incremented monotonically, and the sector count is decremented until it hits 0.</p>
+    <p class="seen">Revisiting the caller with this new understanding...</p>
+    <div class="listing">
+      <p class="comment">read $18 sectors into $0800 starting from T01,S0E</p>
+      <code>B713-   20 5D B6    JSR   $B65D
+B716-  [01 0E 00 08 18]</code>
+      <p class="comment">continue in the code we just read</p>
+      <code>B71B-   4C 00 08    JMP   $0800</code>
+    </div>
+    <p class="seen">That's where I'll interrupt the boot.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Continue To Abuse The Stack For Fun And Profit (Mostly Fun)</h3>
+
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up callback #1 after boot0 loads boot1</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D 4A 08    STA   $084A
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D 4B 08    STA   $084B
+9702-   A9 97       LDA   #$97
+9704-   8D 4C 08    STA   $084C</code>
+      <p class="comment">start the boot</p>
+      <code>9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">callback #1 is here break into monitor instead of jumping to $0800</p>
+      <code>970A-   A9 59       LDA   #$59
+970C-   8D 1C B7    STA   $B71C
+970F-   A9 FF       LDA   #$FF
+9711-   8D 1D B7    STA   $B71D
+9714-   4C 00 B7    JMP   $B700</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE1,A$9600,L$117</code>
+      <code>*9600G
+...reboots slot 6...
+<beep></code>
+      <code>*800L</code>
+    </div>
+    <div class="listing">
+      <code>0800-   4C 0F 11    JMP   $110F</code>
+    </div>
+    <p class="seen">Woohoo! It worked.</p>
+    <div class="line_editing">
+      <code>*2800<800.1FFFM</code>
+      <code>*C500G
+...
+]CALL -151</code>
+      <code>*800<2800.3FFFM</code>
+      <code>*BSAVE BOOT2 0800-1FFF,A$800,L$1800</code>
+      <code>*800L</code>
+    </div>
+    <div class="listing">
+      <code>0800-   4C 0F 11    JMP   $110F</code>
+    </div>
+    <div class="line_editing">
+      <code>*110FL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">A quick investigation reveals that this is also a multi-sector read loop that takes parameters on the stack, just like the one at $B65D. So this reads $05 sectors into $1900 starting from T18,S04.</p>
+      <code>110F-   20 41 09    JSR   $0941
+1112-  [18 04 00 19 05]</code>
+      <p class="comment">and continue there</p>
+      <code>1117-   4C 00 19    JMP   $1900</code>
+    </div>
+    <p class="seen">Once again, time to interrupt the boot.</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which We Grow Suspicious</h3>
+
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up callback #1 after boot0 loads boot1</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D 4A 08    STA   $084A
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D 4B 08    STA   $084B
+9702-   A9 97       LDA   #$97
+9704-   8D 4C 08    STA   $084C</code>
+      <p class="comment">start the boot</p>
+      <code>9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">callback #1 is here set up callback #2 after boot1 loads boot2 (into $0800, &c.)</p>
+      <code>970A-   A9 17       LDA   #$17
+970C-   8D 1C B7    STA   $B71C
+970F-   A9 97       LDA   #$97
+9711-   8D 1D B7    STA   $B71D</code>
+      <p class="comment">continue the boot</p>
+      <code>9714-   4C 00 B7    JMP   $B700</code>
+      <p class="comment">callback #2 is here set up callback #3 after boot2 loads more code into $1900</p>
+      <code>9717-   A9 24       LDA   #$24
+9719-   8D 18 11    STA   $1118
+971C-   A9 97       LDA   #$97
+971E-   8D 19 11    STA   $1119</code>
+      <p class="comment">continue the boot</p>
+      <code>9721-   4C 00 08    JMP   $0800</code>
+      <p class="comment">callback #3 is here copy last code chunk to slightly higher memory so it survives a reboot (my HELLO program is very large)</p>
+      <code>9724-   A2 05       LDX   #$05
+9726-   A0 00       LDY   #$00
+9728-   B9 00 19    LDA   $1900,Y
+972B-   99 00 29    STA   $2900,Y
+972E-   C8          INY
+972F-   D0 F7       BNE   $9728
+9731-   EE 2A 97    INC   $972A
+9734-   EE 2D 97    INC   $972D
+9737-   CA          DEX
+9738-   D0 EE       BNE   $9728</code>
+      <p class="comment">and finally reboot to my work disk</p>
+      <code>973A-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE2,A$9600,L$13D</code>
+      <code>*9600G
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]CALL -151</code>
+      <code>*1900<2900.2DFFM
+*BSAVE BOOT2 1900,A$1900,L$500</code>
+      <code>*1900L</code>
+    </div>
+    <div class="listing">
+      <code>1900-   A2 FF       LDX   #$FF
+1902-   9A          TXS
+1903-   D8          CLD
+1904-   20 3D 1C    JSR   $1C3D</code>
+    </div>
+    <div class="line_editing">
+      <code>*1C3DL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">memory bank initialization</p>
+      <code>1C3D-   8D 00 C0    STA   $C000
+1C40-   8D 02 C0    STA   $C002
+1C43-   8D 04 C0    STA   $C004
+1C46-   8D 0C C0    STA   $C00C</code>
+      <p class="comment">slow to 1 MHz (IIgs)</p>
+      <code>1C49-   AD 36 C0    LDA   $C036
+1C4C-   29 7F       AND   #$7F
+1C4E-   8D 36 C0    STA   $C036</code>
+      <p class="comment">black border (IIgs)</p>
+      <code>1C51-   AD 34 C0    LDA   $C034
+1C54-   29 F0       AND   #$F0
+1C56-   8D 34 C0    STA   $C034</code>
+      <p class="comment">unfriendly reset vector</p>
+      <code>1C59-   A9 69       LDA   #$69
+1C5B-   8D F2 03    STA   $03F2
+1C5E-   A9 FF       LDA   #$FF
+1C60-   8D F3 03    STA   $03F3
+1C63-   A9 00       LDA   #$00
+1C65-   8D F4 03    STA   $03F4</code>
+      <p class="comment">show hi-res screen</p>
+      <code>1C68-   8D 50 C0    STA   $C050
+1C6B-   8D 57 C0    STA   $C057
+1C6E-   8D 52 C0    STA   $C052</code>
+      <p class="comment">don't know the significance of this</p>
+      <code>1C71-   A9 40       LDA   #$40
+1C73-   85 5E       STA   $5E
+1C75-   A9 00       LDA   #$00
+1C77-   85 96       STA   $96
+1C79-   85 94       STA   $94
+1C7B-   A9 01       LDA   #$01
+1C7D-   8D 06 11    STA   $1106
+1C80-   20 D2 1C    JSR   $1CD2</code>
+    </div>
+    <div class="line_editing">
+      <code>*1CD2L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">hmm, creating code by overwriting existing memory, one byte at a time</p>
+      <code>1CD2-   EA          NOP
+1CD3-   A9 20       LDA   #$20
+1CD5-   8D 1D 1D    STA   $1D1D
+1CD8-   A9 02       LDA   #$02
+1CDA-   8D 1F 1D    STA   $1D1F
+1CDD-   A9 D8       LDA   #$D8
+1CDF-   8D 1E 1D    STA   $1D1E
+1CE2-   A9 60       LDA   #$60
+1CE4-   8D 20 1D    STA   $1D20</code>
+      <p class="comment">wipe $46 bytes of memory</p>
+      <code>1CE7-   A9 00       LDA   #$00
+1CE9-   85 50       STA   $50
+1CEB-   A9 12       LDA   #$12
+1CED-   85 51       STA   $51
+1CEF-   A0 46       LDY   #$46
+1CF1-   A9 00       LDA   #$00
+1CF3-   91 50       STA   ($50),Y
+1CF5-   88          DEY
+1CF6-   D0 FB       BNE   $1CF3</code>
+      <p class="comment">call the following line, then fall through to do it again</p>
+      <code>1CF8-   20 FB 1C    JSR   $1CFB</code>
+      <p class="comment">read $02 sectors into $42D8 starting from T02,S06</p>
+      <code>1CFB-   20 41 09    JSR   $0941
+1CFE-  [02 06 D8 42 02]</code>
+      <p class="comment">copy one of the pages we just read</p>
+      <code>1D03-   A0 00       LDY   #$00
+1D05-   B9 D8 42    LDA   $42D8,Y
+1D08-   99 D8 02    STA   $02D8,Y
+1D0B-   C8          INY
+1D0C-   D0 F7       BNE   $1D05</code>
+      <p class="comment">copy part of the other page too</p>
+      <code>1D0E-   A0 90       LDY   #$90
+1D10-   B9 D6 43    LDA   $43D6,Y
+1D13-   99 D6 03    STA   $03D6,Y
+1D16-   88          DEY
+1D17-   D0 F7       BNE   $1D10
+1D19-   20 1D 1D    JSR   $1D1D
+1D1C-   60          RTS
+1D1D-   00          BRK
+1D1E-   00          BRK
+1D1F-   00          BRK
+1D20-   00          BRK</code>
+    </div>
+    <p>Aha! But all is not as it seems. Recall that we literally *just* modified the memory at $1D1D..$1D20 (at $1CD3). This is the code that ends up there:</p>
+    <div class="line_editing">
+      <code>*1D1D:20 D8 02 60</code>
+      <code>*1D1DL</code>
+    </div>
+    <div class="listing">
+      <code>1D1D-   20 D8 02    JSR   $02D8
+1D1E-   60          RTS</code>
+    </div>
+    <p class="seen">Highly suspect.</p>
+    <p>Let's interrupt at $1D19 and see what sneaky code ends up in the input buffer ($02D8), the page 3 vectors ($03D6), and overflowing onto the text page.</p>
+</section>
+
+<section>
+  <h2>Chapter 4</h2>
+  <h3>In Which We Have An "Aha" Moment</h3>
+
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up callback #1 and start the boot</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D 4A 08    STA   $084A
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D 4B 08    STA   $084B
+9702-   A9 97       LDA   #$97
+9704-   8D 4C 08    STA   $084C
+9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">callback #1 is here set up callback #2 and continue boot</p>
+      <code>970A-   A9 17       LDA   #$17
+970C-   8D 1C B7    STA   $B71C
+970F-   A9 97       LDA   #$97
+9711-   8D 1D B7    STA   $B71D
+9714-   4C 00 B7    JMP   $B700</code>
+      <p class="comment">callback #2 is here set up callback #3 and continue boot</p>
+      <code>9717-   A9 24       LDA   #$24
+9719-   8D 18 11    STA   $1118
+971C-   A9 97       LDA   #$97
+971E-   8D 19 11    STA   $1119
+9721-   4C 00 08    JMP   $0800</code>
+      <p class="comment">callback #3 is here set up callback #4 and continue boot</p>
+      <code>9724-   A9 4C       LDA   #$4C
+9726-   8D 19 1D    STA   $1D19
+9729-   A9 36       LDA   #$36
+972B-   8D 1A 1D    STA   $1D1A
+972E-   A9 97       LDA   #$97
+9730-   8D 1B 1D    STA   $1D1B
+9733-   4C 00 19    JMP   $1900</code>
+      <p class="comment">callback #4 is here capture the code that ends up in low memory and reboot to my work disk</p>
+      <code>9736-   A2 02       LDX   #$02
+9738-   B9 D8 02    LDA   $02D8,Y
+973B-   99 D8 22    STA   $22D8,Y
+973E-   C8          INY
+973F-   D0 F7       BNE   $9738
+9741-   EE 3A 97    INC   $973A
+9744-   EE 3D 97    INC   $973D
+9747-   CA          DEX
+9748-   D0 EE       BNE   $9738
+974A-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE3,A$9600,L$14D</code>
+      <code>*9600G
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]BSAVE BOOT2 02D8,A$22D8,L$200</code>
+    </div>
+    <p>Since part of this ends up on the text page, I'm going to leave it at $22D8.</p>
+    <p class="seen">Relative branches will look correct, but absolute addresses will be off by $2000.</p>
+    <div class="line_editing">
+      <code>]CALL -151</code>
+      <code>*22D8L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">whatever this is doing, it's going to keep doing it until it works (note the infinite loop if the carry bit is set)</p>
+      <code>22D8-   A0 3C       LDY   #$3C
+22DA-   A9 04       LDA   #$04
+22DC-   20 E2 02    JSR   $02E2
+22DF-   B0 F7       BCS   $22D8
+22E1-   60          RTS</code>
+      <p class="comment">save registers</p>
+      <code>22E2-   48          PHA
+22E3-   8A          TXA
+22E4-   48          PHA
+22E5-   98          TYA
+22E6-   48          PHA</code>
+      <p class="comment">do something</p>
+      <code>22E7-   20 F8 02    JSR   $02F8</code>
+      <p class="comment">restore registers</p>
+      <code>22EA-   68          PLA
+22EB-   A8          TAY
+22EC-   68          PLA
+22ED-   AA          TAX
+22EE-   68          PLA</code>
+      <p class="comment">read a sector via RWTS</p>
+      <code>22EF-   20 B5 B7    JSR   $B7B5</code>
+      <p class="comment">do the same thing again (but save and restore the processor flags)</p>
+      <code>22F2-   08          PHP
+22F3-   20 F8 02    JSR   $02F8
+22F6-   28          PLP</code>
+      <p class="comment">and return to caller with the flags from the RWTS call</p>
+      <code>22F7-   60          RTS</code>
+    </div>
+    <p class="seen">OK, this is a bit convoluted, but it's not intentionally obfuscated. It's just cautious. The heart of it is a standard RWTS call (at $02EF) which absolutely has to work, otherwise $02DF will keep branching back to $02D8 to try again.</p>
+    <p class="seen">The RWTS parameter table is at $043C (passed in A and Y, set at $02D8).</p>
+    <p>Before and after the RWTS call, we call a routine at $02F8. The RWTS parameter table is never modified, so it's just whatever was read from disk.</p>
+    <div class="line_editing">
+      <code>*243C.2450</code>
+    </div>
+    <div class="listing">
+      <code>243C- 01 60 01 00
+2440- 01 0F 4D 04 00 12 00 00
+      ^^ ^^       ^^^^^
+   track sector  address</code>
+      <code>2448- 01 00 00 60 01 00 01 EF
+2450- D8</code>
+    </div>
+    <p>That's reading from slot 6, drive 1, track $01, sector $0F (aha! that's the unreadable sector), into $1200.</p>
+    <div class="line_editing">
+      <code>*22F8L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">take two bytes from a data structure starting at $0321 and store them in zero page $02/$03</p>
+      <code>22F8-   A2 00       LDX   #$00
+22FA-   A0 00       LDY   #$00
+22FC-   BD 21 03    LDA   $0321,X
+22FF-   E8          INX
+2300-   85 02       STA   $02
+2302-   BD 21 03    LDA   $0321,X
+2305-   E8          INX
+2306-   85 03       STA   $03
+2308-   C5 02       CMP   $02
+230A-   D0 05       BNE   $2311
+230C-   C9 00       CMP   #$00
+230E-   D0 01       BNE   $2311
+2310-   60          RTS</code>
+      <p class="comment">swap the byte at ($02),Y with the byte at $0321,X</p>
+      <code>2311-   BD 21 03    LDA   $0321,X
+2314-   48          PHA
+2315-   B1 02       LDA   ($02),Y
+2317-   9D 21 03    STA   $0321,X
+231A-   E8          INX
+231B-   68          PLA
+231C-   91 02       STA   ($02),Y</code>
+      <p class="comment">and loop back (will exit if the BNEs at $030A and $030E fail)</p>
+      <code>231E-   4C FC 02    JMP   $02FC</code>
+    </div>
+    <p class="seen">So we're swapping some bytes in memory, then (since we call the same routine again) swapping them back after the RWTS call at $02EF. This is driven by a data structure (starting at $0321) that contains an array of triples (two byte address + one byte value) followed by two null bytes.</p>
+    <p class="seen">Here is the data structure:</p>
+    <div class="line_editing">
+      <code>*2321.2334</code>
+    </div>
+    <div class="listing">
+      <code>2321- C2 B8 4C
+      C3 B8 8E
+      C4 B8 03
+      DC B8 4C
+      DD B8 35
+      DE B8 03
+      00 00</code>
+    </div>
+    <p class="seen">So we're swapping three bytes at $B8C2 (4C 8E 03) and three bytes at $B8DC (4C 35 03). That... is right in the middle of RWTS code. $B8C2 is the POSTNIBBLE routine that converts the 342 nibbles on disk into 256 bytes in memory. $B8DC is the READ routine. And we're completely replacing (well, redirecting) both of them to custom routines that we just read from disk, in order to read the unreadable sector on track $01.</p>
+    <p class="seen">Let's see what's at $038E and $0335.</p>
+    <div class="line_editing">
+      <code>*238EL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">new POSTNIBBLE routine</p>
+      <code>238E-   A0 87       LDY   #$87
+2390-   20 AB 03    JSR   $03AB
+2393-   88          DEY
+2394-   20 AB 03    JSR   $03AB
+2397-   0A          ASL
+2398-   0A          ASL
+2399-   0A          ASL
+239A-   0A          ASL
+239B-   85 00       STA   $00
+239D-   20 AB 03    JSR   $03AB
+23A0-   05 00       ORA   $00
+23A2-   91 3E       STA   ($3E),Y
+23A4-   98          TYA
+23A5-   88          DEY
+23A6-   C9 00       CMP   #$00
+23A8-   D0 EA       BNE   $2394
+23AA-   60          RTS
+23AB-   98          TYA
+23AC-   48          PHA
+23AD-   C9 87       CMP   #$87
+23AF-   D0 19       BNE   $23CA
+23B1-   A0 55       LDY   #$55
+23B3-   AD C0 FB    LDA   $FBC0
+23B6-   F0 0C       BEQ   $23C4
+23B8-   AE 8D 03    LDX   $038D
+23BB-   BD 8D C0    LDA   $C08D,X
+23BE-   BD 8E C0    LDA   $C08E,X
+23C1-   10 01       BPL   $23C4
+23C3-   88          DEY
+23C4-   84 02       STY   $02
+23C6-   A2 00       LDX   #$00
+23C8-   86 01       STX   $01
+23CA-   A4 02       LDY   $02
+23CC-   A6 01       LDX   $01
+23CE-   30 0C       BMI   $23DC
+23D0-   BE FF BB    LDX   $BBFF,Y
+23D3-   88          DEY
+23D4-   D0 0A       BNE   $23E0
+23D6-   A9 FF       LDA   #$FF
+23D8-   85 01       STA   $01
+23DA-   D0 04       BNE   $23E0
+23DC-   BE 00 BB    LDX   $BB00,Y
+23DF-   C8          INY
+23E0-   84 02       STY   $02
+23E2-   68          PLA
+23E3-   A8          TAY
+23E4-   BD 3C 03    LDA   $033C,X
+23E7-   60          RTS</code>
+    </div>
+    <div class="line_editing">
+      <code>*2335L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">new READ routine</p>
+      <code>2335-   A0 20       LDY   #$20
+2337-   8E 8D 03    STX   $038D
+233A-   88          DEY
+233B-   F0 4E       BEQ   $238B
+233D-   BD 8C C0    LDA   $C08C,X
+2340-   10 FB       BPL   $233D
+2342-   49 D5       EOR   #$D5
+2344-   D0 F4       BNE   $233A
+2346-   EA          NOP
+2347-   BD 8C C0    LDA   $C08C,X
+234A-   10 FB       BPL   $2347
+234C-   C9 AA       CMP   #$AA
+234E-   D0 F2       BNE   $2342
+2350-   A0 56       LDY   #$56
+2352-   BD 8C C0    LDA   $C08C,X
+2355-   10 FB       BPL   $2352
+2357-   EA          NOP
+2358-   EA          NOP
+2359-   9D 8D C0    STA   $C08D,X
+235C-   88          DEY
+235D-   84 26       STY   $26
+235F-   BD 8C C0    LDA   $C08C,X
+2362-   10 FB       BPL   $235F
+2364-   BC 00 BA    LDY   $BA00,X
+2367-   A4 26       LDY   $26
+2369-   99 00 BC    STA   $BC00,Y
+236C-   D0 EE       BNE   $235C
+236E-   84 26       STY   $26
+2370-   BD 8C C0    LDA   $C08C,X
+2373-   10 FB       BPL   $2370
+2375-   BC 00 BA    LDY   $BA00,X
+2378-   A4 26       LDY   $26
+237A-   99 00 BB    STA   $BB00,Y
+237D-   C8          INY
+237E-   D0 EE       BNE   $236E
+2380-   AD 52 BC    LDA   $BC52
+2383-   29 F0       AND   #$F0
+2385-   C9 90       CMP   #$90
+2387-   F0 02       BEQ   $238B
+2389-   18          CLC
+238A-   60          RTS
+238B-   38          SEC
+238C-   60          RTS
+238D-   00          BRK</code>
+    </div>
+    <p class="seen">And that's how we're going to read the unreadable sector: we're going to let this code do it for us.</p>
+</section>
+
+<section>
+  <h2>Chapter 5</h2>
+  <h3>In Which Perseverance Pays Off</h3>
+
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up callback #1 and start the boot</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D 4A 08    STA   $084A
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D 4B 08    STA   $084B
+9702-   A9 97       LDA   #$97
+9704-   8D 4C 08    STA   $084C
+9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">callback #1 is here set up callback #2 and continue boot</p>
+      <code>970A-   A9 17       LDA   #$17
+970C-   8D 1C B7    STA   $B71C
+970F-   A9 97       LDA   #$97
+9711-   8D 1D B7    STA   $B71D
+9714-   4C 00 B7    JMP   $B700</code>
+      <p class="comment">callback #2 is here set up callback #3 and continue boot</p>
+      <code>9717-   A9 24       LDA   #$24
+9719-   8D 18 11    STA   $1118
+971C-   A9 97       LDA   #$97
+971E-   8D 19 11    STA   $1119
+9721-   4C 00 08    JMP   $0800</code>
+      <p class="comment">callback #3 is here set up callback #4 and continue boot</p>
+      <code>9724-   A9 4C       LDA   #$4C
+9726-   8D 19 1D    STA   $1D19
+9729-   A9 36       LDA   #$36
+972B-   8D 1A 1D    STA   $1D1A
+972E-   A9 97       LDA   #$97
+9730-   8D 1B 1D    STA   $1D1B
+9733-   4C 00 19    JMP   $1900</code>
+      <p class="comment">callback #4 is here set up callback #5 (!) and continue</p>
+      <code>9736-   A9 4C       LDA   #$4C
+9738-   8D DF 02    STA   $02DF
+973B-   A9 48       LDA   #$48
+973D-   8D E0 02    STA   $02E0
+9740-   A9 97       LDA   #$97
+9742-   8D E1 02    STA   $02E1
+9745-   4C D8 02    JMP   $02D8</code>
+      <p class="comment">callback #5 is here copy the page that we read from the unreadable sector T01,S0F to higher memory so it survives a reboot</p>
+      <code>9748-   A0 00       LDY   #$00
+974A-   B9 00 12    LDA   $1200,Y
+974D-   99 00 22    STA   $2200,Y
+9750-   C8          INY
+9751-   D0 F7       BNE   $974A</code>
+      <p class="comment">reboot to my work disk, one last time</p>
+      <code>9753-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE4,A$9600,L$156</code>
+      <code>*9600G
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]BSAVE BOOT2 1200,A$2200,L$100
+]CALL -151</code>
+      <code>*2201L</code>
+    </div>
+    <div class="listing">
+      <code>2201-   A5 94       LDA   $94
+2203-   49 01       EOR   #$01
+2205-   85 94       STA   $94
+2207-   4C F3 11    JMP   $11F3
+220A-   60          RTS
+220B-   68          PLA
+220C-   85 C5       STA   $C5
+220E-   68          PLA
+220F-   85 C6       STA   $C6
+2211-   A0 01       LDY   #$01
+2213-   B1 C5       LDA   ($C5),Y
+2215-   F0 06       BEQ   $221D
+2217-   20 41 12    JSR   $1241
+221A-   4C 13 12    JMP   $1213</code>
+    </div>
+    <p class="seen">Well, I'm not sure what this is, but it is most decidedly something. This was not just a check to ensure that the unreadable sector was there. The data on that sector actually matters.</p>
+    <p>OK, no problem. I have the data now. I can write it back to T01,S0F on my non- working copy. Then, if I disable the RWTS swapper at $02F8, the program will just read T01,S0F with a standard RWTS.</p>
+    <div class="listing">
+      <code>08C0-   A9 08       LDA   #$08
+08C2-   A0 E8       LDY   #$E8
+08C4-   4C D9 03    JMP   $03D9</code>
+      <code>08E8- 01 60 01 FE 01 0F FB 08
+                  ^^ ^^
+               track sector</code>
+      <code>08F0- 00 12 00 00 02 00 FE 60
+      ^^^^^       ^^
+     address    write</code>
+      <code>08F8- 01 00 00 00 01 EF D8 00</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE WRITE T01S0F,A$8C0,L$40
+*BLOAD BOOT2 1200,A$1200</code>
+    </div>
+    <div class="curses_input">
+      <code>[S6,D1=non-working copy]</code>
+    </div>
+    <div class="line_editing">
+      <code>*8C0G
+...write write write...</code>
+    </div>
+    <p>$02D8 was read from T02,S06 (at $1CFB).</p>
+    <p>I want to put an "RTS" at $02F8 to disable the RWTS swapper, so that's at offset $20. I shouldn't need to change anything else.</p>
+    <p class="seen">T02,S06,$20 change "A2" to "60"</p>
+    <div class="line_editing">
+      <code>]PR#6
+...works...</code>
+    </div>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

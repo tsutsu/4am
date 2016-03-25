@@ -1,0 +1,1297 @@
+<!doctype html>
+<html><head>
+<title>Muppet Word Book</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">unable to read any track</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">no read errors, but copy loads ProDOS title screen, then reboots</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">T00 has at least a few sectors, but</p>
+    <p class="seen">I'm not sure how many</p>
+    <p class="seen">T01+ have no visible structure at all</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK: 03  START: 2FF1  LENGTH: 015F</code>
+      <code>2FE8: E7 E7 AA D5 FE FF FF FF   VIEW
+2FF0: FF FF C9 9E D3 F3 99 E6
+2FF8: 99 E6 99 E6 99 E6 99 E6
+3000: 99 E6 99 E6 99 CA AA A9
+3008: 9B A7 AD 96 AA D5 FC 99
+3010: E6 99 E6 99 E6 99 E6 99
+3018: E6 99 E6 CA D5 A9 96 96
+3020: 96 96 96 96 96 96 96 96
+3028: 96 96 96 96 96 96 96 96</code>
+      <code>---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">Disk Fixer</p>
+    <p class="seen">["O" -> "Input/Output Control"] "CHECKSUM ENABLED" -> "NO" T00,S00 readable T00,S0D readable T00,S0E readable nothing else</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p class="seen">not a 16-sector disk (or maybe a wildly non-standard one)</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">ditto</p>
+    <p class="seen">Why didn't my EDD copy work?</p>
+    <p class="seen">I don't know. Probably a nibble check in the first .SYSTEM file (assuming this is really ProDOS as it claims).</p>
+    <p class="seen">Converting the disk to a standard format will be a challenge. Advanced</p>
+    <p class="seen">Demuffin requires a DOS 3.3-shaped RWTS, but this disk uses ProDOS (as far as I can tell). Assuming the disk even uses 16 sectors (and Copy ][+ just can't see the structure), I might be able to extract the RWTS from the PRODOS file and build an RWTS to plug into Advanced Demuffin. I've done that successfully before, but it's finicky. DOS 3.3 and ProDOS are very different beasts.</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Boot trace to capture PRODOS file in memory</p>
+    <p class="seen">2. Extract its RWTS routines to build a DOS 3.3-shaped RWTS file</p>
+    <p class="seen">3. Convert the disk to a standard format with Advanced Demuffin</p>
+    <p class="seen">4. Patch the bootloader and/or the PRODOS file to be able to read a standard format disk</p>
+    <p class="seen">5. Find and bypass the nibble check</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Take Our First Steps</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0</code>
+      <code>]CALL -151
+*800<2800.28FFM
+*801L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up $801 with an "RTS" (probably so we can JSR $C65C later to read sectors)</p>
+      <code>0801-   A9 60       LDA   #$60
+0803-   8D 01 08    STA   $0801</code>
+      <p class="comment">save slot (x16)</p>
+      <code>0806-   86 43       STX   $43
+0808-   86 2B       STX   $2B</code>
+      <p class="comment">munge slot into $C6 form and store it</p>
+      <code>080A-   8A          TXA
+080B-   4A          LSR
+080C-   4A          LSR
+080D-   4A          LSR
+080E-   4A          LSR
+080F-   09 C0       ORA   #$C0
+0811-   8D 38 08    STA   $0838</code>
+      <p class="comment">set reset vector</p>
+      <code>0814-   A0 CE       LDY   #$CE
+0816-   A9 08       LDA   #$08
+0818-   8C F2 03    STY   $03F2
+081B-   8D F3 03    STA   $03F3
+081E-   A9 AD       LDA   #$AD
+0820-   8D F4 03    STA   $03F4</code>
+      <code>0823-   A9 00       LDA   #$00
+0825-   85 09       STA   $09
+0827-   85 03       STA   $03</code>
+      <p class="comment">increment physical sector number</p>
+      <code>0829-   E6 3D       INC   $3D</code>
+      <p class="comment">read a sector</p>
+      <code>082B-   20 36 08    JSR   $0836</code>
+      <p class="comment">decrement sector count</p>
+      <code>082E-   CE 39 08    DEC   $0839</code>
+      <p class="comment">loop back to read more sectors</p>
+      <code>0831-   D0 F6       BNE   $0829</code>
+      <p class="comment">or continue down below</p>
+      <code>0833-   4C 40 08    JMP   $0840
+0836-   4C 5C C6    JMP   $C65C
+0839-  [02]
+083A-  ["PRODOS"]</code>
+      <p class="comment">execution continues here after all sectors are read</p>
+      <code>0840-   A9 02       LDA   #$02
+0842-   85 02       STA   $02
+0844-   A9 0C       LDA   #$0C
+0846-   85 27       STA   $27</code>
+      <p class="comment">don't know what this does yet</p>
+      <code>0848-   20 34 09    JSR   $0934</code>
+    </div>
+    <p class="seen">This is where I need to interrupt the boot, to see what ends up at $900 (and $A00) from initial sector read loop.</p>
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up callback at $0840 after sector read loop exits</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D 40 08    STA   $0840
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D 41 08    STA   $0841
+9702-   A9 97       LDA   #$97
+9704-   8D 42 08    STA   $0842</code>
+      <p class="comment">start the boot</p>
+      <code>9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">callback is here -- copy 3 pages to graphics page so they survive a reboot</p>
+      <code>970A-   A2 03       LDX   #$03
+970C-   A0 00       LDY   #$00
+970E-   B9 00 08    LDA   $0800,Y
+9711-   99 00 28    STA   $2800,Y
+9714-   C8          INY
+9715-   D0 F7       BNE   $970E
+9717-   EE 10 97    INC   $9710
+971A-   EE 13 97    INC   $9713
+971D-   CA          DEX
+971E-   D0 EE       BNE   $970E</code>
+      <p class="comment">turn off slot 6 drive motor</p>
+      <code>9720-   AD E8 C0    LDA   $C0E8</code>
+      <p class="comment">reboot to my work disk</p>
+      <code>9723-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE0,A$9600,L$126
+*9600G
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]BSAVE BOOT0 0800-0AFF,A$2800,L$300
+]CALL -151
+*800<2800.2AFFM
+*934L
+.
+. actually boring, it's just setting up
+. a nibble translate table
+.</code>
+    </div>
+    <p class="seen">Continuing at $084B...</p>
+    <div class="listing">
+      <code>084B-   20 EF 08    JSR   $08EF</code>
+    </div>
+    <div class="line_editing">
+      <code>*8EFL
+.
+. appears to read a sector into ($26)
+.</code>
+    </div>
+    <p class="seen">Continuing at $084E...</p>
+    <div class="listing">
+      <p class="comment">look for PRODOS file in disk catalog (string at $0839 spells "PRODOS")</p>
+      <code>084E-   A9 04       LDA   #$04
+0850-   85 00       STA   $00
+0852-   A9 0C       LDA   #$0C
+0854-   85 01       STA   $01
+0856-   A5 00       LDA   $00
+0858-   18          CLC
+0859-   69 27       ADC   #$27
+085B-   85 00       STA   $00
+085D-   B0 6F       BCS   $08CE
+085F-   A0 06       LDY   #$06
+0861-   B1 00       LDA   ($00),Y
+0863-   D9 39 08    CMP   $0839,Y
+0866-   D0 EE       BNE   $0856
+0868-   88          DEY
+0869-   D0 F6       BNE   $0861</code>
+      <p class="comment">get block info for PRODOS file</p>
+      <code>086B-   B1 00       LDA   ($00),Y
+086D-   48          PHA
+086E-   A0 10       LDY   #$10
+0870-   B1 00       LDA   ($00),Y
+0872-   C9 FF       CMP   #$FF
+0874-   D0 58       BNE   $08CE
+0876-   C8          INY
+0877-   B1 00       LDA   ($00),Y
+0879-   85 02       STA   $02
+087B-   C8          INY
+087C-   B1 00       LDA   ($00),Y
+087E-   85 03       STA   $03
+0880-   A9 FF       LDA   #$FF
+0882-   85 07       STA   $07
+0884-   A9 00       LDA   #$00
+0886-   85 26       STA   $26
+0888-   85 00       STA   $00
+088A-   A0 1E       LDY   #$1E
+088C-   68          PLA
+088D-   C9 26       CMP   #$26
+088F-   F0 0B       BEQ   $089C</code>
+      <p class="comment">load data at $2000</p>
+      <code>0891-   A0 20       LDY   #$20
+0893-   84 27       STY   $27</code>
+      <p class="comment">read it</p>
+      <code>0895-   20 EF 08    JSR   $08EF</code>
+      <p class="comment">carry clear on success</p>
+      <code>0898-   90 1F       BCC   $08B9</code>
+      <p class="comment">carry set on failure</p>
+      <code>089A-   B0 32       BCS   $08CE</code>
+      <p class="comment">loop to read the rest of the file</p>
+      <code>089C-   84 27       STY   $27
+089E-   84 01       STY   $01
+08A0-   20 EF 08    JSR   $08EF
+08A3-   B0 29       BCS   $08CE
+08A5-   E6 07       INC   $07
+08A7-   A4 07       LDY   $07
+08A9-   B1 00       LDA   ($00),Y
+08AB-   85 02       STA   $02
+08AD-   E6 01       INC   $01
+08AF-   B1 00       LDA   ($00),Y
+08B1-   85 03       STA   $03
+08B3-   C6 01       DEC   $01
+08B5-   11 00       ORA   ($00),Y
+08B7-   D0 E7       BNE   $08A0</code>
+      <p class="comment">execution continues here after all sectors are read successfully -- turn off drive motor</p>
+      <code>08B9-   BD 88 C0    LDA   $C088,X</code>
+      <p class="comment">set reset vector</p>
+      <code>08BC-   A2 00       LDX   #$00
+08BE-   A0 57       LDY   #$57
+08C0-   A9 F2       LDA   #$F2
+08C2-   8E F2 03    STX   $03F2
+08C5-   8C F3 03    STY   $03F3
+08C8-   8D F4 03    STA   $03F4</code>
+      <p class="comment">jump to the beginning of PRODOS file</p>
+      <code>08CB-   4C 00 20    JMP   $2000</code>
+      <p class="comment">any failure ends up here</p>
+      <code>08CE-   E6 27       INC   $27
+08D0-   A0 00       LDY   #$00
+08D2-   A6 2B       LDX   $2B</code>
+      <p class="comment">turn off drive motor</p>
+      <code>08D4-   BD 88 C0    LDA   $C088,X</code>
+      <p class="comment">wipe memory and never return</p>
+      <code>08D7-   20 DD 08    JSR   $08DD
+08DA-   4C DA 08    JMP   $08DA
+08DD-   A9 60       LDA   #$60
+08DF-   91 26       STA   ($26),Y
+08E1-   99 00 09    STA   $0900,Y
+08E4-   99 00 0A    STA   $0A00,Y
+08E7-   88          DEY
+08E8-   D0 F5       BNE   $08DF
+08EA-   C6 27       DEC   $27
+08EC-   4C DF 08    JMP   $08DF</code>
+    </div>
+    <p class="seen">So, it really is loading ProDOS, albeit in its own special way. $08CB jumps to the code loaded from the PRODOS file at $2000.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Take Two Steps Forward, One Step Back, One Twist Sideways, And Worry That We Just Created A New Dance Move</h3>
+
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">save all flags and registers</p>
+      <code>96F8-   08          PHP
+96F9-   48          PHA
+96FA-   8A          TXA
+96FB-   48          PHA
+96FC-   98          TYA
+96FD-   48          PHA</code>
+      <p class="comment">fill $2000..$95FF with "FD" bytes so</p>
+      <p class="comment">I can tell how big the PRODOS file is later</p>
+      <code>96FE-   A2 76       LDX   #$76
+9700-   A0 00       LDY   #$00
+9702-   A9 FD       LDA   #$FD
+9704-   99 00 20    STA   $2000,Y
+9707-   C8          INY
+9708-   D0 FA       BNE   $9704
+970A-   EE 06 97    INC   $9706
+970D-   CA          DEX
+970E-   D0 F4       BNE   $9704</code>
+      <p class="comment">set up the callback after PRODOS file is loaded</p>
+      <code>9710-   A9 23       LDA   #$23
+9712-   8D CC 08    STA   $08CC
+9715-   A9 97       LDA   #$97
+9717-   8D CD 08    STA   $08CD</code>
+      <p class="comment">restore registers and flags</p>
+      <code>971A-   68          PLA
+971B-   A8          TAY
+971C-   68          PLA
+971D-   AA          TAX
+971E-   68          PLA
+971F-   28          PLP</code>
+      <p class="comment">start the boot</p>
+      <code>9720-   4C 01 08    JMP   $0801</code>
+      <p class="comment">turn off slot 6 drive motor</p>
+      <code>9723-   AD E8 C0    LDA   $C0E8</code>
+      <p class="comment">reboot to my work disk (PRODOS file loads at $2000, so no relocation is necessary)</p>
+      <code>9726-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE.PRODOS,A$9600,L$129</code>
+      <code>*BRUN TRACE.PRODOS
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]CALL -151</code>
+    </div>
+    <div class="curses_input">
+      <code>[perusing memory, starting at $2000]</code>
+    </div>
+    <p class="seen">It looks like $5A00 is the first page that still has repeated $FD bytes.</p>
+    <div class="line_editing">
+      <code>*5A-20
+=3A
+*BSAVE BOOT1.PRODOS,A$2000,L$3A00</code>
+    </div>
+    <p class="seen">Scanning through memory, I found the RWTS code. (Sorry, no magic here. It can be in a number of places, depending on the version of ProDOS. And this is *not* a standard version of ProDOS.)</p>
+    <p>The RWTS is... odd. Here, for example, is the routine that reads the address field (relocated into the language card at $D308 by the time it's used):</p>
+    <div class="line_editing">
+      <code>*5308L</code>
+    </div>
+    <div class="listing">
+      <code>5308-   A6 3E       LDX   $3E
+530A-   A0 03       LDY   #$03
+530C-   8C A4 D4    STY   $D4A4
+530F-   8C A5 D4    STY   $D4A5
+5312-   84 3F       STY   $3F
+5314-   A0 02       LDY   #$02
+5316-   CE A5 D4    DEC   $D4A5
+5319-   D0 05       BNE   $5320
+531B-   CE A4 D4    DEC   $D4A4
+531E-   F0 3B       BEQ   $535B</code>
+      <p class="comment">loop will match "CA AA A9" (that's what's at $D4D0, a.k.a. $54D0)</p>
+      <code>5320-   BD 8C C0    LDA   $C08C,X
+5323-   10 FB       BPL   $5320
+5325-   D9 D0 D4    CMP   $D4D0,Y
+5328-   D0 EA       BNE   $5314
+532A-   88          DEY
+532B-   10 F3       BPL   $5320</code>
+      <p class="comment">now decode the actual address field</p>
+      <code>532D-   A9 00       LDA   #$00
+532F-   F0 03       BEQ   $5334
+5331-   99 A0 D4    STA   $D4A0,Y
+5334-   BC 8C C0    LDY   $C08C,X
+5337-   10 FB       BPL   $5334
+5339-   59 00 D4    EOR   $D400,Y
+533C-   A4 3F       LDY   $3F
+533E-   C6 3F       DEC   $3F
+5340-   10 EF       BPL   $5331
+5342-   A8          TAY
+5343-   D0 16       BNE   $535B</code>
+      <p class="comment">match "AA" for address epilogue</p>
+      <code>5345-   BD 8C C0    LDA   $C08C,X
+5348-   10 FB       BPL   $5345
+534A-   C9 AA       CMP   #$AA
+534C-   D0 0D       BNE   $535B</code>
+      <p class="comment">munge one of the address field values into the Y register on exit (not sure which one)</p>
+      <code>534E-   AD A2 D4    LDA   $D4A2
+5351-   4A          LSR
+5352-   4A          LSR
+5353-   A8          TAY</code>
+      <p class="comment">munge another value into accumulator</p>
+      <code>5354-   AD A3 D4    LDA   $D4A3
+5357-   4A          LSR
+5358-   4A          LSR</code>
+      <p class="comment">clear carry (well at least that's normal)</p>
+      <code>5359-   18          CLC
+535A-   60          RTS</code>
+    </div>
+    <p class="seen">And here is the heart of the RWTS, the routine that matches the data prologue then converts the data field of nibbles to bytes in memory:</p>
+    <div class="line_editing">
+      <code>*5366L</code>
+    </div>
+    <div class="listing">
+      <code>5366-   8A          TXA
+5367-   09 8C       ORA   #$8C
+5369-   8D AC D3    STA   $D3AC
+536C-   8D B9 D3    STA   $D3B9
+536F-   8D CB D3    STA   $D3CB
+5372-   8D DD D3    STA   $D3DD
+5375-   8D F2 D3    STA   $D3F2
+5378-   A0 20       LDY   #$20
+537A-   88          DEY
+537B-   30 DE       BMI   $535B</code>
+      <p class="comment">match "CA D5 A9" data prologue</p>
+      <code>537D-   BD 8C C0    LDA   $C08C,X
+5380-   10 FB       BPL   $537D
+5382-   C9 CA       CMP   #$CA
+5384-   D0 F4       BNE   $537A
+5386-   2C A1 D4    BIT   $D4A1   ; odd
+5389-   BD 8C C0    LDA   $C08C,X
+538C-   10 FB       BPL   $5389
+538E-   C9 D5       CMP   #$D5
+5390-   D0 F0       BNE   $5382
+5392-   50 03       BVC   $5397   ; odd
+5394-   BD 8D C0    LDA   $C08D,X ; odd
+5397-   BD 8C C0    LDA   $C08C,X
+539A-   10 FB       BPL   $5397
+539C-   C9 A9       CMP   #$A9
+539E-   F0 07       BEQ   $53A7
+53A0-   88          DEY
+53A1-   10 F4       BPL   $5397
+53A3-   D0 B6       BNE   $535B
+53A5-   D0 7E       BNE   $5425</code>
+      <p class="comment">convert nibbles to bytes</p>
+      <code>53A7-   A0 54       LDY   #$54
+53A9-   A9 00       LDA   #$00
+53AB-   AE 8C C0    LDX   $C08C
+53AE-   10 FB       BPL   $53AB
+53B0-   5D 00 D4    EOR   $D400,X
+53B3-   84 3F       STY   $3F
+53B5-   29 FC       AND   #$FC
+53B7-   AA          TAX
+53B8-   AC 8C C0    LDY   $C08C
+53BB-   10 FB       BPL   $53B8
+53BD-   59 00 D4    EOR   $D400,Y
+53C0-   29 FC       AND   #$FC
+53C2-   1D 02 D5    ORA   $D502,X
+53C5-   A4 3F       LDY   $3F
+53C7-   99 00 D6    STA   $D600,Y
+53CA-   AC 8C C0    LDY   $C08C
+53CD-   10 FB       BPL   $53CA
+53CF-   59 00 D4    EOR   $D400,Y
+53D2-   29 FC       AND   #$FC
+53D4-   1D 01 D5    ORA   $D501,X
+53D7-   A4 3F       LDY   $3F
+53D9-   99 55 D6    STA   $D655,Y
+53DC-   AC 8C C0    LDY   $C08C
+53DF-   10 FB       BPL   $53DC
+53E1-   59 00 D4    EOR   $D400,Y
+53E4-   29 FC       AND   #$FC
+53E6-   1D 00 D5    ORA   $D500,X
+53E9-   A4 3F       LDY   $3F
+53EB-   99 AA D6    STA   $D6AA,Y
+53EE-   88          DEY
+53EF-   10 BA       BPL   $53AB
+53F1-   AC 8C C0    LDY   $C08C
+53F4-   10 FB       BPL   $53F1
+53F6-   59 00 D4    EOR   $D400,Y
+53F9-   29 FC       AND   #$FC
+53FB-   85 3F       STA   $3F
+53FD-   4A          LSR
+53FE-   4A          LSR
+53FF-   05 3F       ORA   $3F
+5401-   A6 3E       LDX   $3E
+5403-   BC 8C C0    LDY   $C08C,X
+5406-   10 FB       BPL   $5403
+5408-   59 00 D4    EOR   $D400,Y
+540B-   8D FF D6    STA   $D6FF</code>
+      <p class="comment">appears to be a checksum byte (branches to "SEC" if it fails)</p>
+      <code>540E-   BC 8C C0    LDY   $C08C,X
+5411-   10 FB       BPL   $540E
+5413-   59 00 D4    EOR   $D400,Y
+5416-   29 FC       AND   #$FC
+5418-   D0 0B       BNE   $5425</code>
+      <p class="comment">match "AA" for data epilogue</p>
+      <code>541A-   BD 8C C0    LDA   $C08C,X
+541D-   10 FB       BPL   $541A
+541F-   C9 AA       CMP   #$AA
+5421-   D0 02       BNE   $5425
+5423-   18          CLC
+5424-   60          RTS
+5425-   38          SEC
+5426-   60          RTS
+5427-   A2 10       LDX   #$10
+5429-   CA          DEX
+542A-   D0 FD       BNE   $5429
+542C-   38          SEC
+542D-   E9 01       SBC   #$01
+542F-   F0 04       BEQ   $5435
+5431-   A2 12       LDX   #$12
+5433-   D0 F4       BNE   $5429
+5435-   60          RTS</code>
+    </div>
+    <p class="seen">I won't do a side-by-side comparison, but this is all completely different from standard ProDOS. I don't just mean the address prologue. Even the routine that converts nibbles to bytes is different.</p>
+    <p class="seen">Now what I saw in the nibble editor makes slightly more sense:</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK: 03  START: 2FF1  LENGTH: 015F</code>
+    </div>
+    <div class="curses">
+      <code>2FE8: E7 E7 AA D5 FE FF FF FF   VIEW
+2FF0: FF FF C9 9E D3 F3 99 E6
+2FF8: 99 E6 99 E6 99 E6 99 E6
+3000: 99 E6 99 E6 99 CA AA A9
+                     ^^^^^^^^
+                 address prologue</code>
+      <code>3008: 9B A7 AD 96 AA D5 FC 99
+      ^^^^^^^^^^^ ^^ address epilogue
+     address field</code>
+      <code>3010: E6 99 E6 99 E6 99 E6 99
+3018: E6 99 E6 CA D5 A9 96 96
+               ^^^^^^^^
+            data prologue</code>
+    </div>
+    <div class="terminal_output">
+      <code>3020: 96 96 96 96 96 96 96 96
+3028: 96 96 96 96 96 96 96 96</code>
+      <code>---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">Porting this to a DOS 3.3-shaped RWTS is not going to be feasible. This is not just a matter of different prologue or epilogue bytes; the entire nibble- to-byte conversion scheme has been rewritten. I need to rethink my next steps.</p>
+    <p class="seen">This disk is, at some level, "ProDOS."</p>
+    <p class="seen">It has a custom bootloader to find and load the PRODOS file into memory; it has what appears to be an entirely rewritten floppy device driver; it also has a nibble check somewhere that I haven't even found yet. But it's not entirely custom. About 90% of this file is identical to ProDOS (version 1.1.1, as advertised on the standard ProDOS title screen that it displays during boot).</p>
+    <p class="seen">If I could somehow inject a clean, working version of BASIC.SYSTEM and get this PRODOS file to load that instead of the original program, I could theoretically see the files and copy them off to a standard disk. Or maybe</p>
+    <p class="seen">I could write a poor-man's Advanced</p>
+    <p class="seen">Demuffin to read the disk sector by sector (well, block by block since it's ProDOS), then save the sector data and recreate the disk with a standard RWTS.</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Trace PRODOS file</p>
+    <p class="seen">2. Inject clean BASIC.SYSTEM into memory</p>
+    <p class="seen">3. Copy each file off the disk</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which We Try Variations Of Our Dance Move And Also Our RWTS</h3>
+
+    <div class="curses_input">
+      <code>[S7,D1=ProDOS hard drive, "A4AMCRACK"]
+[S5,D1=my work disk]</code>
+      <code>[Copy ][+ 8.4]
+  --> COPY
+    --> FILE
+      --> from SLOT 7, DRIVE 1
+      -->   to SLOT 5, DRIVE 1
+        --> BASIC.SYSTEM</code>
+    </div>
+    <p class="seen">OK, now I have a clean copy of the ProDOS BASIC.SYSTEM file on my DOS 3.3- based work disk. I'll get back to that.</p>
+    <div class="line_editing">
+      <code>]PR#5
+...
+]BLOAD BOOT1.PRODOS,A$2000
+]CALL -151
+*2000L
+.
+. nothing unusual, until...
+.
+; set up to read block 2 into $0C00
+; (this is the ProDOS disk catalog)
+218F-   A2 00       LDX   #$00
+2191-   86 14       STX   $14
+2193-   A0 02       LDY   #$02
+2195-   A9 0C       LDA   #$0C
+2197-   85 15       STA   $15
+2199-   8D 07 22    STA   $2207
+219C-   8C 08 22    STY   $2208
+219F-   8E 09 22    STX   $2209</code>
+    </div>
+    <div class="listing">
+      <p class="comment">raw disk read (MLI $80)</p>
+      <code>21A2-   20 00 BF    JSR   $BF00
+21A5-  [80 04 22]</code>
+      <p class="comment">on failure, jump to The Badlands</p>
+      <code>21A8-   D0 19       BNE   $21C3</code>
+      <p class="comment">check if we've read all the blocks of the disk catalog into memory</p>
+      <code>21AA-   A0 03       LDY   #$03
+21AC-   B1 14       LDA   ($14),Y
+21AE-   AA          TAX
+21AF-   88          DEY
+21B0-   11 14       ORA   ($14),Y
+21B2-   F0 0C       BEQ   $21C0
+21B4-   B1 14       LDA   ($14),Y
+21B6-   A8          TAY
+21B7-   A5 15       LDA   $15
+21B9-   18          CLC
+21BA-   69 02       ADC   #$02
+21BC-   C9 14       CMP   #$14
+21BE-   90 D7       BCC   $2197</code>
+      <p class="comment">success path continues at $5800</p>
+      <code>21C0-   4C 00 58    JMP   $5800</code>
+      <p class="comment">failure path ends up here</p>
+      <code>21C3-   4C 00 57    JMP   $5700</code>
+    </div>
+    <div class="line_editing">
+      <code>*5700L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">relocate this to $0800</p>
+      <code>5700-   A2 80       LDX   #$80
+5702-   BD 0E 57    LDA   $570E,X
+5705-   9D 00 08    STA   $0800,X
+5708-   CA          DEX
+5709-   10 F7       BPL   $5702</code>
+      <p class="comment">and jump there</p>
+      <code>570B-   4C 00 08    JMP   $0800</code>
+      <p class="comment">wipe all memory</p>
+      <code>570E-   2C 89 C0    BIT   $C089
+5711-   2C 89 C0    BIT   $C089
+5714-   A2 1F       LDX   #$1F
+5716-   A0 00       LDY   #$00
+5718-   99 00 09    STA   $0900,Y
+571B-   99 00 20    STA   $2000,Y
+571E-   99 00 40    STA   $4000,Y
+5721-   99 00 60    STA   $6000,Y
+5724-   99 00 80    STA   $8000,Y
+5727-   99 00 A0    STA   $A000,Y
+572A-   99 00 D0    STA   $D000,Y</code>
+      <p class="comment">and make a sound while doing it</p>
+      <code>572D-   AD 30 C0    LDA   $C030
+5730-   88          DEY
+5731-   D0 E5       BNE   $5718
+5733-   EE 0C 08    INC   $080C
+5736-   EE 0F 08    INC   $080F
+5739-   EE 12 08    INC   $0812
+573C-   EE 15 08    INC   $0815
+573F-   EE 18 08    INC   $0818
+5742-   EE 1B 08    INC   $081B
+5745-   EE 1E 08    INC   $081E
+5748-   CA          DEX
+5749-   10 CD       BPL   $5718
+574B-   8D F2 03    STA   $03F2
+574E-   8D F3 03    STA   $03F3
+5751-   2C 8A C0    BIT   $C08A</code>
+      <p class="comment">and reboot</p>
+      <code>5754-   6C FC FF    JMP   ($FFFC)</code>
+    </div>
+    <p class="seen">Well, let's try not to end up there!</p>
+    <p class="seen">If we read the catalog successfully, execution continues at $5800.</p>
+    <div class="line_editing">
+      <code>*5800L</code>
+    </div>
+    <div class="listing">
+      <code>5800-   A2 38       LDX   #$38
+5802-   86 02       STX   $02
+5804-   2C 81 C0    BIT   $C081
+5807-   2C 81 C0    BIT   $C081
+580A-   A9 D1       LDA   #$D1
+580C-   8D 04 D1    STA   $D104</code>
+      <p class="comment">set reset vector</p>
+      <code>580F-   A2 F6       LDX   #$F6
+5811-   A0 BF       LDY   #$BF
+5813-   A9 1A       LDA   #$1A
+5815-   8E F2 03    STX   $03F2
+5818-   8C F3 03    STY   $03F3
+581B-   8D F4 03    STA   $03F4</code>
+      <p class="comment">reset drive heads</p>
+      <code>581E-   A5 43       LDA   $43
+5820-   29 70       AND   #$70
+5822-   85 3E       STA   $3E
+5824-   AA          TAX
+5825-   BD 80 C0    LDA   $C080,X
+5828-   BD 82 C0    LDA   $C082,X
+582B-   BD 84 C0    LDA   $C084,X
+582E-   BD 86 C0    LDA   $C086,X</code>
+      <p class="comment">then turn on drive motor manually (suspicious)</p>
+      <code>5831-   BD 89 C0    LDA   $C089,X
+5834-   24 43       BIT   $43
+5836-   10 01       BPL   $5839
+5838-   E8          INX
+5839-   BD 8A C0    LDA   $C08A,X</code>
+      <p class="comment">wait loop ($58A8 is just an RTS)</p>
+      <code>583C-   A9 00       LDA   #$00
+583E-   AA          TAX
+583F-   A8          TAY
+5840-   20 A8 58    JSR   $58A8
+5843-   88          DEY
+5844-   D0 FA       BNE   $5840
+5846-   CA          DEX
+5847-   D0 F7       BNE   $5840</code>
+      <code>5849-   85 44       STA   $44</code>
+      <p class="comment">read/write access to RAM bank 1</p>
+      <code>584B-   2C 8B C0    BIT   $C08B
+584E-   2C 8B C0    BIT   $C08B</code>
+      <p class="comment">maybe an address pointer at ($44)?</p>
+      <code>5851-   A9 14       LDA   #$14
+5853-   85 45       STA   $45</code>
+      <p class="comment">don't know what this does yet</p>
+      <code>5855-   20 03 D0    JSR   $D003</code>
+      <code>5858-   4C 5E 58    JMP   $585E</code>
+      <p class="comment">[skipped] 585B- 4C F6 BF JMP $BFF6</p>
+      <code>585E-   A2 03       LDX   #$03
+5860-   86 00       STX   $00
+5862-   86 01       STX   $01
+5864-   A2 12       LDX   #$12
+5866-   86 03       STX   $03
+5868-   C6 03       DEC   $03
+586A-   30 12       BMI   $587E</code>
+      <p class="comment">nor this</p>
+      <code>586C-   20 0C D0    JSR   $D00C
+586F-   B0 F7       BCS   $5868
+5871-   C0 06       CPY   #$06
+5873-   D0 F3       BNE   $5868</code>
+      <p class="comment">nor any of this</p>
+      <code>5875-   20 0F D0    JSR   $D00F
+5878-   90 19       BCC   $5893
+587A-   C6 01       DEC   $01
+587C-   10 E6       BPL   $5864
+587E-   A6 02       LDX   $02
+5880-   30 D9       BMI   $585B
+5882-   A0 12       LDY   #$12
+5884-   BD A9 58    LDA   $58A9,X
+5887-   99 92 D3    STA   $D392,Y
+588A-   CA          DEX
+588B-   88          DEY
+588C-   10 F6       BPL   $5884
+588E-   86 02       STX   $02
+5890-   4C 5E 58    JMP   $585E
+5893-   C6 00       DEC   $00
+5895-   10 CD       BPL   $5864
+5897-   A5 01       LDA   $01
+5899-   C9 03       CMP   #$03
+589B-   D0 E1       BNE   $587E</code>
+      <p class="comment">success path falls through to here (I think)</p>
+      <code>589D-   A6 3E       LDX   $3E</code>
+      <p class="comment">turn off drive motor</p>
+      <code>589F-   BD 88 C0    LDA   $C088,X</code>
+      <p class="comment">switch to ROM</p>
+      <code>58A2-   2C 8A C0    BIT   $C08A</code>
+      <p class="comment">continue with "stage 2" loader (to launch .SYSTEM file, probably)</p>
+      <code>58A5-   4C 00 08    JMP   $0800
+58A8-   60          RTS</code>
+    </div>
+    <p>I think the failure path ends up at $585B (from $5880), which jumps to $BFF6.</p>
+    <div class="line_editing">
+      <code>*BFF6L</code>
+    </div>
+    <div class="listing">
+      <code>BFF6-   2C 80 C0    BIT   $C080
+BFF9-   4C 00 D1    JMP   $D100</code>
+    </div>
+    <p class="seen">I'm guessing that $D100 ends up executing the code that started out at $5700, a.k.a. The Badlands.</p>
+    <p>By the time execution reaches $589D (the success path), ProDOS has done everything it needs to do by relocating itself into the language card, and it's time to find the first .SYSTEM file and load it. But it needs to load the file at $2000, so ProDOS moves its "stage 2" code to $800 to avoid memory conflicts.</p>
+    <p class="seen">Oh, and it's modified the RWTS in memory a number of times. How many? I'm not sure yet.</p>
+    <p class="seen">I need to interrupt the boot to see what evil lurks at $D003, $D00C, and $D00F.</p>
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up callback #1 after PRODOS file is loaded</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D CB 08    STA   $08CB
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D CC 08    STA   $08CC
+9702-   A9 97       LDA   #$97
+9704-   8D CD 08    STA   $08CD</code>
+      <p class="comment">start the boot</p>
+      <code>9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">(callback #1) set up callback #2 just before switching on RAM bank 1</p>
+      <code>970A-   A9 4C       LDA   #$4C
+970C-   8D 55 58    STA   $5855
+970F-   A9 1C       LDA   #$1C
+9711-   8D 56 58    STA   $5856
+9714-   A9 97       LDA   #$97
+9716-   8D 57 58    STA   $5857</code>
+      <p class="comment">continue the boot</p>
+      <code>9719-   4C 00 20    JMP   $2000</code>
+      <p class="comment">(callback #2) switch to RAM bank 1 and dump the entire contents into main memory</p>
+      <code>971C-   2C 8B C0    BIT   $C08B
+971F-   2C 8B C0    BIT   $C08B
+9722-   A2 30       LDX   #$30
+9724-   A0 00       LDY   #$00
+9726-   B9 00 D0    LDA   $D000,Y
+9729-   99 00 20    STA   $2000,Y
+972C-   C8          INY
+972D-   D0 F7       BNE   $9726
+972F-   EE 28 97    INC   $9728
+9732-   EE 2B 97    INC   $972B
+9735-   CA          DEX
+9736-   D0 EE       BNE   $9726</code>
+      <p class="comment">switch back to ROM</p>
+      <code>9738-   2C 82 C0    BIT   $C082</code>
+      <p class="comment">reboot to my work disk</p>
+      <code>973B-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE.D003,A$9600,L$13E
+*9600G
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]BSAVE BOOT1.D000-FFFF,A$2000,L$3000
+]CALL -151</code>
+      <code>*2003L</code>
+    </div>
+    <div class="listing">
+      <code>2003-   4C 9C D1    JMP   $D19C</code>
+    </div>
+    <div class="line_editing">
+      <code>*219CL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">This just sets up the absolute addresses in the RWTS so it can put the sector data in-place in its final memory destination. Perfectly normal.</p>
+      <p class="comment">By the way, ($44) points to $1400; that was initialized at $5849, just before this call.</p>
+      <code>219C-   A5 44       LDA   $44
+219E-   A4 45       LDY   $45
+21A0-   8D C8 D3    STA   $D3C8
+21A3-   8C C9 D3    STY   $D3C9
+21A6-   18          CLC
+21A7-   69 55       ADC   #$55
+21A9-   90 01       BCC   $21AC
+21AB-   C8          INY
+21AC-   85 3A       STA   $3A
+21AE-   84 3B       STY   $3B
+21B0-   8D DA D3    STA   $D3DA
+21B3-   8C DB D3    STY   $D3DB
+21B6-   18          CLC
+21B7-   69 55       ADC   #$55
+21B9-   90 01       BCC   $21BC
+21BB-   C8          INY
+21BC-   85 3C       STA   $3C
+21BE-   84 3D       STY   $3D
+21C0-   8D EC D3    STA   $D3EC
+21C3-   8C ED D3    STY   $D3ED
+21C6-   18          CLC
+21C7-   69 55       ADC   #$55
+21C9-   90 01       BCC   $21CC
+21CB-   C8          INY
+21CC-   8D 0C D4    STA   $D40C
+21CF-   8C 0D D4    STY   $D40D
+21D2-   60          RTS</code>
+    </div>
+    <div class="line_editing">
+      <code>*200CL</code>
+    </div>
+    <div class="listing">
+      <code>200C-   4C 08 D3    JMP   $D308</code>
+    </div>
+    <p>OK, I know that routine reads the next available address field. (It was originally at $5308; I already traced it earlier.)</p>
+    <div class="line_editing">
+      <code>*200FL</code>
+    </div>
+    <div class="listing">
+      <code>200F-   4C 66 D3    JMP   $D366</code>
+    </div>
+    <p>This routine was originally at $5366.</p>
+    <p class="seen">It reads the data field.</p>
+    <p class="seen">Now this entire loop makes more sense.</p>
+    <p class="seen">It's literally copying different chunks of code into the middle of the RWTS and trying to find a variation that can read several sectors in a row. Let's list it again and sprinkle some more comments around.</p>
+    <p>The main loop starts at $585E. There are 4 counters, $00, $01, $02, and $03. $00 is the number of times we've tried to read a sector (starts at 3 and decremented). $01 is the number of times it succeeded (starts at 3 and checked after all reads). $02 is used as an index for copying $13-byte chunks of code into the RWTS. When it goes negative, we've tried all of the RWTS variations. $02 starts at $38 (set at $5800). $03 is a death counter for finding the proper sector.</p>
+    <div class="listing">
+      <code>585E-   A2 03       LDX   #$03
+5860-   86 00       STX   $00
+5862-   86 01       STX   $01</code>
+      <p class="comment">$03 is an inner loop death counter for finding the proper sector</p>
+      <code>5864-   A2 12       LDX   #$12
+5866-   86 03       STX   $03
+5868-   C6 03       DEC   $03</code>
+      <p class="comment">when $03 goes negative, give up on finding the proper sector (with this RWTS variation)</p>
+      <code>586A-   30 12       BMI   $587E</code>
+      <p class="comment">read next available address field</p>
+      <code>586C-   20 0C D0    JSR   $D00C</code>
+      <p class="comment">if that returned an error, loop back and try again (decrements $03)</p>
+      <code>586F-   B0 F7       BCS   $5868</code>
+      <p class="comment">After the routine at $D00C, the Y register has an address field value (guessing this is a sector number)</p>
+      <code>5871-   C0 06       CPY   #$06
+5873-   D0 F3       BNE   $5868</code>
+      <p class="comment">try to read a sector worth of data</p>
+      <code>5875-   20 0F D0    JSR   $D00F</code>
+      <p class="comment">if that worked, branch forward</p>
+      <code>5878-   90 19       BCC   $5893</code>
+      <p class="comment">decrement read-data death counter and try again</p>
+      <code>587A-   C6 01       DEC   $01
+587C-   10 E6       BPL   $5864</code>
+      <p class="comment">if we've tried all variations, give up entirely, otherwise fall through</p>
+      <code>587E-   A6 02       LDX   $02
+5880-   30 D9       BMI   $585B</code>
+      <p class="comment">copy $13 bytes of code into the middle of the RWTS routine(!)</p>
+      <code>5882-   A0 12       LDY   #$12
+5884-   BD A9 58    LDA   $58A9,X
+5887-   99 92 D3    STA   $D392,Y
+588A-   CA          DEX
+588B-   88          DEY
+588C-   10 F6       BPL   $5884</code>
+      <p class="comment">store the index pointer so the next time through the loop, we copy a different chunk of code into the middle of the RWTS routine(!)</p>
+      <code>588E-   86 02       STX   $02</code>
+      <p class="comment">start over with this RWTS variation</p>
+      <code>5890-   4C 5E 58    JMP   $585E</code>
+      <p class="comment">execution continues here (from $5878) after a successful sector read -- decrement the sector read counter and try again</p>
+      <code>5893-   C6 00       DEC   $00
+5895-   10 CD       BPL   $5864</code>
+      <p class="comment">if any of the reads failed, branch to try the next RWTS variation</p>
+      <code>5897-   A5 01       LDA   $01
+5899-   C9 03       CMP   #$03
+589B-   D0 E1       BNE   $587E</code>
+      <p class="comment">success path falls through to here -- we have found the working RWTS and we are ready to move on with the boot</p>
+      <code>589D-   A6 3E       LDX   $3E</code>
+      <p class="comment">turn off drive motor</p>
+      <code>589F-   BD 88 C0    LDA   $C088,X</code>
+      <p class="comment">switch to ROM</p>
+      <code>58A2-   2C 8A C0    BIT   $C08A</code>
+      <p class="comment">continue with "stage 2" loader (to launch .SYSTEM file, presumably)</p>
+      <code>58A5-   4C 00 08    JMP   $0800</code>
+    </div>
+    <p>Here are the three different variations that it copies into the RWTS. Note that the overflow bit will always be set by the time this code is run, so the "BVC" instruction burns 3 cycles but never branches. Each variation burns a different number of CPU cycles (listed in the right margin) before checking the third nibble of the data prologue.</p>
+    <div class="terminal_output">
+      <code>#1:</code>
+    </div>
+    <div class="listing">
+      <code>58CC-   50 05       BVC   $58D3    | 3
+58CE-   BD 8D C0    LDA   $C08D,X  | 4
+58D1-   EA          NOP            | 2
+58D2-   EA          NOP            | 2
+58D3-   BD 8C C0    LDA   $C08C,X
+58D6-   10 FB       BPL   $58D3
+58D8-   C9 A9       CMP   #$A9
+58DA-   F0 05       BEQ   $58E1
+58DC-   88          DEY
+58DD-   10 F4       BPL   $58D3</code>
+    </div>
+    <div class="terminal_output">
+      <code>#2:</code>
+    </div>
+    <div class="listing">
+      <code>58BC-   50 04       BVC   $58C2    | 3
+58BE-   BD 8D C0    LDA   $C08D,X  | 4
+58C1-   08          PHP            | 2
+58C2-   BD 8C C0    LDA   $C08C,X
+58C5-   10 FB       BPL   $58C2
+58C7-   C9 A9       CMP   #$A9
+58C9-   F0 06       BEQ   $58D1
+58CB-   88          DEY
+58CC-   10 F4       BPL   $58C2
+58CE-   68          PLA</code>
+    </div>
+    <div class="terminal_output">
+      <code>#3:</code>
+    </div>
+    <div class="listing">
+      <code>58A9-   50 03       BVC   $58AE    | 3
+58AB-   BD 8D C0    LDA   $C08D,X  | 4
+58AE-   BD 8C C0    LDA   $C08C,X
+58B1-   10 FB       BPL   $58AE
+58B3-   C9 A9       CMP   #$A9
+58B5-   F0 07       BEQ   $58BE
+58B7-   88          DEY
+58B8-   D0 F4       BNE   $58AE
+58BA-   EA          NOP
+58BB-   EA          NOP</code>
+    </div>
+    <p>None of these timing variations work on my EDD bit copy, because they all need some timing bits between the second and third nibble of the data prologue, and EDD doesn't preserve those. So there's no nibble check, per se. The structure of the disk itself is designed to foil bit copiers.</p>
+</section>
+
+<section>
+  <h2>Chapter 4</h2>
+  <h3>In Which We Finally Make Some Forward Progress</h3>
+
+    <p class="seen">Let's capture the "stage 2" code that ends up at $0800, then I can see what</p>
+    <p class="seen">I need to do to inject BASIC.SYSTEM into memory and launch it.</p>
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up callback #1</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D CB 08    STA   $08CB
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D CC 08    STA   $08CC
+9702-   A9 97       LDA   #$97
+9704-   8D CD 08    STA   $08CD</code>
+      <p class="comment">start the boot</p>
+      <code>9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">(callback #1) set up callback #2</p>
+      <code>970A-   A9 4C       LDA   #$4C
+970C-   8D A5 58    STA   $58A5
+970F-   A9 1C       LDA   #$1C
+9711-   8D A6 58    STA   $58A6
+9714-   A9 97       LDA   #$97
+9716-   8D A7 58    STA   $58A7</code>
+      <p class="comment">continue the boot</p>
+      <code>9719-   4C 00 20    JMP   $2000</code>
+      <p class="comment">(callback #2) copy stage 2 code from $0800 to graphics page so it survives a reboot</p>
+      <code>971C-   A2 18       LDX   #$18
+971E-   A0 00       LDY   #$00
+9720-   B9 00 08    LDA   $0800,Y
+9723-   99 00 28    STA   $2800,Y
+9726-   C8          INY
+9727-   D0 F7       BNE   $9720
+9729-   EE 22 97    INC   $9722
+972C-   EE 25 97    INC   $9725
+972F-   CA          DEX
+9730-   D0 EE       BNE   $9720</code>
+      <p class="comment">turn off slot 6 drive motor</p>
+      <code>9732-   AD E8 C0    LDA   $C0E8</code>
+      <p class="comment">reboot to my work disk</p>
+      <code>9735-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE2,A$9600,L$138
+*9600G
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]BSAVE STAGE2 0800-14FF,A$2800,L$D00
+]CALL -151
+*800<2800.34FFM
+*800L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">this is looking through the disk catalog (loaded at $0C00)</p>
+      <code>0800-   A9 0C       LDA   #$0C
+0802-   85 11       STA   $11
+0804-   A9 04       LDA   #$04
+0806-   2C A5 10    BIT   $10A5
+0809-   18          CLC
+080A-   6D 23 0C    ADC   $0C23
+080D-   85 10       STA   $10
+080F-   B0 12       BCS   $0823
+0811-   6D 23 0C    ADC   $0C23
+0814-   90 0F       BCC   $0825
+0816-   A5 11       LDA   $11
+0818-   4A          LSR
+0819-   90 0A       BCC   $0825
+081B-   C9 09       CMP   #$09
+081D-   F0 1E       BEQ   $083D
+081F-   A9 04       LDA   #$04
+0821-   85 10       STA   $10
+0823-   E6 11       INC   $11
+0825-   A0 10       LDY   #$10
+0827-   A9 FF       LDA   #$FF
+0829-   51 10       EOR   ($10),Y
+082B-   D0 DA       BNE   $0807
+082D-   A8          TAY
+082E-   B1 10       LDA   ($10),Y
+0830-   F0 D5       BEQ   $0807
+0832-   29 0F       AND   #$0F
+0834-   8D 80 02    STA   $0280
+0837-   C9 08       CMP   #$08
+0839-   90 CC       BCC   $0807
+083B-   B0 03       BCS   $0840</code>
+      <p class="comment">$0965 contains the string ".SYSTEM", so this is checking whether this file ends with the string ".SYSTEM"</p>
+      <code>0841-   A2 06       LDX   #$06
+0843-   B1 10       LDA   ($10),Y
+0845-   5D 65 09    EOR   $0965,X
+0848-   0A          ASL</code>
+      <p class="comment">if not, loop to find the next file</p>
+      <code>0849-   D0 BC       BNE   $0807
+084B-   88          DEY
+084C-   CA          DEX
+084D-   10 F4       BPL   $0843</code>
+      <p class="comment">copy the filename into the buffer at $0280 and another buffer at $093B (I think the second one is used for error messages if things go wrong)</p>
+      <code>084F-   A0 00       LDY   #$00
+0851-   C8          INY
+0852-   B1 10       LDA   ($10),Y
+0854-   99 80 02    STA   $0280,Y
+0857-   09 80       ORA   #$80
+0859-   99 3B 09    STA   $093B,Y
+085C-   CC 80 02    CPY   $0280
+085F-   D0 F0       BNE   $0851</code>
+      <p class="comment">pad error message with spaces</p>
+      <code>0861-   A9 A0       LDA   #$A0
+0863-   99 3C 09    STA   $093C,Y
+0866-   98          TYA
+0867-   69 13       ADC   #$13
+0869-   8D 4F 09    STA   $094F</code>
+      <p class="comment">open file (ProDOS MLI $C8)</p>
+      <code>086C-   20 00 BF    JSR   $BF00
+086F-  [C8 50 09]
+0872-   D0 46       BNE   $08BA</code>
+      <p class="comment">get file EOF (MLI $D1)</p>
+      <code>0874-   20 00 BF    JSR   $BF00
+0877-  [D1 56 09]
+087A-   D0 3E       BNE   $08BA
+087C-   AD 5A 09    LDA   $095A
+087F-   D0 53       BNE   $08D4
+0881-   AD 59 09    LDA   $0959
+0884-   C9 98       CMP   #$98
+0886-   B0 4C       BCS   $08D4
+0888-   8D 60 09    STA   $0960
+088B-   AD 58 09    LDA   $0958
+088E-   8D 5F 09    STA   $095F</code>
+      <p class="comment">read file (MLI $CA)</p>
+      <code>0891-   20 00 BF    JSR   $BF00
+0894-  [CA 5B 09]
+0897-   F0 06       BEQ   $089F
+0899-   C9 56       CMP   #$56
+089B-   F0 37       BEQ   $08D4
+089D-   D0 1B       BNE   $08BA</code>
+      <p class="comment">close file (MLI $CC)</p>
+      <code>089F-   20 00 BF    JSR   $BF00
+08A2-  [CC 63 09]
+08A5-   D0 13       BNE   $08BA
+08A7-   AD 82 C0    LDA   $C082</code>
+      <p class="comment">jump to beginning of loaded file</p>
+      <code>08AA-   4C 00 20    JMP   $2000</code>
+    </div>
+    <p class="seen">This is where I want to interrupt the boot and inject my clean version of BASIC.SYSTEM. (I could probably do it slightly earlier to avoid loading whichever .SYSTEM file it's opening, but I don't want to run afoul of any expected side effects of having loaded the file through the MLI.)</p>
+    <div class="line_editing">
+      <code>*BLOAD BASIC.SYSTEM,A$6000</code>
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up callback #1</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D CB 08    STA   $08CB
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D CC 08    STA   $08CC
+9702-   A9 97       LDA   #$97
+9704-   8D CD 08    STA   $08CD</code>
+      <p class="comment">start the boot</p>
+      <code>9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">(callback #1) set up callback #2</p>
+      <code>970A-   A9 4C       LDA   #$4C
+970C-   8D A5 58    STA   $58A5
+970F-   A9 1C       LDA   #$1C
+9711-   8D A6 58    STA   $58A6
+9714-   A9 97       LDA   #$97
+9716-   8D A7 58    STA   $58A7</code>
+      <p class="comment">continue the boot</p>
+      <code>9719-   4C 00 20    JMP   $2000</code>
+      <p class="comment">(callback #2) set up callback #3</p>
+      <code>971C-   A9 4C       LDA   #$4C
+971E-   8D AA 08    STA   $08AA
+9721-   A9 2E       LDA   #$2E
+9723-   8D AB 08    STA   $08AB
+9726-   A9 97       LDA   #$97
+9728-   8D AC 08    STA   $08AC</code>
+      <p class="comment">continue the boot</p>
+      <code>972B-   4C 00 08    JMP   $0800</code>
+      <p class="comment">(callback #3) move BASIC.SYSTEM into place (I manually BLOADed this file already at $6000)</p>
+      <code>972E-   A2 28       LDX   #$28
+9730-   A0 00       LDY   #$00
+9732-   B9 00 60    LDA   $6000,Y
+9735-   99 00 20    STA   $2000,Y
+9738-   C8          INY
+9739-   D0 F7       BNE   $9732
+973B-   EE 34 97    INC   $9734
+973E-   EE 37 97    INC   $9737
+9741-   CA          DEX
+9742-   D0 EE       BNE   $9732</code>
+      <p class="comment">tell BASIC.SYSTEM not to look for a STARTUP file</p>
+      <code>9744-   A9 00       LDA   #$00
+9746-   8D 06 20    STA   $2006</code>
+      <p class="comment">continue the boot with the clean version of BASIC.SYSTEM</p>
+      <code>9749-   4C 00 20    JMP   $2000</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE3,A$9600,L$14C
+*9600G
+...reboots slot 6...
+...displays ProDOS title page...
+...clears screen...</code>
+    </div>
+    <div class="terminal_output">
+      <code>            PRODOS BASIC 1.5
+        COPYRIGHT APPLE  1983-92</code>
+    </div>
+    <div class="line_editing">
+      <code>]</code>
+    </div>
+    <p class="seen">Son of a biscuit. It actually worked.</p>
+</section>
+
+<section>
+  <h2>Chapter 5</h2>
+  <h3>In Which We Finally Catch A Break, And Our Adventure Comes To A Sudden But Satisfying Conclusion</h3>
+
+    <div class="line_editing">
+      <code>]CAT</code>
+      <code>/MLCD2</code>
+    </div>
+    <div class="terminal_output">
+      <code> NAME           TYPE  BLOCKS  MODIFIED</code>
+      <code> PRODOS          SYS      30   9-OCT-86
+*MLCD2.SYSTEM    SYS      14  24-FEB-87
+*COMDAT          BIN      24  29-OCT-86
+*COMMON          BIN       5  29-OCT-86
+*T.O.C.          BIN       9  18-MAY-87
+*T.O.C.DAT       BIN      13  29-OCT-86
+*TEACH.OPT       BIN      11  16-FEB-87
+*LOT             BIN      12  29-OCT-86
+*LOT.DAT         BIN      13  29-OCT-86
+*ELEV            BIN      13  29-OCT-86
+*ELEV.DAT        BIN      14  29-OCT-86
+*PIGS            BIN      11  19-MAY-87
+*PIGS.DAT        BIN      13  29-OCT-86
+*CIRC            BIN       9  29-OCT-86
+*CIRC.DAT        BIN      12  29-OCT-86
+*BANDB           BIN      12  29-OCT-86
+*BANDB.DAT       BIN      13  29-OCT-86
+*MUPSLAT         BIN      13  21-MAY-87
+*MUPSLAT.DAT     BIN      11  19-MAY-87
+ MUI.ASM         BIN       4  15-FEB-87
+*MLK.ASM         BIN       4   9-MAY-86
+*KEY.ASM         BIN       1   9-MAY-86
+*TCHWIN          BIN       5   7-JUL-86
+*MOUSE           BIN       5  11-MAR-87
+ TEACH.SET       BIN       1  19-MAY-87</code>
+      <code>BLOCKS FREE:    1     BLOCKS USED:  279</code>
+    </div>
+    <p class="seen">The custom floppy device driver is in memory, and I have unfettered access to the disk through a clean version of BASIC.SYSTEM.</p>
+    <div class="line_editing">
+      <code>]PREFIX /MLCD2
+]BLOAD MLCD2.SYSTEM,A$2000,TSYS
+]CALL -151</code>
+      <code>*2000L</code>
+    </div>
+    <div class="listing">
+      <code>2000-   A2 FF       LDX   #$FF
+2002-   9A          TXS
+2003-   A9 00       LDA   #$00
+2005-   8D FC BF    STA   $BFFC
+2008-   8D FD BF    STA   $BFFD
+200B-   A9 49       LDA   #$49
+200D-   85 98       STA   $98
+200F-   A9 20       LDA   #$20
+2011-   85 99       STA   $99
+2013-   A9 09       LDA   #$09
+2015-   85 9B       STA   $9B
+2017-   A0 00       LDY   #$00
+2019-   84 9A       STY   $9A
+201B-   A2 02       LDX   #$02
+201D-   20 38 20    JSR   $2038
+2020-   A9 47       LDA   #$47
+2022-   85 98       STA   $98
+2024-   A9 22       LDA   #$22
+2026-   85 99       STA   $99
+2028-   A9 00       LDA   #$00</code>
+    </div>
+    <p class="seen">Un. Fettered. Access.</p>
+    <p class="seen">But how do I copy all these files to a standard disk? I could do it one at a time -- the BLOAD command works, so I could simply load each file into memory and reboot and save it.</p>
+    <p class="seen">But wait. ProDOS has separate device drivers for floppies and hard drives.</p>
+    <p class="seen">Maybe...</p>
+    <div class="curses_input">
+      <code>[S7,D1=ProDOS hard drive, "A4AMCRACK"]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PREFIX /A4AMCRACK
+]CAT</code>
+      <code>/A4AMCRACK</code>
+    </div>
+    <div class="terminal_output">
+      <code> NAME           TYPE  BLOCKS  MODIFIED</code>
+    </div>
+    <div class="line_editing">
+      <code>*PRODOS          SYS      35   6-AUG-03
+ RAM.DRV.SYSTEM  SYS       4  29-NOV-10
+ PROSEL.SYSTEM   SYS       1   1-APR-88
+ APPLICATIONS    DIR       2  18-DEC-14
+ BASIC.SYSTEM    SYS      21   6-DEC-91
+ COMMANDS        DIR       1  20-MAR-14
+ DOC             DIR       1  20-MAR-14
+ DOS3.3          DIR       1  20-MAR-14
+ ARCHIVE         DIR       1   8-FEB-15
+ MERLIN          DIR       2   1-OCT-14
+ INCOMING        DIR       1  30-SEP-14
+ PROSEL          BIN      13  17-OCT-14
+ UTIL            DIR       6  20-MAR-14</code>
+    </div>
+    <div class="terminal_output">
+      <code>BLOCKS FREE:60603     BLOCKS USED: 4932</code>
+    </div>
+    <p class="seen">Not only do I have unfettered access to the floppy disk, I have my entire hard drive of utilities at my disposal.</p>
+    <div class="line_editing">
+      <code>]-/A4AMCRACK/APPLICATIONS/COPYIIPLUS8.4
+/UTIL.SYSTEM
+...launches Copy ][+...</code>
+    </div>
+    <div class="terminal_output">
+      <code>  --> CREATE SUBDIRECTORY
+    --> SLOT 7, DRIVE 1
+      --> SUBDIRECTORY NAME: MLCD2</code>
+    </div>
+    <p>--> COPY --> FILES --> from SLOT 6, DRIVE 1 --> to SLOT 7, DRIVE 1, MLCD2 --> all files</p>
+    <p class="seen">It works. Copy ][+ uses the version of ProDOS in memory, including the custom floppy disk driver. As far as Copy ][+ is concerned, there's nothing unusual about this disk or its files. Hooray for abstractions!</p>
+    <p class="seen">Now that I have all the files off the original disk, I can safely put it away and never touch it again. (Whew. Good riddance.)</p>
+    <div class="curses_input">
+      <code>[S6,D1=blank disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#7</code>
+    </div>
+    <p class="seen">Using Copy ][+ again, I simply recreate the original disk with a clean copy of the PRODOS file. (I have a directory of PRODOS files of different versions for just such an occasion, because that's not weird at all.)</p>
+    <div class="curses_input">
+      <code>[Copy ][+ 8.4]
+  --> FORMAT DISK
+    --> PRODOS
+      --> SLOT 6, DRIVE 1
+        --> VOLUME NAME: MLCD2</code>
+    </div>
+    <p class="seen">--> COPY --> FILES --> from SLOT 7, DRIVE 1 --> to SLOT 6, DRIVE 1 --> ARCHIVES/PRODOS1.1.1/PRODOS</p>
+    <p class="seen">--> COPY --> FILES --> from SLOT 7, DRIVE 1, TOWN --> to SLOT 6, DRIVE 1 --> all files except PRODOS</p>
+    <div class="line_editing">
+      <code>]PR#6
+...works...</code>
+    </div>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

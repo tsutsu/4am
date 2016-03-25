@@ -1,0 +1,478 @@
+<!doctype html>
+<html><head>
+<title>Squeegee Learns About Drugs</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">unable to read any track</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p>no read errors, but copy loads ProDOS then hangs with drive motor on</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p>modified address epilogue "DE DE EB"</p>
+    <p class="seen">Disk Fixer</p>
+    <p>["O" -> "Input/Output Control"] set Address Epilogue to "DE DE EB"</p>
+    <p>Success! All tracks readable! T00 -> looks like ProDOS</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">Why didn't my EDD copy work?</p>
+    <p>probably a nibble check in the first SYSTEM file</p>
+    <p class="seen">Next steps:</p>
+    <p>1. convert disk to standard format with Super Demuffin</p>
+    <p>2. patch RWTS in PRODOS file to read standard format (if necessary)</p>
+    <p class="seen">3. find nibble check and bypass it</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Convert The Disk To A Standard Format</h3>
+
+    <p>I've included a copy of Super Demuffin on my work disk.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk, side A]
+[S6,D1=blank disk]</code>
+    </div>
+    <div class="curses">
+      <code>      SUPER-DEMUFFIN AND FAST COPY
+Modified by: The Saltine/Coast to Coast</code>
+      <code>
+   Address prologue: D5 AA 96</code>
+      <code>   Address epilogue: DE DE EB    DISK
+                        ^^     ORIGINAL
+*change this -----------++</code>
+      <code>      Data prologue: D5 AA AD</code>
+      <code>      Data epilogue: DE AA EB</code>
+      <code>
+ Ignore write errors while demuffining!</code>
+      <code>
+  D - Edit parameters
+      <SPACE> - Advance to next parm
+      <RETURN> - Exit edit mode
+  R - Restore DOS 3.3 parameters
+  O - Edit Original disk's parameters
+  C - Edit Copy disk's parameters
+  G - Begin demuffin process</code>
+    </div>
+    <div class="curses_input">
+      <code>["G" to begin]</code>
+    </div>
+    <div class="terminal_output">
+      <code>    LOCKSMITH 7.0  FAST DISK BACKUP</code>
+      <code>
+  R...................................
+  W***********************************
+HEX00000000000000001111111111111111222
+TRK0123456789ABCDEF0123456789ABCDEF012
+  0...................................0
+  1...................................1
+  2...................................2
+  3...................................3
+  4...................................4
+  5...................................5
+  6...................................6
+  7...................................7
+  8...................................8
+  9...................................9
+  A...................................A
+  B...................................B
+  C...................................C
+  D...................................D
+12E...................................E
+  F...................................F
+[              ] PRESS [RESET] TO EXIT.</code>
+    </div>
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...boots to ProDOS and hangs...
+(same as EDD bit copy)</code>
+    </div>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Enter A Parallel Universe Where Everything Is Just Slightly Off</h3>
+
+    <div class="curses_input">
+      <code>[S7,D1=my ProDOS hard drive]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#7
+]CAT,S6,D1</code>
+      <code>/MARSH.SQ</code>
+    </div>
+    <div class="terminal_output">
+      <code> NAME           TYPE  BLOCKS  MODIFIED</code>
+      <code> PRODOS          SYS      32  14-JUN-89
+ BASIC.SYSTEM    SYS      21  17-JUN-89
+ STARTUP         BIN       7   5-JUL-89
+ DBS25           BIN       6   5-JUL-89
+ UNPACK4         BIN       1  22-AUG-89
+ BS.CHAR         BIN       4   5-JUL-89
+ GWINDOW         BIN       1   5-JUL-89
+ ESC.WDW         BIN       5   5-JUL-89
+ ANA             BIN       3  21-AUG-89
+ SQ.FNT          BIN       3  21-AUG-89
+ PAC.PP0         BIN       5   5-JUL-89
+ HELLO           BAS       9  27-SEP-89
+ MENU            BAS       7  27-SEP-89
+ INFO            BAS      10  29-SEP-89
+ MAIN            BAS      15  16-OCT-89
+ LEARN1          BAS       6  27-SEP-89
+ LEARN2          BAS       8  30-OCT-89
+ PAC.O14         BIN       5  22-AUG-89
+ PAC.O15         BIN       5  22-AUG-89
+ PAC.O16         BIN       4  22-AUG-89
+ PAC1.27.TBL     BIN       1  22-AUG-89
+ PAC1.27         BIN      81  22-AUG-89
+ PAC.INTRO       BIN       5  27-SEP-89
+ MEMORY.CONFIG   SYS       3  16-DEC-88</code>
+      <code>BLOCKS FREE:   26     BLOCKS USED:  254</code>
+    </div>
+    <div class="line_editing">
+      <code>]PREFIX /MARSH.SQ
+]LOAD STARTUP</code>
+    </div>
+    <div class="terminal_output">
+      <code>FILE TYPE MISMATCH</code>
+    </div>
+    <p>Oh. Well, right. The catalog did say that STARTUP was a BIN file. Hmm.</p>
+    <div class="line_editing">
+      <code>]BLOAD STARTUP
+]LIST</code>
+      <code>
+]</code>
+    </div>
+    <p>No luck.</p>
+    <div class="line_editing">
+      <code>]LOAD HELLO
+]LIST</code>
+    </div>
+    <div class="terminal_output">
+      <code> 0  ONERR  GOTO 63000
+ 5  REM</code>
+    </div>
+    <p>HELLO</p>
+    <p>09/27/89</p>
+    <p>10 IF PEEK (104) < 88 THEN HOME : VTAB 12: HTAB 14: PRINT "D ebug Mode.": POKE 230,32: POKE 104,88: POKE 88 * 256,0: POKE 2067,96: PRINT CHR$ (4)"RUN HELLO" 20 GOSUB 60000 90 GOTO 10000 99 REM</p>
+    <div class="terminal_output">
+      <code>         CLEAR</code>
+      <code> 100  &  CLEAR 4: &  PRINT H$,140
+     ,0,2,CS,2: &  LEN J,H$: IF J
+      > 0 THEN J = J + 20
+ 102 HC = 5 +  INT ( RND (1) * 3)</code>
+    </div>
+    <p>BREAK ]RUN ...program prints "Debug Mode" but runs without complaint...</p>
+    <p>It appears that BASIC.SYSTEM has been hacked up to auto-run HELLO instead of STARTUP. (I ran all the other BASIC files, and HELLO is definitely the startup program.) But running HELLO manually does not give the same results as when the disk is booted directly (the "Debug Mode" indicator).</p>
+    <p>I briefly considered copying the files to a freshly formatted ProDOS disk and letting it run in debug mode, but that wouldn't answer any questions about how the disk is actually protected. But I'm not above doing that, as a last resort.</p>
+    <div class="line_editing">
+      <code>]PR#7
+]PREFIX /MARSH.SQ
+]-BASIC.SYSTEM
+...program loads and runs without
+mentioning "Debug Mode"...</code>
+    </div>
+    <p>Hmm. On line 10, PEEK(104) is looking at zero page $68, which is the starting address of the current Applesoft BASIC program in memory. I guess this copy of BASIC.SYSTEM has also been modified to load the HELLO program at a non- standard location, and the HELLO program itself detects when the location is unexpectedly... standard.</p>
+    <div class="line_editing">
+      <code>]PR#7
+]PREFIX /MARSH.SQ
+]-PRODOS
+...loads ProDOS and hangs with the
+drive motor on...</code>
+    </div>
+    <p>It's looking more and more likely that the nibble check is inside the PRODOS file itself.</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which Things Are Not Always As They Appear</h3>
+
+    <p>Instead of tracing the entire PRODOS file, I turned to my trusty Disk Fixer sector editor and searched for the hex sequence "BD 89 C0". Although there are many variations of copy protection, a surprising number of disks use a nibble check that starts by loading the X register with the slot number (x16) and an "LDA $C089,X" instruction to turn on the drive motor.</p>
+    <p>And I got lucky: I found four matches.</p>
+    <p>- T00,S0E - part of the ProDOS bootloader (expected) - T04,S0C - Copy II Plus disk map says this is part of the PRODOS file, but</p>
+    <p>I looked and it's part of the RWTS.</p>
+    <p>So this is expected and legitimate, not the start of a nibble check.</p>
+    <p>- T1F,S09 - two additional matches, both highly suspicious.</p>
+    <p>Copy II Plus disk map says T1F,S09 is part of the MEMORY.CONFIG file. It's a SYS file, which means it's probably loaded at $2000. Then again, everything on this disk is just slightly off.</p>
+    <div class="line_editing">
+      <code>]PR#7
+]PREFIX /MARSH.SQ
+]BLOAD MEMORY.CONFIG,A$2000,TSYS
+]CALL -151
+*2000L</code>
+    </div>
+    <div class="listing">
+      <code>2000-   20 D1 21    JSR   $21D1</code>
+    </div>
+    <div class="line_editing">
+      <code>*21D1L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">grab slot+drive of last-used device</p>
+      <code>21D1-   AD 30 BF    LDA   $BF30
+21D4-   8D DF 21    STA   $21DF</code>
+      <p class="comment">call ProDOS MLI with command $80 ("read block") -- this is like a low- level sector read</p>
+      <code>21D7-   20 00 BF    JSR   $BF00
+21DA-  [80 DE 21]
+21DD-   60          RTS</code>
+    </div>
+    <div class="line_editing">
+      <code>*2003L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">grab slot+drive again</p>
+      <code>2003-   AE 30 BF    LDX   $BF30</code>
+      <p class="comment">turn on drive motor manually</p>
+      <code>2006-   BD 8A C0    LDA   $C08A,X
+2009-   BD 89 C0    LDA   $C089,X
+200C-   BD 8E C0    LDA   $C08E,X</code>
+      <code>200F-   A9 00       LDA   #$00
+2011-   85 00       STA   $00
+2013-   A9 23       LDA   #$23
+2015-   85 01       STA   $01</code>
+      <p class="comment">this subroutine moves the drive head from the track given in $00 to the track given in $01</p>
+      <code>2017-   20 E4 21    JSR   $21E4</code>
+      <p class="comment">here we go</p>
+      <code>201A-   20 36 20    JSR   $2036</code>
+    </div>
+    <div class="line_editing">
+      <code>*2036L</code>
+    </div>
+    <div class="listing">
+      <code>2036-   A9 00       LDA   #$00
+2038-   85 04       STA   $04
+203A-   AE 30 BF    LDX   $BF30</code>
+      <p class="comment">turn on drive motor again, just for good measure I guess</p>
+      <code>203D-   BD 89 C0    LDA   $C089,X
+2040-   BD 8E C0    LDA   $C08E,X</code>
+      <p class="comment">looks for the next address field</p>
+      <code>2043-   20 74 21    JSR   $2174</code>
+      <p class="comment">is found sector = 0?</p>
+      <code>2046-   A5 2D       LDA   $2D
+2048-   C5 04       CMP   $04</code>
+      <p class="comment">no, loop until we find it</p>
+      <code>204A-   D0 F7       BNE   $2043</code>
+      <p class="comment">skip to sync byte</p>
+      <code>204C-   BD 8E C0    LDA   $C08E,X
+204F-   BD 8C C0    LDA   $C08C,X
+2052-   10 FB       BPL   $204F
+2054-   C9 FF       CMP   #$FF
+2056-   D0 F4       BNE   $204C</code>
+      <p class="comment">skip an exact number of nibbles and look for $D5</p>
+      <code>2058-   A0 00       LDY   #$00
+205A-   C8          INY
+205B-   BD 8E C0    LDA   $C08E,X
+205E-   BD 8C C0    LDA   $C08C,X
+2061-   10 FB       BPL   $205E
+2063-   C9 D5       CMP   #$D5
+2065-   D0 F3       BNE   $205A
+2067-   C0 07       CPY   #$07</code>
+      <p class="comment">if not found in correct location, try again from the top</p>
+      <code>2069-   D0 D8       BNE   $2043</code>
+      <p class="comment">do this for all sectors</p>
+      <code>206B-   E6 04       INC   $04
+206D-   A9 10       LDA   #$10
+206F-   C5 04       CMP   $04
+2071-   D0 D0       BNE   $2043</code>
+      <p class="comment">start over on sector 0</p>
+      <code>2073-   A9 00       LDA   #$00
+2075-   85 04       STA   $04
+2077-   20 74 21    JSR   $2174
+207A-   A5 2D       LDA   $2D
+207C-   C5 04       CMP   $04
+207E-   D0 F7       BNE   $2077</code>
+      <p class="comment">skip to address epilogue</p>
+      <code>2080-   BD 8C C0    LDA   $C08C,X
+2083-   10 FB       BPL   $2080
+2085-   C9 AA       CMP   #$AA
+2087-   D0 F7       BNE   $2080
+2089-   BD 8C C0    LDA   $C08C,X
+208C-   10 FB       BPL   $2089
+208E-   C9 EB       CMP   #$EB
+2090-   D0 EE       BNE   $2080</code>
+      <p class="comment">skip to sync byte</p>
+      <code>2092-   BD 8C C0    LDA   $C08C,X
+2095-   10 FB       BPL   $2092
+2097-   C9 FF       CMP   #$FF
+2099-   D0 F7       BNE   $2092</code>
+      <p class="comment">skip an exact number of nibbles and look for $D5</p>
+      <code>209B-   A0 00       LDY   #$00
+209D-   C8          INY
+209E-   BD 8E C0    LDA   $C08E,X
+20A1-   BD 8C C0    LDA   $C08C,X
+20A4-   10 FB       BPL   $20A1
+20A6-   C9 D5       CMP   #$D5
+20A8-   D0 F3       BNE   $209D
+20AA-   C0 10       CPY   #$10</code>
+      <p class="comment">if not found in correct location, try again from the top</p>
+      <code>20AC-   D0 C5       BNE   $2073</code>
+      <p class="comment">do this for several other sectors</p>
+      <code>20AE-   E6 04       INC   $04
+20B0-   A9 0A       LDA   #$0A
+20B2-   20 68 21    JSR   $2168
+20B5-   A9 04       LDA   #$04
+20B7-   C5 04       CMP   $04
+20B9-   D0 04       BNE   $20BF
+20BB-   E6 04       INC   $04
+20BD-   D0 B8       BNE   $2077
+20BF-   A9 0F       LDA   #$0F
+20C1-   C5 04       CMP   $04
+20C3-   D0 BB       BNE   $2080
+20C5-   20 74 21    JSR   $2174
+20C8-   A5 2D       LDA   $2D
+20CA-   C9 0F       CMP   #$0F
+20CC-   D0 F7       BNE   $20C5</code>
+      <p class="comment">read an actual sector worth of data</p>
+      <code>20CE-   20 FB 20    JSR   $20FB</code>
+      <p class="comment">look for $A5 in a specific place</p>
+      <code>20D1-   A0 00       LDY   #$00
+20D3-   C8          INY
+20D4-   BD 8E C0    LDA   $C08E,X
+20D7-   BD 8C C0    LDA   $C08C,X
+20DA-   10 FB       BPL   $20D7
+20DC-   C9 A5       CMP   #$A5
+20DE-   D0 F3       BNE   $20D3
+20E0-   C0 2D       CPY   #$2D
+20E2-   D0 E1       BNE   $20C5</code>
+      <p class="comment">look for $D5 in a specific place</p>
+      <code>20E4-   A0 00       LDY   #$00
+20E6-   C8          INY
+20E7-   BD 8E C0    LDA   $C08E,X
+20EA-   BD 8C C0    LDA   $C08C,X
+20ED-   10 FB       BPL   $20EA
+20EF-   C9 D5       CMP   #$D5
+20F1-   D0 F3       BNE   $20E6
+20F3-   C0 5D       CPY   #$5D
+20F5-   D0 CE       BNE   $20C5</code>
+      <p class="comment">success path falls through to here</p>
+      <code>20F7-   A0 00       LDY   #$00
+20F9-   EA          NOP
+20FA-   60          RTS</code>
+    </div>
+    <p>Backing up and continuing at $201D...</p>
+    <div class="line_editing">
+      <code>*201DL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">move drive head back to track 0</p>
+      <code>201D-   A9 23       LDA   #$23
+201F-   85 00       STA   $00
+2021-   A9 00       LDA   #$00
+2023-   85 01       STA   $01
+2025-   20 E4 21    JSR   $21E4</code>
+      <p class="comment">move some code and jump to it</p>
+      <code>2028-   A0 00       LDY   #$00
+202A-   B9 42 22    LDA   $2242,Y
+202D-   99 00 10    STA   $1000,Y
+2030-   C8          INY
+2031-   D0 F7       BNE   $202A
+2033-   4C 00 10    JMP   $1000</code>
+    </div>
+    <p>My copy never made it this far. It was stuck in an infinite loop in the $2036 subroutine, trying to find a precisely organized track $23 (and failing).</p>
+    <p>On the assumption that this was the nibble check, I made the following edit to skip over the copy protection and go directly to the legitimate-looking code at $2028.</p>
+    <p>T1F,S09,$00 change "20 D1 21"</p>
+    <p>to "4C 28 20"</p>
+    <div class="line_editing">
+      <code>]PR#6
+...works...</code>
+    </div>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<section>
+  <h2>Epilogue</h2>
+
+    <p>How does MEMORY.CONFIG get called?</p>
+    <p>This bugged me for a long time. The answer came to me after I listed the legitimate code at $2242 (that gets moved to $1000).</p>
+    <div class="line_editing">
+      <code>]PR#7
+]PREFIX /MARSH.SQ
+]BLOAD MEMORY.CONFIG,A$2000,TSYS
+]CALL -151
+*2033:4C 59 FF
+*2028G
+*1000L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">ProDOS MLI call: close file</p>
+      <code>1000-   20 00 BF    JSR   $BF00
+1003-  [CC 2D 10]</code>
+      <p class="comment">ProDOS MLI call: open file</p>
+      <code>1006-   20 00 BF    JSR   $BF00
+1009-  [C8 2F 10]</code>
+      <p class="comment">ProDOS MLI call: read file</p>
+      <code>100C-   20 00 BF    JSR   $BF00
+100F-  [CA 35 10]</code>
+      <p class="comment">ProDOS MLI call: close file</p>
+      <code>1012-   20 00 BF    JSR   $BF00
+1015-  [CC 3D 10]</code>
+      <code>1018-   AC 3F 10    LDY   $103F
+101B-   8C 80 02    STY   $0280
+101E-   B9 3F 10    LDA   $103F,Y
+1021-   99 81 02    STA   $0281,Y
+1024-   88          DEY
+1025-   D0 F7       BNE   $101E
+1027-   AD 10 C0    LDA   $C010
+102A-   4C 00 20    JMP   $2000</code>
+    </div>
+    <p>What file are we opening and reading? $102F + 1 will be a pointer to a ProDOS filename.</p>
+    <div class="line_editing">
+      <code>*1030.1031</code>
+    </div>
+    <div class="listing">
+      <code>1030- 3F 10</code>
+    </div>
+    <div class="line_editing">
+      <code>*FC58G N 400<103F.104FM</code>
+    </div>
+    <div class="terminal_output">
+      <code>LBASIC.SYSTEMJJJJ</code>
+    </div>
+    <p>It's loading BASIC.SYSTEM into $2000 and executing it. That means that MEMORY.CONFIG must be executed before BASIC.SYSTEM; it must be loaded by the PRODOS file directly. But PRODOS always loads the first .SYSTEM file (in this case, BASIC.SYSTEM). Unless the PRODOS file has been modified...</p>
+    <p class="seen">Disk Fixer</p>
+    <p>--> [F]ind --> [A]SCII --> "CONFIG"</p>
+    <div class="curses">
+      <code>-------------- DISK EDIT --------------
+TRACK $01/SECTOR $0B/VOLUME $FE/BYTE$F8
+---------------------------------------
+$80: CE C4 A0 C1 A0 A2 AE D3   ND A ".S
+$88: D9 D3 D4 C5 CD A2 A0 C6   YSTEM" F
+$90: C9 CC C5 A0 A0 AA AA A0   ILE  **
+$98: AA AA A0 A0 D3 D9 D3 D4   **  SYST
+$A0: C5 CD A0 D0 D2 CF C7 D2   EM PROGR
+$A8: C1 CD A0 D4 CF CF A0 CC   AM TOO L
+$B0: C1 D2 C7 C5 A0 A0 AA AA   ARGE  **
+$B8: AA AA A0 D5 CE C1 C2 CC   ** UNABL
+$C0: C5 A0 D4 CF A0 CC CF C1   E TO LOA
+$C8: C4 A0 D8 AE D3 D9 D3 D4   D X.SYST
+$D0: C5 CD A0 AA AA AA AA AA   EM *****
+$D8: AA AA AA AA 00 03 80 02   ****@C.B
+$E0: 00 14 01 02 01 00 00 00   @TABA@@@
+$E8: 04 01 00 20 00 00 00 00   DA@ @@@@
+$F0: 01 00 AE C3 CF CE C6 C9   A@.CONFI
+           ^^^^^^^^^^^^^^^^^
+        this should be ".SYSTEM"
+        
+$F8: C7 8D 08 C0 B5 42 8D 09   G.H@5B.I
+     ^^</code>
+    </div>
+    <div class="terminal_output">
+      <code>---------------------------------------
+BUFFER 0/SLOT 6/DRIVE 1/MASK OFF/NORMAL</code>
+      <code>---------------------------------------
+COMMAND :</code>
+    </div>
+    <p>And there it is: a hacked version of PRODOS that, instead of looking for the first .SYSTEM file, looks for the first .CONFIG file. Of course there's only one of those, MEMORY.CONFIG, which silently performs its nibble check before manually reading BASIC.SYSTEM and jumping to it.</p>
+</section>
+
+</body></html>

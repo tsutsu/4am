@@ -1,0 +1,312 @@
+<!doctype html>
+<html><head>
+<title>Star Maze (Scott, Foresman and Company)</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+
+    <p>"Star Maze" is a 1985 educational game distributed by Scott, Foresman and</p>
+    <p>Company. (Not to be confused with the 1982 arcade game of the same name.)</p>
+    <p class="seen">COPYA fails miserably and immediately. EDD 4 bit copy gives no read errors, but the copy just reboots endlessly.</p>
+    <p>In my experience, programs do not reboot unless someone tells them to.</p>
+    <p>Turning to my trusty Disk Fixer editor, I press "P" to get to the</p>
+    <p class="seen">Sector Editor Patcher, and select "DOS</p>
+    <p class="seen">3.3 PATCHED". This option ignores checksum bytes and epilogue sequences -- as long as the address and data prologue are standard ("D5 AA 96" and "D5 AA AD", respectively), this will allow me to read each sector. And lo and behold, it works! I can read the data from every sector on every track.</p>
+    <p>Just from a quick manual inspection, track $00 appears to be DOS 3.3-shaped.</p>
+    <p>By that, I mean that T00,S00 re-uses the disk controller ROM routine to load T00,S01-09, which contain an RWTS and some loading code to read the rest of the disk and start the program. Lots of copy protected disks start out re-using this part of DOS 3.3, since it's easier to patch an RWTS to accommodate a non- standard disk structure than to write an entire RWTS from scratch. Uncovering and undoing those patches is part of the fun.(*)</p>
+    <p class="seen">(*) not guaranteed, actual fun may vary</p>
+    <p>However, there is no evidence of a full DOS on the disk. There is no catalog on track $11. The original disk doesn't sound like it's loading DOS on boot, and it never shows the BASIC prompt that would indicate it's loading a HELLO program.</p>
+    <p class="seen">Given the (relatively) weak structural protection, I used to turn to the DOS</p>
+    <p class="seen">3.3 master disk, patch the RWTS to ignore checksums and epilogue bytes (changing $B942 from "SEC" to "CLC"), and run COPYA. Then, one fine day, and completely by accident, I came across an original disk with a bad sector. I suppose this shouldn't surprise me.</p>
+    <p class="seen">These floppies are decades old by now; it's amazing any of them work at all.</p>
+    <p class="seen">The point is, I shouldn't be using tools that ignore potentially serious read errors. So no more COPYA+B942:18 patch. From now on, it's Super Demuffin or Advanced Demuffin to convert disks to a standard format. Let's see if AUTOTRACE can capture the RWTS from the original disk. If not, I'll have to resort to manual investigation.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS
+/!\ NIBBLE CHECK AT $BB00</code>
+    </div>
+    <p class="seen">For those of you just tuning in, my work disk uses a custom program that I affectionately call "AUTOTRACE" to automate the process of boot tracing as far as possible. For some disks, this just captures track 0, sector 0 (saved in a file called "BOOT0") and stops.</p>
+    <p class="seen">For other disks that load in the same way that an unprotected DOS 3.3 disk loads, it captures the next stage of the boot process as well (in a file called "BOOT1"). BOOT1 contains sectors 0-9 on track 0, which are loaded into memory at $B600..$BFFF. This generally contains the RWTS routines which the program uses to read the rest of the disk.</p>
+    <p class="seen">If the RWTS is fairly normal as well (and my AUTOTRACE program just spot- checks a few memory locations to guess at its "normalcy"), there's a good chance I'll be able to use a tool called Advanced Demuffin (written in 1983 by The Stack) to convert the disk from whatever weird format it uses to store its sector data into a standard disk readable by unprotected DOS 3.3 disks or any other third-party tools.</p>
+    <p class="seen">In this case, AUTOTRACE extracts the RWTS routines (generally loaded from track 0, sectors 2-9 into $B800..$BFFF) and saves *that* into a third file called "RWTS".</p>
+    <p>Along the way, AUTOTRACE gave me a warning about a possible nibble check, which is very exciting(*). I just added this warning recently, and here I am already reaping the benefits. It just scans the $BB00 page for the opcodes "BD 89 C0" (LDA $C089,X), which is a common instruction in nibble checks.</p>
+    <p class="seen">(*)not guaranteed, excitement may vary</p>
+    <p>I'll come back to the nibble check in a moment. First, I want to use Advanced</p>
+    <p>Demuffin to convert the disk to a standard format. It uses the disk's own RWTS to read the original (stored in the RWTS file), then a standard DOS 3.3 RWTS to write out the data, sector by sector.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>[press "5" to switch to slot 5]</code>
+      <code>[press "R" to load a new RWTS module]
+  --> At $B8, load "RWTS" from drive 1</code>
+      <code>[press "6" to switch to slot 6]</code>
+      <code>[press "C" to convert disk]</code>
+    </div>
+    <p class="seen">This disk is 16 sectors, and the default options (copy the entire disk, all tracks, all sectors) don't need to be changed unless something goes horribly wrong.</p>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:...................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:...................................
+SC1:...................................
+SC2:...................................
+SC3:...................................
+SC4:...................................
+SC5:...................................
+SC6:...................................
+SC7:...................................
+SC8:...................................
+SC9:...................................
+SCA:...................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:...................................
+=======================================
+16SC $00,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <p class="seen">The disk's own RWTS gave no read errors on any track. This is the power and the genius of Advanced Demuffin. Every disk must be able to read itself. So, let it read itself, then capture the data and write it out in a standard format.</p>
+    <p>However, booting the demuffin'd copy displays the same behavior as my failed bit copy: it just reboots endlessly.</p>
+    <p class="seen">Let's go find that nibble check.</p>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]BLOAD BOOT1,A$2600
+]CALL -151</code>
+      <code>*FE89G FE93G     ; disconnect DOS
+*B600<2600.2FFFM ; move RWTS into place</code>
+      <code>*B700L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">standard RWTS parameter table setup</p>
+      <code>B700-   8E E9 B7    STX   $B7E9
+B703-   8E F7 B7    STX   $B7F7
+B706-   A9 01       LDA   #$01
+B708-   8D F8 B7    STA   $B7F8
+B70B-   8D EA B7    STA   $B7EA
+B70E-   AD E0 B7    LDA   $B7E0
+B711-   8D E1 B7    STA   $B7E1</code>
+      <p class="comment">but start reading at T03,S08</p>
+      <code>B714-   A9 03       LDA   #$03
+B716-   8D EC B7    STA   $B7EC
+B719-   A9 08       LDA   #$08
+B71B-   8D ED B7    STA   $B7ED
+B71E-   AC E7 B7    LDY   $B7E7
+B721-   88          DEY
+B722-   8C F1 B7    STY   $B7F1
+B725-   A9 01       LDA   #$01
+B727-   8D F4 B7    STA   $B7F4
+B72A-   8A          TXA
+B72B-   4A          LSR
+B72C-   4A          LSR
+B72D-   4A          LSR
+B72E-   4A          LSR
+B72F-   AA          TAX
+B730-   A9 00       LDA   #$00
+B732-   9D F8 04    STA   $04F8,X
+B735-   9D 78 04    STA   $0478,X</code>
+      <p class="comment">hmm</p>
+      <code>B738-   20 00 BB    JSR   $BB00
+B73B-   A2 FF       LDX   #$FF
+B73D-   9A          TXS
+B73E-   8E EB B7    STX   $B7EB
+B741-   4C C8 BF    JMP   $BFC8
+B744-   20 89 FE    JSR   $FE89</code>
+      <p class="comment">jump straight to program, probably</p>
+      <code>B747-   4C 00 88    JMP   $8800</code>
+    </div>
+    <p>Everything was looking normal until the JSR $BB00 at $B738. I would have expected that to call $B793 to do a multi-sector read loop. (The RWTS is all set up for it.) But we're rerouting through $BB00 instead. (Note: in a standard DOS 3.3 RWTS, there's nothing at $BB00. It's scratch space that's overwritten on every sector read. So any code there is immediately suspect.)</p>
+    <div class="line_editing">
+      <code>*BB00L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">save zero page</p>
+      <code>BB00-   A2 00       LDX   #$00
+BB02-   B5 00       LDA   $00,X
+BB04-   9D 00 85    STA   $8500,X
+BB07-   CA          DEX
+BB08-   D0 F8       BNE   $BB02</code>
+      <p class="comment">seek (don't read)</p>
+      <code>BB0A-   A9 00       LDA   #$00
+BB0C-   8D F4 B7    STA   $B7F4
+BB0F-   A9 B7       LDA   #$B7
+BB11-   A0 E8       LDY   #$E8
+BB13-   20 00 BD    JSR   $BD00</code>
+      <p class="comment">hmm</p>
+      <code>BB16-   20 43 BB    JSR   $BB43</code>
+      <p class="comment">save flags</p>
+      <code>BB19-   08          PHP</code>
+      <p class="comment">restore zero page</p>
+      <code>BB1A-   A2 00       LDX   #$00
+BB1C-   BD 00 85    LDA   $8500,X
+BB1F-   95 00       STA   $00,X
+BB21-   CA          DEX
+BB22-   D0 F8       BNE   $BB1C</code>
+      <p class="comment">restore flags</p>
+      <code>BB24-   28          PLP</code>
+      <p class="comment">failure path is here</p>
+      <code>BB25-   B0 0A       BCS   $BB31</code>
+      <p class="comment">success path falls through to here</p>
+      <code>BB27-   A6 2B       LDX   $2B</code>
+      <p class="comment">read (not seek)</p>
+      <code>BB29-   A9 01       LDA   #$01
+BB2B-   8D F4 B7    STA   $B7F4</code>
+      <p class="comment">call multi-sector read routine as usual</p>
+      <code>BB2E-   4C 93 B7    JMP   $B793</code>
+      <p class="comment">The Badlands (from which there is no return)</p>
+      <code>BB31-   A5 2B       LDA   $2B
+BB33-   4A          LSR
+BB34-   4A          LSR
+BB35-   4A          LSR
+BB36-   4A          LSR
+BB37-   09 C0       ORA   #$C0
+BB39-   A8          TAY
+BB3A-   88          DEY
+BB3B-   98          TYA</code>
+      <p class="comment">push the address to reboot (-1) to the stack</p>
+      <code>BB3C-   48          PHA
+BB3D-   A9 FF       LDA   #$FF
+BB3F-   48          PHA</code>
+      <p class="comment">exit via HOME routine</p>
+      <code>BB40-   4C 58 FC    JMP   $FC58</code>
+    </div>
+    <p>When the HOME routine "returns," it will pop off the address that was just manually pushed to the stack, add 1 (as usual), and... reboot.</p>
+    <p>...Which explains the behavior I was seeing on my failed copies.</p>
+    <p>Meanwhile, based on the logic in this main routine, I'd guess that the subroutine at $BB43 is a nibble check that sets the carry on failure and clears it on success.</p>
+    <div class="line_editing">
+      <code>*BB43L</code>
+    </div>
+    <div class="listing">
+      <code>BB43-   A9 0A       LDA   #$0A
+BB45-   85 50       STA   $50
+BB47-   A6 2B       LDX   $2B</code>
+      <p class="comment">initialize disk motor (highly suspicious)</p>
+      <code>BB49-   BD 89 C0    LDA   $C089,X
+BB4C-   BD 8E C0    LDA   $C08E,X</code>
+      <p class="comment">this address is used later</p>
+      <code>BB4F-   A9 C1       LDA   #$C1
+BB51-   85 48       STA   $48
+BB53-   A9 BB       LDA   #$BB
+BB55-   85 49       STA   $49</code>
+      <p class="comment">set the death counter</p>
+      <code>BB57-   A9 80       LDA   #$80
+BB59-   85 51       STA   $51
+BB5B-   C6 51       DEC   $51</code>
+      <p class="comment">if the death counter hits zero, FAIL</p>
+      <code>BB5D-   F0 5C       BEQ   $BBBB</code>
+      <p class="comment">read next address field</p>
+      <code>BB5F-   20 44 B9    JSR   $B944</code>
+      <p class="comment">if that didn't work, FAIL</p>
+      <code>BB62-   B0 57       BCS   $BBBB</code>
+      <p class="comment">loop until we find sector $0F</p>
+      <code>BB64-   A5 2D       LDA   $2D
+BB66-   C9 0F       CMP   #$0F
+BB68-   D0 F1       BNE   $BB5B</code>
+      <p class="comment">Search for a specific sequence of nibbles in the "dead zone" between the address field and data field.</p>
+      <p class="comment">This area is normally not important, so COPYA didn't copy it precisely because normal disks don't care. (Actually, it's even more evil than that, because the original disk is written with timing bits in specific non-standard places between the nibbles in the dead zone. This code not only requires the right nibbles in the right order, it reads them just slightly slower than normal. So the timing bits need to be in the right places too, or else this code will read the wrong nibble values while it's out of sync. This will trip up even the best bit copiers.</p>
+      <p class="comment">And you can forget about making a disk image for emulators -- those don't store timing bits at all.)</p>
+      <code>BB6A-   A0 00       LDY   #$00
+BB6C-   BD 8C C0    LDA   $C08C,X
+BB6F-   10 FB       BPL   $BB6C
+BB71-   88          DEY
+BB72-   F0 47       BEQ   $BBBB  ; FAIL
+BB74-   C9 D5       CMP   #$D5
+BB76-   D0 F4       BNE   $BB6C
+BB78-   A0 00       LDY   #$00
+BB7A-   BD 8C C0    LDA   $C08C,X
+BB7D-   10 FB       BPL   $BB7A
+BB7F-   88          DEY
+BB80-   F0 39       BEQ   $BBBB  ; FAIL
+BB82-   C9 E7       CMP   #$E7
+BB84-   D0 F4       BNE   $BB7A
+BB86-   BD 8C C0    LDA   $C08C,X
+BB89-   10 FB       BPL   $BB86
+BB8B-   C9 E7       CMP   #$E7
+BB8D-   D0 2C       BNE   $BBBB  ; FAIL
+BB8F-   BD 8C C0    LDA   $C08C,X
+BB92-   10 FB       BPL   $BB8F
+BB94-   C9 E7       CMP   #$E7
+BB96-   D0 23       BNE   $BBBB  ; FAIL</code>
+      <p class="comment">kill some time to get out of sync with the "proper" start of nibbles)</p>
+      <code>BB98-   BD 8D C0    LDA   $C08D,X
+BB9B-   A0 10       LDY   #$10
+BB9D-   24 06       BIT   $06</code>
+      <p class="comment">now start looking for nibbles that don't really exist (except they do, because we're out of sync and reading timing bits as data)</p>
+      <code>BB9F-   BD 8C C0    LDA   $C08C,X
+BBA2-   10 FB       BPL   $BB9F
+BBA4-   88          DEY
+BBA5-   F0 14       BEQ   $BBBB  ; FAIL
+BBA7-   C9 EE       CMP   #$EE
+BBA9-   D0 F4       BNE   $BB9F</code>
+      <p class="comment">check for nibble sequence stored in reverse order at $BBC1</p>
+      <code>BBAB-   A0 07       LDY   #$07
+BBAD-   BD 8C C0    LDA   $C08C,X
+BBB0-   10 FB       BPL   $BBAD
+BBB2-   D1 48       CMP   ($48),Y
+BBB4-   D0 05       BNE   $BBBB
+BBB6-   88          DEY
+BBB7-   10 F4       BPL   $BBAD</code>
+      <p class="comment">success path is here -- clear carry</p>
+      <code>BBB9-   18          CLC
+BBBA-   60          RTS</code>
+      <p class="comment">failure path is here -- decrement the death counter and try again</p>
+      <code>BBBB-   C6 50       DEC   $50
+BBBD-   D0 98       BNE   $BB57</code>
+      <p class="comment">once the death counter hits zero, give up completely and set the carry on the way out</p>
+      <code>BBBF-   38          SEC
+BBC0-   60          RTS</code>
+    </div>
+    <p>The important takeaway here is that there are no side effects to this nibble check. It just does its thing and sets a flag, and the main routine at $BB00 decides what to do (either reboot or continue to $B793). The entire thing is self-contained. I can change the JSR $BB00 (at $B738) to JSR $B793 and bypass the entire thing.</p>
+    <p class="seen">A lot of disks need this sort of patching, and I got tired of doing it manually, so I wrote a program to do it for me. It is called Post-Demuffin</p>
+    <p class="seen">Patcher ("PDP" for short).</p>
+    <p class="seen">PDP prompts you to select a slot and drive, then reads the demuffin'd disk, checks for a modified DOS 3.3-shaped RWTS, and applies the necessary patches so the disk can read itself. It also detects and bypasses some known nibble checks, like the one on this disk.</p>
+    <p class="seen">I've included a copy of Post-Demuffin</p>
+    <p class="seen">Patcher on my work disk; the full source code is currently available at <https://archive.org/details/ PostDemuffinPatcher4am>.</p>
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]BRUN PDP</code>
+    </div>
+    <p>T00,S01,$39 change 00BB to 93B7</p>
+    <p class="seen">(This is the actual output of the program. Post-Demuffin Patcher prints out the changes it is going to make before it writes them to the disk.)</p>
+    <p class="seen">I should point out that Post-Demuffin</p>
+    <p>Patcher is really quite conservative in making patches. It checks a lot of the surrounding code before deciding to patch a specific location. In the case of bypassing this nibble check, it checks every single byte of code up to and including the JSR $BB00, to ensure that the disk is using a known DOS 3.3- shaped bootloader up until that point.</p>
+    <p>And there were dozens of patches that it didn't make to this disk (like RWTS patches), because it decided they weren't needed.</p>
+    <div class="line_editing">
+      <code>]PR#6</code>
+    </div>
+    <p>And it works. The disk boots and runs with no complaint. The RWTS must be liberal enough that it can still read the disk even after it's been converted to a standard format. And there doesn't appear to be any further protection.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

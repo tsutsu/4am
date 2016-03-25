@@ -1,0 +1,341 @@
+<!doctype html>
+<html><head>
+<title>Ortho's Personalized Plant Selector</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+
+    <p class="seen">Side A is protected but bootable.</p>
+    <p class="seen">Side B is unprotected but unbootable.</p>
+    <p class="seen">Life is like that.</p>
+    <p class="seen">This has not been a haiku.</p>
+</section>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">unable to read any track</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">no errors, but copy only boots as far as ProDOS title screen, then gives "RELOCATION / CONFIGURATION ERROR"</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p>modified prologues and epilogues on every track (except T00,S00) address = AA D5 AB / DE AB data = AA D5 EB / ED AA EB</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK: 05  START: 32EA  LENGTH: 015F</code>
+    </div>
+    <div class="curses">
+      <code>32D0: 96 96 96 96 96 96 96 96   VIEW
+32D8: 96 96 ED AA EB FD D2 D2
+            ^^^^^^^^
+         data epilogue</code>
+      <code>32E0: D2 D2 DD A5 AE BF FF FF
+32E8: FF FF DB B7 AD BF D7 AB
+32F0: F7 BD EB AF ED AA D5 AB  <-32F5
+                     ^^^^^^^^
+                 address prologue</code>
+      <code>32F8: FF FE AA AF AF AB FA FA
+      ^^^^^ ^^^^^ ^^^^^ ^^^^^
+      v=255 t=$05 s=$0B chksm</code>
+      <code>3300: DE AB E4 FF 9E D3 FC DB
+      ^^^^^
+ address epilogue</code>
+      <code>3308: B7 AD BF D7 AB AA D5 EB
+                     ^^^^^^^^
+                  data prologue</code>
+    </div>
+    <div class="terminal_output">
+      <code>3310: AE EC D3 F3 BF DE F4 D9</code>
+      <code>---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">Disk Fixer</p>
+    <p>T00,S00 is a custom bootloader ["O" -> "Input/Output Control"] set address prologue to "AA D5 AB" set address epilogue to "DE AB EB" set data prologue to "AA D5 EB" set data epilogue to "ED AA EB"</p>
+    <p>Success! all tracks readable, except T00,S0A and T00,S0B</p>
+    <p>I see references to PRODOS, but with those sectors unreadable on track $00, a straight conversion may be difficult</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p class="seen">modified prologues/epilogues</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">modified prologues/epilogues</p>
+    <p class="seen">Why didn't my EDD copy work?</p>
+    <p class="seen">I don't know. The error is a standard ProDOS message, but it could easily have been triggered manually after a failed nibble check.</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Catch A Lucky <brk></h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...boots to main menu...</code>
+    </div>
+    <p><Ctrl-Reset> dumps me to the monitor with ProDOS still in memory. No reset vector protection at all.</p>
+    <div class="line_editing">
+      <p class="comment">copy F8 ROM to RAM bank 1</p>
+      <code>*C089 C089 N F800<F800.FFFFM</code>
+    </div>
+    <div class="listing">
+      <code>C089- B0
+C089- B0</code>
+    </div>
+    <div class="line_editing">
+      <p class="comment">read/write RAM bank 1</p>
+      <code>*C08B C08B</code>
+    </div>
+    <div class="listing">
+      <code>C08B- B0
+C08B- B0</code>
+    </div>
+    <p>Now I can inspect the modified ProDOS in memory. Here's the relevant part of the RWTS:</p>
+    <div class="line_editing">
+      <code>*D398L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">entry point to find address prologue</p>
+      <code>D398-   A0 FC       LDY   #$FC
+D39A-   8C 6B D3    STY   $D36B
+D39D-   C8          INY
+D39E-   D0 05       BNE   $D3A5
+D3A0-   EE 6B D3    INC   $D36B
+D3A3-   F0 68       BEQ   $D40D</code>
+      <p class="comment">address prologue #1 can be $D5 or $AA</p>
+      <code>D3A5-   BD 8C C0    LDA   $C08C,X
+D3A8-   10 FB       BPL   $D3A5
+D3AA-   C9 D5       CMP   #$D5
+D3AC-   F0 02       BEQ   $D3B0
+D3AE-   C9 AA       CMP   #$AA
+D3B0-   D0 EB       BNE   $D39D</code>
+      <p class="comment">address prologue #2 can be $AA or $D5</p>
+      <code>D3B2-   BD 8C C0    LDA   $C08C,X
+D3B5-   10 FB       BPL   $D3B2
+D3B7-   C9 AA       CMP   #$AA
+D3B9-   F0 02       BEQ   $D3BD
+D3BB-   C9 D5       CMP   #$D5
+D3BD-   D0 EB       BNE   $D3AA</code>
+      <p class="comment">address prologue #3 can be $96 or $AB</p>
+      <code>D3BF-   BD 8C C0    LDA   $C08C,X
+D3C2-   10 FB       BPL   $D3BF
+D3C4-   C9 96       CMP   #$96
+D3C6-   F0 04       BEQ   $D3CC
+D3C8-   C9 AB       CMP   #$AB
+D3CA-   D0 DE       BNE   $D3AA</code>
+    </div>
+    <p>This explains how the program disk can be protected but the data disk (side B) can be copyable. The RWTS is really two RWTSs in one, accepting either(*) the standard "D5 AA 96" or the nonstandard "AA D5 AB" address prologue.</p>
+    <p>(*) Well actually(+), there are eight</p>
+    <p>possible sequences, since each item in the sequence is chosen from two possible nibbles, and 2^3 = 8.</p>
+    <p>(+) Q: How did the pedant die?</p>
+    <p>A: He fell down a well actually.</p>
+    <p>There is similar two-for-one code to match the address epilogue:</p>
+    <div class="line_editing">
+      <code>*D3F1L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">address epilogue #1 can be... $DE</p>
+      <code>D3F1-   BD 8C C0    LDA   $C08C,X
+D3F4-   10 FB       BPL   $D3F1
+D3F6-   C9 DE       CMP   #$DE
+D3F8-   F0 02       BEQ   $D3FC
+D3FA-   C9 DE       CMP   #$DE
+D3FC-   D0 0F       BNE   $D40D</code>
+      <p class="comment">address epilogue #2 can be $AA or $AB</p>
+      <code>D3FE-   BD 8C C0    LDA   $C08C,X
+D401-   10 FB       BPL   $D3FE
+D403-   C9 AA       CMP   #$AA
+D405-   F0 04       BEQ   $D40B
+D407-   C9 AB       CMP   #$AB
+D409-   D0 02       BNE   $D40D
+D40B-   18          CLC
+D40C-   60          RTS
+D40D-   38          SEC
+D40E-   60          RTS</code>
+    </div>
+    <p>Ditto for the data prologue:</p>
+    <div class="line_editing">
+      <code>*D443L</code>
+    </div>
+    <div class="listing">
+      <code>D443-   A0 20       LDY   #$20
+D445-   88          DEY
+D446-   F0 42       BEQ   $D48A</code>
+      <p class="comment">data prologue #1 can be $D5 or $AA</p>
+      <code>D448-   BD 8C C0    LDA   $C08C,X
+D44B-   10 FB       BPL   $D448
+D44D-   C9 D5       CMP   #$D5
+D44F-   F0 02       BEQ   $D453
+D451-   C9 AA       CMP   #$AA
+D453-   D0 F0       BNE   $D445</code>
+      <p class="comment">data prologue #2 can be $AA or $D5</p>
+      <code>D455-   BD 8C C0    LDA   $C08C,X
+D458-   10 FB       BPL   $D455
+D45A-   C9 AA       CMP   #$AA
+D45C-   F0 02       BEQ   $D460
+D45E-   C9 D5       CMP   #$D5
+D460-   D0 EB       BNE   $D44D
+D462-   EA          NOP</code>
+      <p class="comment">data prologue #3 can be $AD or $EB</p>
+      <code>D463-   BD 8C C0    LDA   $C08C,X
+D466-   10 FB       BPL   $D463
+D468-   C9 AD       CMP   #$AD
+D46A-   F0 04       BEQ   $D470
+D46C-   C9 EB       CMP   #$EB
+D46E-   D0 DD       BNE   $D44D</code>
+    </div>
+    <p>But where it really gets interesting is in the data epilogue.</p>
+    <div class="line_editing">
+      <code>*D4DDL</code>
+    </div>
+    <div class="listing">
+      <code>D4DD-   A6 3E       LDX   $3E</code>
+      <p class="comment">data epilogue #1 can be $DE or $ED</p>
+      <code>D4DF-   BD 8C C0    LDA   $C08C,X
+D4E2-   10 FB       BPL   $D4DF
+D4E4-   C9 DE       CMP   #$DE</code>
+      <p class="comment">if it's $DE (standard), branch all the way forward to $D4FF to signal success (i.e. don't ever check the second epilogue)</p>
+      <code>D4E6-   F0 17       BEQ   $D4FF</code>
+      <p class="comment">if it's $ED (nonstandard), things get weird</p>
+      <code>D4E8-   C9 ED       CMP   #$ED
+D4EA-   D0 16       BNE   $D502</code>
+      <p class="comment">$D526 is just an "RTS", so we're just burning cycles here</p>
+      <code>D4EC-   20 26 D5    JSR   $D526</code>
+      <p class="comment">burn some more cycles</p>
+      <code>D4EF-   EA          NOP
+D4F0-   EA          NOP
+D4F1-   EA          NOP</code>
+      <p class="comment">look at data latch (no loop)</p>
+      <code>D4F2-   BD 8C C0    LDA   $C08C,X</code>
+      <p class="comment">if high bit is still set, branch to failure path (sets the carry)</p>
+      <code>D4F5-   30 0B       BMI   $D502
+D4F7-   EA          NOP</code>
+      <p class="comment">otherwise burn a nibble and clear the carry to signal success</p>
+      <code>D4F8-   BD 8C C0    LDA   $C08C,X
+D4FB-   10 FB       BPL   $D4F8
+D4FD-   A9 00       LDA   #$00
+D4FF-   18          CLC
+D500-   F0 01       BEQ   $D503
+D502-   38          SEC
+D503-   68          PLA
+D504-   A0 55       LDY   #$55
+D506-   91 44       STA   ($44),Y
+D508-   60          RTS</code>
+    </div>
+    <p>To understand the genius of this, some background is in order. Each bit on disk takes 4 CPU cycles to come around as the disk is spinning. That means we need to read an 8-bit nibble every 32 cycles. (The data latch will hold the last value for 4 more cycles, so we can spend an absolute maximum of 36 cycles fetching any one nibble. Of course we'll need to make up that time later; it's not free. Ain't nothing free.)</p>
+    <p>If the first nibble of the epilogue has a timing bit after it, that will burn another 4 cycles and delay everything else. $D4EC does a JSR to an RTS, which requires 6 cycles to call and 6 more to return. Then there are three NOP codes, which burns another 6 cycles. So by the time we check the data latch at $D4F2, we've "wasted" so much time that we can distinguish whether the first nibble of the epilogue had a timing bit after it or not. Timing bit = original disk; lack of timing bit = unauthorized copy.</p>
+    <p>And that explains why my EDD bit copy failed: it didn't preserve the timing bits after the $ED nibble in the data prologue. It sets the carry, so the caller thinks the sector is bad and we hear the familiar disk grinding. Higher up the call chain, ProDOS says, "Whoa!</p>
+    <p>I can't even read the disk catalog to find the first .SYSTEM file! I'm out."</p>
+    <p>It displays the generic "RELOCATION / CONFIGURATION ERROR" and gives up.</p>
+    <p>There was never a nibble check, per se; the structure of the disk itself is designed to foil bit copiers.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Catch An Even Luckier Break</h3>
+
+    <p>So how am I going to crack this? I have the protected version of ProDOS in memory. Can I reuse that somehow?</p>
+    <p>It turns out I can, in a ridiculously easy way. This program -- how can I put this politely -- it's possible that there was some outsourcing of concerns, and it's possible that the various parties involved (development team that wrote it, QA team that tested it, and disk distribution house that added the copy protection and mastered it) -- well, have you ever read the comic strip Dilbert? I'm not saying there were pointy haired bosses involved, but there is a fairly glaring hole in this disk's copy protection.</p>
+    <p>Here is the main menu:</p>
+    <div class="curses">
+      <code>             Program Selector</code>
+      <code>        Ortho Plant Selector
+        Planting Calendar
+        Note Pad
+        Calculator
+        Define Growing Region</code>
+      <code>        Program Set-up
+    >>> Catalog of files <<<</code>
+      <code>       Point to the desired program
+       with the cursor control keys,
+       select by pressing RETURN.
+     ________________________________</code>
+      <code>    Ortho's Personalized Plant Selector</code>
+    </div>
+    <p>Selecting "Catalog of files" takes me to A GENERAL PURPOSE PROGRAM SELECTOR that displays a full catalog of the (protected) program disk.</p>
+    <div class="terminal_output">
+      <code>      PRODOS          SYS
+      AE.SYSTEM       SYS
+      AE.DEF          SYS
+      REGION.OBJ      BIN
+      ORTHO           SYS
+      CONFIG          SYS
+      ORTHO.OBJ       BIN
+      CALCULATOR      SYS
+      CAL.RES         BIN
+      REGION          SYS
+      ORTHO2          BIN
+      ZIP.MASTER      BIN
+      AE64.SYSTEM     SYS
+      AE128.SYSTEM    SYS
+      CAL             SYS
+      CAL.OBJ         BIN</code>
+    </div>
+    <div class="curses">
+      <code>    ___________________________________
+    Ortho's Personalized Plant Selector</code>
+    </div>
+    <p>The catalog path (on the top line) is editable; if I overwrite it entirely with the pathname of another disk, I can SELECT AND EXECUTE ARBITRARY PROGRAMS from any disk.</p>
+    <p>Like, say, this one:</p>
+    <div class="curses_input">
+      <code>[S6,D2=Copy II Plus 8.4]</code>
+    </div>
+    <div class="curses">
+      <code>     __________________________________
+      Catalog path: /COPYIIPLUS8.4/</code>
+    </div>
+    <div class="terminal_output">
+      <code>      PRODOS          SYS
+      UTIL.SYSTEM     SYS
+      BITCOPY.SYSTEM  SYS
+      PARM.KEY        TXT
+      PARM.DATA       TXT</code>
+    </div>
+    <div class="curses">
+      <code>    ___________________________________
+    Ortho's Personalized Plant Selector</code>
+    </div>
+    <p>Selecting UTIL.SYSTEM, I can launch</p>
+    <p>Copy II Plus. The protected version of ProDOS is still in memory, and Copy II</p>
+    <p>Plus 8.4 will use it to catalog and read from any available ProDOS disks -- including the protected original disk.</p>
+    <p>Hooray for abstractions!</p>
+    <p>_____________________</p>
+    <p>| /!\ Important /!\ |_____________ | | | If you're going to go to all the | | trouble of adding OS-level copy | | protection that makes bit copies | | essentially impossible, don't let | | the user run arbitrary programs | | after your OS is in memory. | |___________________________________|</p>
+    <p class="seen"></p>
+    <p>Now I can copy all the files from the original (protected) disk to a blank (unprotected) disk.</p>
+    <div class="curses_input">
+      <code>[S6,D2=blank disk]</code>
+      <code>[Copy II Plus 8.4]
+  [FORMAT DISK]
+    [PRODOS]
+      [SLOT 6, DRIVE 2]
+        VOLUME NAME = "BACKUP"</code>
+      <code>  [COPY]
+    [FILES]
+      SOURCE DISK = SLOT 6, DRIVE 1
+      TARGET DISK = SLOT 6, DRIVE 2
+      select all files (*.*)</code>
+      <code>[eject original disk from S6,D1]</code>
+      <code>  [RENAME]
+    [VOLUME]
+      [SLOT 6, DRIVE 2]
+        VOLUME NAME = "AE" (to match
+        the original disk)</code>
+      <code>[S6,D1=freshly made copy]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...works...</code>
+    </div>
+    <p>I don't even need to swap the PRODOS file with a clean copy. The dual RWTS can already read standard formatted disks, so no RWTS patches are required.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

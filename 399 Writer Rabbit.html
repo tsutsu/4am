@@ -1,0 +1,275 @@
+<!doctype html>
+<html><head>
+<title>Writer Rabbit</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+
+    <p>Writer Rabbit is a 1987 educational game programmed programmed by Leslie</p>
+    <p>Grimm and distributed by The Learning</p>
+    <p class="seen">Company.</p>
+    <p>The original disk copies with COPYA, but the copy does not work. It boots to the game title and immediately displays a graphical message "Fatal Disk Error" and hangs. (This seems *very* similar to the copy protection behavior I saw on Math Rabbit. Perhaps the fix is the same?)</p>
+    <p class="seen">Using my trusty Copy ][+ sector editor,</p>
+    <p>I scanned for the ASCII string "Fatal" but found nothing. However, knowing that many Apple II programs use 7-bit ASCII, I scanned for the hex sequence "46 61 74 61 6C" ("Fatal" without the high bit set). And behold! I found the error message on track $10, sector $08, along with some suspicious disk-related code. (Anything outside the RWTS that manually turns on the disk motor by accessing $C089,X is definitely suspicious.)</p>
+    <p>The entry point seems to be on the following sector, T10,S09. I see several strings ("MENU.1", "MENU.2", "PI.INVITE.PAC"), then solid code starting at T10,S09,$8E. There are some JMP and JSR instructions that reference absolute addresses in the $A1xx range, but they don't appear to line up with the code in this sector.</p>
+    <p>Here is the Copy ][+ disassembly listing, which is confusing since it gives addresses relative to $0900, but it's a start.</p>
+    <div class="terminal_output">
+      <code>SECTOR EDITOR                    DISK A</code>
+    </div>
+    <div class="listing">
+      <code>098E-   A9 00       LDA   #$00
+0990-   85 46       STA   $46
+0992-   85 47       STA   $47
+0994-   85 44       STA   $44
+0996-   A9 E0       LDA   #$E0
+0998-   85 45       STA   $45
+099A-   20 3A B8    JSR   $B83A
+099D-   B0 EF       BCS   $098E
+099F-   A5 43       LDA   $43
+09A1-   30 07       BMI   $09AA
+09A3-   AA          TAX
+09A4-   DD 8A C0    CMP   $C08A,X
+09A7-   4C D8 A1    JMP   $A1D8
+09AA-   29 7F       AND   #$7F
+09AC-   AA          TAX
+09AD-   DD 8B C0    CMP   $C08B,X
+09B0-   20 E9 A1    JSR   $A1E9
+09B3-   48          PHA
+09B4-   A0 00       LDY   #$00
+09B6-   98          TYA
+09B7-   99 E9 A1    STA   $A1E9,Y
+09BA-   C8          INY
+09BB-   C0 89       CPY   #$89
+09BD-   D0 F8       BNE   $09B7
+09BF-   68          PLA
+09C0-   60          RTS</code>
+    </div>
+    <p>I saw similar code in Math Rabbit.</p>
+    <p>Extremely similar. Test zero page $43, branch to either engage drive 1 or drive 2, then JSR to a subroutine (the nibble check), then zero out the subroutine to hide all trace of it (presumably to thwart people with NMI cards who can break into the monitor unconditionally when they see the "Fatal Disk Error" message). But the bytes in the sector don't line up with the addresses in the code, which tells me that this sector is part of a file that was not loaded at a page boundary.</p>
+    <p>But that's OK. I'm confident enough that this is the copy protection, that</p>
+    <p>I'm going to edit this sector without tracing it. What could possibly go wrong? I mean, just look at the rest of the code on this sector (and continuing into T10,S08):</p>
+    <div class="terminal_output">
+      <code>SECTOR EDITOR                    DISK A</code>
+    </div>
+    <div class="listing">
+      <p class="comment">turn on drive motor</p>
+      <code>09C1-   BD 89 C0    LDA   $C089,X
+; set up death counters
+09C4-   A9 56       LDA   #$56
+09C6-   85 08       STA   $08
+09C8-   A9 08       LDA   #$08
+09CA-   C6 07       DEC   $07
+09CC-   D0 04       BNE   $09D2
+; if death counter hits 0, fail
+09CE-   C6 08       DEC   $08
+09D0-   F0 3C       BEQ   $0A0E
+; look for $FB nibble
+09D2-   BC 8C C0    LDY   $C08C,X
+09D5-   10 FB       BPL   $09D2
+09D7-   C0 FB       CPY   #$FB
+09D9-   D0 ED       BNE   $09C8
+09DB-   F0 00       BEQ   $09DD
+; kill a few cycles (not pointless,
+; because the disk spins independently
+; of the CPU, so all of these low-level
+; disk reads are highly time-sensitive)
+09DD-   EA          NOP
+09DE-   EA          NOP
+; read data latch (note: no BPL loop
+; here, we're just reading it once)
+09DF-   BC 8C C0    LDY   $C08C,X
+; do a compare to set or clear the
+; carry bit (among other things, but
+; it's the carry bit we care about)
+09E2-   C0 08       CPY   #$08
+; rotate the carry into the low bit of
+; the accumulator
+09E4-   2A          ROL
+; if we just rolled a "1" bit out of
+; the high bit of the accumulator, take
+; this branch
+09E5-   B0 0B       BCS   $09F2
+; next nibble needs to be $FF
+09E7-   BC 8C C0    LDY   $C08C,X
+09EA-   10 FB       BPL   $09E7
+09EC-   C0 FF       CPY   #$FF
+; ...otherwise we start over
+09EE-   D0 D8       BNE   $09C8
+; loop back to get next nibble
+09F0-   F0 EB       BEQ   $09DD
+; nibble
+; execution continues here (from $xxE5)
+; get another nibble
+09F2-   BC 8C C0    LDY   $C08C,X
+09F5-   10 FB       BPL   $09F2
+; stash it in zero page
+09F7-   84 07       STY   $07
+; if the accumulator is anything but
+; %00001010, start over
+09F9-   C9 0A       CMP   #$0A
+09FB-   D0 CB       BNE   $09C8
+; get a nibble
+09FD-   BD 8C C0    LDA   $C08C,X
+0900-   10 FB       BPL   $08FD
+; more bit twiddling
+0902-   38          SEC
+0903-   2A          ROL
+; AND it with the previously stashed
+; nibble
+0904-   25 07       AND   $07
+; check
+0906-   49 FF       EOR   #$FF
+; fail? jump to The Badlands
+0908-   F0 04       BEQ   $090E</code>
+    </div>
+    <p class="seen">Here is the original disk, as seen by the Copy II+ nibble editor. Nibbles with extra "0" bits (timing bits) after them are displayed in inverse on an original machine, marked here with a "+" after the nibble.</p>
+    <div class="terminal_output">
+      <code>1C70: 9F EB E5 FC D7 D7 D7 EE
+1C78: FA E6 E6 FF FE F2 ED FD
+1C80: FF EF ED BA BB DD AF E6
+1C88: B7 A7 CB B7 DE AA EB FF
+1C90: FF FF FF FB+FF FF+FF FF+
+1C98: FD FF+FF+FF+FF+FF+FF+FF+
+1CA0: FF+FF+D5 AA 96 AA AB AA
+1CA8: AA AA AB AA AA DE AA EB+
+1CB0: FF+FF+FF+FF+FF+FF D5 AA</code>
+    </div>
+    <p class="seen">It's easy to understand why a simple sector copy failed. The sequence that this code is looking for starts at offset $1C93, which is between the end of one sector and the beginning of the next. (The data epilogue is at $1C8C; the next address prologue is at $1CA2.)</p>
+    <p class="seen">Sector copiers discard everything between those delimiters and rebuild the track with a default pattern of sync bytes. That pattern doesn't include an $FB nibble, so the nibble check fails.</p>
+    <p class="seen">But the EDD bit copy also failed. Here is the original disk's pattern at offset $1C93:</p>
+    <p class="seen">- $FB + timing bit - $FF - $FF + timing bit - $FF - $FF + timing bit</p>
+    <p class="seen">And here is what the same part of the track looks like on my failed EDD copy:</p>
+    <div class="terminal_output">
+      <code>1C70: 9F EB E5 FC D7 D7 D7 EE
+1C78: FA E6 E6 FF FE F2 ED FD
+1C80: FF EF ED BA BB DD AF E6
+1C88: B7 A7 CB B7 DE AA EB FF
+1C90: FF FF FF FB+FF FF FF+FF+
+1C98: FD FF+FF+FF+FF+FF+FF+FF+
+1CA0: FF+FF+D5 AA 96 AA AB AA
+1CA8: AA AA AB AA AA DE AA EB+
+1CB0: FF+FF+FF+FF+FF+FF D5 AA</code>
+    </div>
+    <p class="seen">A subtle difference! The sequence at offset $1C93 now looks like this:</p>
+    <p class="seen">- $FB + timing bit - $FF - $FF - $FF + timing bit - $FF + timing bit</p>
+    <p class="seen">This code is looking for $FF bytes with an alternating pattern of timing bit, no timing bit, timing bit, no timing bit, timing bit. It doesn't find that on the bit copy, so it knows it's not running on an original disk.</p>
+    <p class="seen">Continuing the code listing...</p>
+    <div class="listing">
+      <code>090A-   DD 88 C0    CMP   $C088,X
+090D-   60          RTS
+; The Badlands (from which there is no
+; return) -- turn off drive motor,
+; display error message, hang
+090E-   DD 88 C0    CMP   $C088,X
+0911-   A9 6E       LDA   #$6E
+0913-   A2 A2       LDX   #$A2
+0915-   20 42 80    JSR   $8042
+0918-   38          SEC
+0919-   6E F9 56    ROR   $56F9
+091C-   20 FE 56    JSR   $56FE
+091F-   00          BRK</code>
+    </div>
+    <p>That is definitely a nibble check if I ever saw one. I'm going to change one byte and reboot:</p>
+    <p>Side A,T10,S09,$C1 change "BD" to "60"</p>
+    <p>And... no change. I still get the same "Fatal Disk Error" message on the title screen.</p>
+    <div class="terminal_output">
+      <code>FFFFFFFFFFFFUUUUUUUUUUUUUU</code>
+    </div>
+    <p>OK. Don't panic. Maybe I missed something simple. Instead of trying to silently bypass the check, I'll (temporarily) break into the monitor and see what's going on.</p>
+    <p>Side A,T10,S09,$C1</p>
+    <p>change "BD 89 C0" to "4C 59 FF"</p>
+    <p>And... no change. This code isn't even being called!</p>
+    <p>Back to square one, I guess. I restored T10,S09 to its original state, but I don't know what to try next. Boot trace the entire disk? Maybe.</p>
+    <p>On a lark, I went back to my trusty</p>
+    <p>Copy ][+ sector editor and searched for the hex sequence "BD 89 C0" (opcodes to turn on the disk motor manually -- a sure sign of foul play if used outside DOS). There's one hit in T00,S0C,$56, but it appears to be part of the RWTS. Ditto T00,S0E,$A7; T01,S03,$CB; T01,S08,$C2. But here's something on T03,S0E,$74.</p>
+    <div class="terminal_output">
+      <code>SECTOR EDITOR                    DISK A</code>
+    </div>
+    <div class="listing">
+      <code>0974-   BD 89 C0    LDA   $C089,X
+0977-   A9 56       LDA   #$56
+0979-   85 08       STA   $08
+097B-   A9 08       LDA   #$08
+097D-   C6 07       DEC   $07
+097F-   D0 04       BNE   $0985
+0981-   C6 08       DEC   $08
+0983-   F0 3C       BEQ   $09C1
+0985-   BC 8C C0    LDY   $C08C,X
+0988-   10 FB       BPL   $0985
+098A-   C0 FB       CPY   #$FB
+098C-   D0 ED       BNE   $097B
+098E-   F0 00       BEQ   $0990
+0990-   EA          NOP
+0991-   EA          NOP
+0992-   BC 8C C0    LDY   $C08C,X
+0995-   C0 08       CPY   #$08
+0997-   2A          ROL
+0998-   B0 0B       BCS   $09A5
+099A-   BC 8C C0    LDY   $C08C,X</code>
+    </div>
+    <p>That looks VERY similar to the code in T10,S09. Modulo the starting byte offset, it's actually identical, down to the zero page addresses it uses to keep track of whether the nibble check has failed.</p>
+    <p>Earlier in the sector, specifically at T00,S0E,$41, I find the calling routine:</p>
+    <div class="terminal_output">
+      <code>SECTOR EDITOR                    DISK A</code>
+    </div>
+    <div class="listing">
+      <code>0941-   A9 00       LDA   #$00
+0943-   85 46       STA   $46
+0945-   85 47       STA   $47
+0947-   85 44       STA   $44
+0949-   A9 E0       LDA   #$E0
+094B-   85 45       STA   $45
+094D-   20 3A B8    JSR   $B83A
+0950-   B0 EF       BCS   $0941
+0952-   A5 43       LDA   $43
+0954-   30 07       BMI   $095D
+0956-   AA          TAX
+0957-   DD 8A C0    CMP   $C08A,X
+095A-   4C 63 8F    JMP   $8F63
+095D-   29 7F       AND   #$7F
+095F-   AA          TAX
+0960-   DD 8B C0    CMP   $C08B,X
+0963-   20 74 8F    JSR   $8F74
+0966-   48          PHA
+0967-   A0 00       LDY   #$00
+0969-   98          TYA
+096A-   99 74 8F    STA   $8F74,Y
+096D-   C8          INY
+096E-   C0 89       CPY   #$89
+0970-   D0 F8       BNE   $096A
+0972-   68          PLA
+0973-   60          RTS</code>
+    </div>
+    <p>Again, different byte offsets, but identical structure. It's all there: checking which disk drive to engage, calling the nibble check (apparently loaded at $8F74), then zeroing out memory to hide the nibble check after it's succeeded.</p>
+    <p>Side A,T03,S0E,$74 change "BD" to "60"</p>
+    <p>Success! It loads the title screen and continues to the main menu. I press the space bar to select a level, and... "Fatal Disk Error" again.</p>
+    <div class="terminal_output">
+      <code>FFFFFFFFFFFFUUUUUUUUUUUUUU</code>
+    </div>
+    <p>And then it hits me: the first patch actually was necessary after all. It just wasn't sufficient.</p>
+    <p class="seen">Side A,T10,S09,$C1 change "BD" to "60"</p>
+    <p>And now the game loads and runs without complaint.</p>
+    <p>That is, until I select "Silly Sentence</p>
+    <p>Party", insert side two, and select "Return to Main Menu". Then I get a "Fatal Disk Error" again. The menu program is duplicated on both sides, and each one contains the same check.</p>
+    <p>Luckily, the third nibble check (on side B) follows the same structure as the other two (on side A), and I found it easily with a sector search for "BD 89 C0".</p>
+    <p>Side B,T08,S03,$C1 change "BD" to "60"</p>
+    <p>And NOW the game really loads and runs without complaint.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<section>
+  <h2>Changelog</h2>
+
+    <div class="terminal_output">
+      <code>2015-09-02</code>
+    </div>
+    <p class="seen">- Vastly improved explanation of the</p>
+    <p class="seen">actual protection routine. Thanks to qkumba for pointing out that my original explanation was inaccurate.</p>
+    <div class="terminal_output">
+      <code>2014-04-13</code>
+    </div>
+    <p class="seen">- initial release</p>
+</section>
+
+</body></html>

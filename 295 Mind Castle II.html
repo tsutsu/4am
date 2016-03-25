@@ -1,0 +1,700 @@
+<!doctype html>
+<html><head>
+<title>Mind Castle II</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">no errors, but copy reboots endlessly</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">ditto</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">ditto</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">nothing suspicious</p>
+    <p class="seen">Disk Fixer</p>
+    <p>T00 -> looks like a DOS 3.3 RWTS T11 -> DOS 3.3 disk catalog</p>
+    <p>No sign of DOS 3.3 in between, though</p>
+    <p class="seen">Why didn't my copies work?</p>
+    <p>probably a nibble check in early boot</p>
+    <p class="seen">Next steps:</p>
+    <p>1. AUTOTRACE to capture early boot</p>
+    <p class="seen">2. Find nibble check and disable it</p>
+    <p class="seen">3. There is no step 3 (I hope)</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which It Dawns On Us That There Is Most Definitely Going To Be A Step 3</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+      <code>]CATALOG,S6,D1</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+018 FREE</code>
+      <code> A 002 HELLO
+ B 063 MCS1.GT
+ B 046 MCS2.GT
+ B 057 MCS3.GT
+ B 057 MCS4.GT
+ B 064 MCS5.GT
+ B 066 MCS6.GT
+ B 035 MCS7.GT
+ A 004 MCS1.SA
+ A 004 MCS2.SA
+ A 004 MCS3.SA
+ A 004 MCS4.SA
+ A 004 MCS5.SA
+ A 005 MCS6.SA
+ A 005 MCS7.SA
+ B 025 SW16/MAIN/HRCG
+ B 026 MCS LOGO
+ B 002 APSOFT/MAIN INTERFACE
+ B 009 CHRSETA/SHPS/SOUND TAB
+ B 004 CHRSETB
+ A 003 MCS INTRO</code>
+    </div>
+    <div class="line_editing">
+      <code>]RUN HELLO
+...hangs...</code>
+    </div>
+    <p class="seen">Hmm.</p>
+    <div class="line_editing">
+      <code>]PR#5
+]LOAD HELLO,S6,D1
+...hangs...</code>
+    </div>
+    <p class="seen">Double hmm.</p>
+    <div class="line_editing">
+      <code>]PR#5
+]BLOAD MCS LOGO,S6,D1
+...hangs...</code>
+    </div>
+    <p>Triple hmm.</p>
+    <p>Turning to my trusty Disk Fixer sector editor, I take a peek at track $11 (the disk catalog).</p>
+    <div class="curses">
+      <code>-------------- DISK EDIT --------------
+TRACK $11/SECTOR $0F/VOLUME $FE/BYTE$00
+---------------------------------------
+$00:>00<11 0E 00 00 00 00 00   @QN@@@@@
+$08: 00 00 00 13 0F 02 C8 C5   @@@SOBHE
+              ^^^^^
+         track/sector list</code>
+    </div>
+    <div class="terminal_output">
+      <code>$10: CC CC CF A0 A0 A0 A0 A0   LLO
+$18: A0 A0 A0 A0 A0 A0 A0 A0
+$20: A0 A0 A0 A0 A0 A0 A0 A0
+$28: A0 A0 A0 A0 02 00 14 0F       B@TO
+$30: 04 CD C3 D3 B1 AE C7 D4   DMCS1.GT
+$38: A0 A0 A0 A0 A0 A0 A0 A0
+$40: A0 A0 A0 A0 A0 A0 A0 A0
+$48: A0 A0 A0 A0 A0 A0 A0 3F          ?
+$50: 00 15 0F 04 CD C3 D3 B2   @UODMCS2
+$58: AE C7 D4 A0 A0 A0 A0 A0   .GT
+$60: A0 A0 A0 A0 A0 A0 A0 A0
+$68: A0 A0 A0 A0 A0 A0 A0 A0
+$70: A0 A0 2E 00 16 0F 04 CD     .@VODM
+$78: C3 D3 B3 AE C7 D4 A0 A0   CS3.GT
+---------------------------------------
+BUFFER 0/SLOT 6/DRIVE 1/MASK OFF/NORMAL</code>
+      <code>---------------------------------------
+COMMAND : _</code>
+    </div>
+    <p>It says the HELLO file starts on T13,S0F. But that sector is completely garbled:</p>
+    <div class="terminal_output">
+      <code>-------------- DISK EDIT --------------
+TRACK $13/SECTOR $0F/VOLUME $FE/BYTE$00
+---------------------------------------
+$00:>D0<D0 D0 D0 D0 D0 D0 D0   PPPPPPPP
+$08: D0 D0 D0 D0 BD D2 D0 D0   PPPP=RPP
+$10: D0 D0 D0 D0 D0 D0 D0 D0   PPPPPPPP
+$18: D0 D0 D0 D0 D0 D0 D0 D0   PPPPPPPP
+$20: D0 D0 D0 D0 D0 D0 D0 D0   PPPPPPPP
+$28: D0 D0 D0 D0 D0 D0 D0 D0   PPPPPPPP
+$30: D0 D0 D0 D0 D0 D0 D0 D0   PPPPPPPP
+$38: D0 D0 D0 D0 D0 D0 D0 D0   PPPPPPPP
+$40: D0 D0 D0 D0 D0 D0 D0 D0   PPPPPPPP
+$48: D0 D0 D0 D0 D0 D0 D0 D0   PPPPPPPP
+$50: D0 D0 D0 D0 D0 D0 D0 D0   PPPPPPPP
+$58: D0 D0 D0 D0 D0 D0 D0 D0   PPPPPPPP
+$60: D0 D0 D0 D0 D0 D0 D0 D0   PPPPPPPP
+$68: D0 D0 D0 D0 D0 D0 D0 D0   PPPPPPPP
+$70: D0 D0 D0 D0 D0 D0 D0 D0   PPPPPPPP
+$78: D0 D0 D0 D0 D0 D0 D0 D0   PPPPPPPP
+---------------------------------------
+BUFFER 0/SLOT 6/DRIVE 1/MASK OFF/NORMAL</code>
+      <code>---------------------------------------
+COMMAND : _</code>
+    </div>
+    <p>A track/sector list is mostly zeroes, punctuated by a sequence of tracks and, unsurprisingly, sectors. Of course, tracks only go up to $22 and sectors up to $0F, so this is just all wrong.</p>
+    <p>Further investigation reveals that the track/sector lists of all the files are similarly garbled. For example, the MCS1.GT file allegedly has its track/ sector list on T14,S0F:</p>
+    <div class="terminal_output">
+      <code>-------------- DISK EDIT --------------
+TRACK $14/SECTOR $0F/VOLUME $FE/BYTE$00
+---------------------------------------
+$00:>D0<D0 D0 D0 D0 D0 D0 D0   PPPPPPPP
+$08: D0 D0 D0 D0 BC D2 BC D3   PPPP<R<S
+$10: BC D4 BC D5 BC D6 BC D7   <T<U<V<W
+$18: BC D8 BC C9 BC CA BC CB   <X<I<J<K
+$20: BC CC BC CD BC CE BC CF   <L<M<N<O
+$28: BC D0 CE D1 CE D2 CE D3   <PNQNRNS
+$30: CE D4 CE D5 CE D6 CE D7   NTNUNVNW
+$38: CE D8 CE C9 CE CA CE CB   NXNINJNK
+$40: CD D1 CD D2 CD D3 CD D4   MQMRMSMT
+$48: CD D5 CD D6 CD D7 CD D8   MUMVMWMX
+$50: CD C9 CD CA CD CB CD CC   MIMJMKML
+$58: CD CD CD CE CD CF CD D0   MMMNMOMP
+$60: CC D1 CC D2 CC D3 CC D4   LQLRLSLT
+$68: CC D5 CC D6 CC D7 CC D8   LULVLWLX
+$70: CC C9 CC CA CC CB CC CC   LILJLKLL
+$78: CC CD CC CE CC CF CC D0   LMLNLOLP
+---------------------------------------
+BUFFER 0/SLOT 6/DRIVE 1/MASK OFF/NORMAL</code>
+      <code>---------------------------------------
+COMMAND :</code>
+    </div>
+    <p>So something on the original disk is decrypting these sectors before DOS interprets them as track/sector lists. (It's possible that the other sectors are also encrypted, but I can't tell yet because I don't know what the files are supposed to look like or which sectors correspond to which files.)</p>
+    <p class="seen">Let's back up.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Find A Nibble Check But It Raises More Questions Than It Answers</h3>
+
+    <div class="line_editing">
+      <code>]PR#5
+]BLOAD BOOT1,A$2600
+]CALL -151</code>
+      <code>*FE89G FE93G
+*B600<2600.2FFFM
+*B700L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">hmm</p>
+      <code>B700-   20 00 BB    JSR   $BB00</code>
+    </div>
+    <div class="line_editing">
+      <code>*BB00L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">usually unused by now -- obfuscation?</p>
+      <code>BB00-   CE FE 08    DEC   $08FE
+BB03-   EE FF 08    INC   $08FF</code>
+      <code>BB06-   20 CC BB    JSR   $BBCC</code>
+    </div>
+    <div class="line_editing">
+      <code>*BBCCL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set all page 3 vectors at once</p>
+      <code>BBCC-   A0 2F       LDY   #$2F
+BBCE-   B9 00 BC    LDA   $BC00,Y
+BBD1-   99 D0 03    STA   $03D0,Y
+BBD4-   88          DEY
+BBD5-   10 F7       BPL   $BBCE
+BBD7-   60          RTS</code>
+    </div>
+    <div class="line_editing">
+      <code>*BB09L</code>
+    </div>
+    <div class="listing">
+      <code>BB09-   20 34 BB    JSR   $BB34</code>
+    </div>
+    <div class="line_editing">
+      <code>*BB34L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">initialize death counter</p>
+      <code>BB34-   A9 10       LDA   #$10
+BB36-   85 FF       STA   $FF
+BB38-   C6 FF       DEC   $FF</code>
+      <p class="comment">if death counter hits 0, go to $B6C6 (presumably The Badlands)</p>
+      <code>BB3A-   D0 03       BNE   $BB3F
+BB3C-   4C C6 B6    JMP   $B6C6</code>
+      <p class="comment">get next available address field</p>
+      <code>BB3F-   20 44 B9    JSR   $B944</code>
+      <p class="comment">if that failed, decrement counter and try again</p>
+      <code>BB42-   B0 F4       BCS   $BB38</code>
+      <p class="comment">check sector</p>
+      <code>BB44-   A5 2D       LDA   $2D</code>
+      <p class="comment">is it sector $08?</p>
+      <code>BB46-   C9 08       CMP   #$08</code>
+      <p class="comment">nope, try again (do not decrement)</p>
+      <code>BB48-   D0 F5       BNE   $BB3F</code>
+      <p class="comment">look for a nibble sequence (given at $BBD8 -- it's "FF D5 AA AD")</p>
+      <code>BB4A-   A0 00       LDY   #$00
+BB4C-   BD 8C C0    LDA   $C08C,X
+BB4F-   10 FB       BPL   $BB4C
+BB51-   D9 D8 BB    CMP   $BBD8,Y
+BB54-   F0 08       BEQ   $BB5E
+BB56-   C0 00       CPY   #$00
+BB58-   F0 F2       BEQ   $BB4C
+BB5A-   A0 00       LDY   #$00
+BB5C-   F0 F3       BEQ   $BB51
+BB5E-   C8          INY
+BB5F-   C0 04       CPY   #$04
+BB61-   D0 E9       BNE   $BB4C</code>
+      <p class="comment">skip one nibble</p>
+      <code>BB63-   BD 8C C0    LDA   $C08C,X
+BB66-   10 FB       BPL   $BB63</code>
+      <p class="comment">lots of weird bit checking and time killing here</p>
+      <code>BB68-   BD 8C C0    LDA   $C08C,X
+BB6B-   30 FB       BMI   $BB68
+BB6D-   BD 8C C0    LDA   $C08C,X
+BB70-   10 FB       BPL   $BB6D
+BB72-   9D 8D C0    STA   $C08D,X
+BB75-   EA          NOP
+BB76-   BD 8C C0    LDA   $C08C,X
+BB79-   30 FB       BMI   $BB76
+BB7B-   BD 8C C0    LDA   $C08C,X
+BB7E-   10 FB       BPL   $BB7B
+BB80-   BD 8C C0    LDA   $C08C,X
+BB83-   30 FB       BMI   $BB80
+BB85-   BD 8C C0    LDA   $C08C,X
+BB88-   10 FB       BPL   $BB85</code>
+      <p class="comment">finally get a string of nibbles and save them at $BBDC</p>
+      <code>BB8A-   A0 0F       LDY   #$0F
+BB8C-   A9 00       LDA   #$00
+BB8E-   85 70       STA   $70
+BB90-   85 71       STA   $71
+BB92-   18          CLC
+BB93-   BD 8C C0    LDA   $C08C,X
+BB96-   10 FB       BPL   $BB93
+BB98-   99 DC BB    STA   $BBDC,Y</code>
+      <p class="comment">keep a running checksum of some sort</p>
+      <code>BB9B-   45 70       EOR   $70
+BB9D-   85 70       STA   $70
+BB9F-   65 71       ADC   $71
+BBA1-   85 71       STA   $71
+BBA3-   88          DEY
+BBA4-   10 ED       BPL   $BB93</code>
+      <p class="comment">use part of the checksum as an index into a lookup table of the nibbles we just saved (at $BBDC)</p>
+      <code>BBA6-   A5 70       LDA   $70
+BBA8-   29 0F       AND   #$0F
+BBAA-   A8          TAY
+BBAB-   B9 DC BB    LDA   $BBDC,Y</code>
+      <p class="comment">store it in page 3 (why?)</p>
+      <code>BBAE-   8D F0 03    STA   $03F0
+BBB1-   C8          INY
+BBB2-   98          TYA
+BBB3-   29 0F       AND   #$0F
+BBB5-   A8          TAY</code>
+      <p class="comment">store another value in page 3</p>
+      <code>BBB6-   B9 DC BB    LDA   $BBDC,Y
+BBB9-   8D F1 03    STA   $03F1</code>
+      <p class="comment">validate checksum</p>
+      <code>BBBC-   A5 71       LDA   $71
+BBBE-   C9 02       CMP   #$02</code>
+      <p class="comment">branch on success</p>
+      <code>BBC0-   F0 03       BEQ   $BBC5</code>
+      <p class="comment">if checksum fails, loop back to decrementing the death counter and start over</p>
+      <code>BBC2-   4C 38 BB    JMP   $BB38</code>
+      <p class="comment">clear temporary values (but the ones at $3F0/$3F1 remain)</p>
+      <code>BBC5-   A9 00       LDA   #$00
+BBC7-   85 70       STA   $70
+BBC9-   85 71       STA   $71
+BBCB-   60          RTS</code>
+    </div>
+    <p>Just for completeness, here is The</p>
+    <p>Badlands routine at $B6C6, which is called if the nibble check fails:</p>
+    <div class="line_editing">
+      <code>*B6C6L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">start ($00) at $BF00</p>
+      <code>B6C6-   A9 BF       LDA   #$BF
+B6C8-   85 01       STA   $01
+B6CA-   A9 00       LDA   #$00
+B6CC-   85 00       STA   $00
+B6CE-   A8          TAY</code>
+      <p class="comment">move code to zero page</p>
+      <code>B6CF-   A2 0C       LDX   #$0C
+B6D1-   BD E1 08    LDA   $08E1,X
+B6D4-   95 02       STA   $02,X
+B6D6-   CA          DEX
+B6D7-   10 F8       BPL   $B6D1</code>
+      <p class="comment">use ROM (not language card)</p>
+      <code>B6D9-   AD 82 C0    LDA   $C082
+B6DC-   A9 A0       LDA   #$A0</code>
+      <p class="comment">jump to code on zero page</p>
+      <code>B6DE-   4C 02 00    JMP   $0002</code>
+      <p class="comment">this routine gets moved to $02 -- it wipes memory and exits via the low-level reset vector</p>
+      <code>B6E1-   91 00       STA   ($00),Y
+B6E3-   C8          INY
+B6E4-   D0 FB       BNE   $B6E1
+B6E6-   C6 01       DEC   $01
+B6E8-   D0 F7       BNE   $B6E1
+B6EA-   6C FC FF    JMP   ($FFFC)</code>
+    </div>
+    <p>That's definitely where my non-working copy is ending up.</p>
+    <p>Continuing from $BB0C (after the JSR to $BB34)...</p>
+    <div class="line_editing">
+      <code>*BB0CL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">replace the code that called this routine with the STX instruction that belongs there</p>
+      <code>BB0C-   A9 8E       LDA   #$8E
+BB0E-   8D 00 B7    STA   $B700
+BB11-   A9 E9       LDA   #$E9
+BB13-   8D 01 B7    STA   $B701
+BB16-   A9 B7       LDA   #$B7
+BB18-   8D 02 B7    STA   $B702</code>
+      <p class="comment">set reset vector</p>
+      <code>BB1B-   A9 C6       LDA   #$C6
+BB1D-   8D F2 03    STA   $03F2
+BB20-   A9 B6       LDA   #$B6
+BB22-   8D F3 03    STA   $03F3
+BB25-   49 A5       EOR   #$A5
+BB27-   8D F4 03    STA   $03F4</code>
+      <p class="comment">modify a byte in The Badlands so it copies code from $B6E1 instead of $08E1 (to zero page)</p>
+      <code>BB2A-   A9 B6       LDA   #$B6
+BB2C-   8D D3 B6    STA   $B6D3</code>
+      <p class="comment">pop return address</p>
+      <code>BB2F-   68          PLA
+BB30-   68          PLA</code>
+      <p class="comment">unconditionally jump back to $B700 (but with new code in place)</p>
+      <code>BB31-   4C 00 B7    JMP   $B700</code>
+    </div>
+    <p>It looks like the nibble check at $BB34 has two side effects: $03F0 and $03F1.</p>
+    <p>I'm not sure how they're used, but we seem to have gone to great trouble to set them, so let's capture them.</p>
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up callback #1 after boot0 loads boot1 (including $BB00)</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D 4A 08    STA   $084A
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D 4B 08    STA   $084B
+9702-   A9 97       LDA   #$97
+9704-   8D 4C 08    STA   $084C</code>
+      <p class="comment">start the boot</p>
+      <code>9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">callback #1 is here set up callback #2 after $BB34 sets the two mystery values in page 3</p>
+      <code>970A-   A9 4C       LDA   #$4C
+970C-   8D C5 BB    STA   $BBC5
+970F-   A9 1C       LDA   #$1C
+9711-   8D C6 BB    STA   $BBC6
+9714-   A9 97       LDA   #$97
+9716-   8D C7 BB    STA   $BBC7</code>
+      <p class="comment">continue the boot</p>
+      <code>9719-   4C 00 B7    JMP   $B700</code>
+      <p class="comment">callback #2 is here print the mystery values and break to the monitor</p>
+      <code>971C-   AD F0 03    LDA   $03F0
+971F-   20 DA FD    JSR   $FDDA
+9722-   AD F1 03    LDA   $03F1
+9725-   20 DA FD    JSR   $FDDA
+9728-   4C 59 FF    JMP   $FF59</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE,A$9600,L$12B
+*9600G
+...reboots slot 6...
+D7F9
+<beep></code>
+    </div>
+    <p>The mystery values are $D7 (in $03F0) and $F9 (in $03F1).</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which We Go Down The Rabbit Hole And It Occurs To Us That Perhaps We Need A New Set Of Analogies Because Rabbits Are Eating Our Garden In Real Life And We're Kind Of Sick Of It To Be Honest</h3>
+
+    <p>Now that I know what to look for, it's surprisingly easy to find it. Turning to my trusty Disk Fixer sector editor,</p>
+    <p>I search the original disk for "F0 03" and "F1 03" and find plenty of hits on track $00.</p>
+    <div class="terminal_output">
+      <code>"F0 03"
+------------- DISK SEARCH -------------</code>
+    </div>
+    <div class="line_editing">
+      <code>$00/$05-$AF   $00/$05-$C0   $00/$06-$E8
+$00/$06-$FA</code>
+    </div>
+    <div class="terminal_output">
+      <code>"F1 03"
+------------- DISK SEARCH -------------</code>
+    </div>
+    <div class="line_editing">
+      <code>$00/$05-$BA   $00/$06-$EB   $00/$06-$F7</code>
+    </div>
+    <p>T00,S05 is loaded at $BB00; I already know about those. But what's all this on T00,S06? Let's find out.</p>
+    <div class="line_editing">
+      <code>]PR#5
+...
+]BLOAD BOOT1,A$2600
+]CALL -151</code>
+      <code>*FE89G FE93G
+*B600<2600.2FFFM</code>
+      <code>*BC00L
+.
+.
+.
+BCDE-   60          RTS</code>
+    </div>
+    <div class="listing">
+      <p class="comment">seems like one entry point is here</p>
+      <code>BCDF-   B1 3E       LDA   ($3E),Y
+BCE1-   2C FF BC    BIT   $BCFF
+BCE4-   30 07       BMI   $BCED
+BCE6-   18          CLC
+BCE7-   4D F0 03    EOR   $03F0   <-- !
+BCEA-   6D F1 03    ADC   $03F1   <-- !
+BCED-   4A          LSR
+BCEE-   60          RTS</code>
+      <p class="comment">another entry point is here</p>
+      <code>BCEF-   2A          ROL
+BCF0-   2C FF BC    BIT   $BCFF
+BCF3-   30 07       BMI   $BCFC
+BCF5-   38          SEC
+BCF6-   ED F1 03    SBC   $03F1   <-- !
+BCF9-   4D F0 03    EOR   $03F0   <-- !
+BCFC-   91 3E       STA   ($3E),Y
+BCFE-   60          RTS</code>
+    </div>
+    <p>Those two mystery values are embedded in the RWTS at a deep level. Another quick sector search for "20 DF BC" found the caller of $BCDF at $B805:</p>
+    <div class="line_editing">
+      <code>*B800L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">the "prenibble" routine, which converts 256 bytes in memory to 342 nibbles (to be written to disk)</p>
+      <code>B800-   A2 00       LDX   #$00
+B802-   A0 02       LDY   #$02
+B804-   88          DEY
+B805-   20 DF BC    JSR   $BCDF   <-- !
+B808-   3E 00 BC    ROL   $BC00,X
+B80B-   4A          LSR
+B80C-   3E 00 BC    ROL   $BC00,X
+B80F-   99 00 BB    STA   $BB00,Y
+B812-   E8          INX
+B813-   E0 56       CPX   #$56
+B815-   90 ED       BCC   $B804</code>
+    </div>
+    <p>...and the caller of $BCEF, at $B8D3:</p>
+    <div class="line_editing">
+      <code>*B8C2L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">the "postnibble" routine, which converts 342 nibbles (read from disk) to 256 bytes (to be stored in memory)</p>
+      <code>B8C2-   A0 00       LDY   #$00
+B8C4-   A2 56       LDX   #$56
+B8C6-   CA          DEX
+B8C7-   30 FB       BMI   $B8C4
+B8C9-   B9 00 BB    LDA   $BB00,Y
+B8CC-   5E 00 BC    LSR   $BC00,X
+B8CF-   2A          ROL
+B8D0-   5E 00 BC    LSR   $BC00,X
+B8D3-   20 EF BC    JSR   $BCEF   <-- !
+B8D6-   C8          INY
+B8D7-   C4 26       CPY   $26
+B8D9-   D0 EB       BNE   $B8C6
+B8DB-   60          RTS</code>
+    </div>
+    <p>Every nibble on this disk is decrypted on read and encrypted on write. No exceptions.</p>
+    <p>Well, one exception. What's this about $BCFF?</p>
+    <div class="listing">
+      <code>BCE1-   2C FF BC    BIT   $BCFF   <-- ?
+BCE4-   30 07       BMI   $BCED</code>
+    </div>
+    <p>and</p>
+    <div class="listing">
+      <code>BCF0-   2C FF BC    BIT   $BCFF   <-- ?
+BCF3-   30 07       BMI   $BCFC</code>
+    </div>
+    <p>A quick sector search for "FF BC" found where it's set, at $B758. The routine appears to start at $B74B.</p>
+    <div class="line_editing">
+      <code>*B74BL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">?</p>
+      <code>B74B-   8C F8 06    STY   $06F8</code>
+      <p class="comment">if ($48) points to an RWTS parameter table, then this will get the track number</p>
+      <code>B74E-   A0 04       LDY   #$04
+B750-   B1 48       LDA   ($48),Y</code>
+      <p class="comment">is it track $11?</p>
+      <code>B752-   C9 11       CMP   #$11</code>
+      <p class="comment">no, branch</p>
+      <code>B754-   D0 02       BNE   $B758</code>
+      <p class="comment">yes, set high bit</p>
+      <code>B756-   09 80       ORA   #$80</code>
+      <p class="comment">store the result</p>
+      <code>B758-   8D FF BC    STA   $BCFF
+B75B-   60          RTS</code>
+    </div>
+    <p>And after one final sector search for "20 4B B7", it appears that $B74B is called almost immediately after the RWTS entry point at $BD00:</p>
+    <div class="line_editing">
+      <code>*BD00L</code>
+    </div>
+    <div class="listing">
+      <code>BD00-   84 48       STY   $48
+BD02-   85 49       STA   $49
+BD04-   A0 02       LDY   #$02
+BD06-   20 4B B7    JSR   $B74B   <-- !
+BD09-   A0 04       LDY   #$04
+BD0B-   8C F8 04    STY   $04F8</code>
+    </div>
+    <p>(The instruction at $BD06 is supposed to be "STY $06F8", which explains why that instruction was replicated at $B74B.)</p>
+    <p>In other words, track $11 is the only track that is *not* encrypted. (Technically, T00,S00-T00,S09 are also unencrypted, because they're read by the disk controller ROM during boot.</p>
+    <p>But the other sectors on track $00 are encrypted, because they're read by the RWTS to load DOS.)</p>
+    <p>This explains why I could CATALOG the disk successfully from my work disk, but it crashed when I tried to RUN or LOAD anything. I wasn't running the original RWTS that knew how to decrypt each individual sector, and apparently it's not that difficult to crash DOS if you feed it bogus track/sector lists.</p>
+    <p>So, you know, don't do that.</p>
+    <p>Oh, and even if I swapped the original RWTS into memory, I would need to have the magic values in $03F0 and $03F1 in order for the decryption to work. And those are embedded in the desync'ed bitstream after a successful nibble check during boot.</p>
+    <p>Everything is awesome.</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which Everything Is Awesome When We're Living Our Dream</h3>
+
+    <p>I'm going to use the original disk as a weapon against itself. Once the magic values in page 3 are initialized, I can</p>
+    <p>I can use the original disk's RWTS (already captured) to decrypt every single sector on every single track, then write them out -- unencrypted, thankyouverymuch -- to a blank disk.</p>
+    <p>All I need is Advanced Demuffin and an IOB module. (Read the docs on my work disk for background on IOB modules.)</p>
+    <div class="line_editing">
+      <code>]PR#5
+...
+]CALL -151
+]BLOAD ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="listing">
+      <p class="comment">standard Advanced Demuffin setup (unchanged)</p>
+      <code>1400-   4A          LSR
+1401-   8D 22 0F    STA   $0F22
+1404-   8C 23 0F    STY   $0F23
+1407-   8E 27 0F    STX   $0F27
+140A-   A9 01       LDA   #$01
+140C-   8D 20 0F    STA   $0F20
+140F-   8D 2A 0F    STA   $0F2A</code>
+      <p class="comment">initialize decryption keys</p>
+      <code>1412-   A9 D7       LDA   #$D7
+1414-   8D F0 03    STA   $03F0
+1417-   A9 F9       LDA   #$F9
+1419-   8D F1 03    STA   $03F1</code>
+      <p class="comment">call RWTS</p>
+      <code>141C-   A9 0F       LDA   #$0F
+141E-   A0 1E       LDY   #$1E
+1420-   4C 00 BD    JMP   $BD00</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE IOB,A$1400,L$FB</code>
+    </div>
+    <p>Two things to keep in mind (that I got wrong the first few times I tried to do this):</p>
+    <p>1. The RWTS calls $B74B to set the flag at $BCFF that determines whether this track is encrypted.</p>
+    <p>If I tell Advanced Demuffin to use the RWTS file at $B800, I won't have that routine at $B74B, so the decryption either won't work at all or it will mistakenly decrypt the unencrypted track $11.</p>
+    <p>Solution: load BOOT1 at $B600. It includes the RWTS at $B800 and the extra routine at $B74B.</p>
+    <p>2. T00,S00-T00,S09 are not encrypted (because they're read by the disk controller ROM routine, not the RWTS), but the rest of track $00 is encrypted.</p>
+    <p>Solution: put my non-working copy in drive 2, then tell Advanced</p>
+    <p>Demuffin to start the conversion at T00,S0A.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=non-working copy]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>*BRUN ADVANCED DEMUFFIN</code>
+    </div>
+    <div class="curses_input">
+      <code>["5" to switch to slot 5]</code>
+      <code>["R" to load a new RWTS module]
+  --> At $B6, load "BOOT1" from drive 1</code>
+      <code>[press "I" to load a new IOB module]
+  --> load "IOB" from drive 1</code>
+      <code>["6" to switch to slot 6]</code>
+      <code>["C" to convert disk]</code>
+      <code>["Y" to change default values]</code>
+    </div>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======================================</code>
+      <code>
+INPUT ALL VALUES IN HEX</code>
+      <code>
+SECTORS PER TRACK? (13/16) 16</code>
+    </div>
+    <div class="curses">
+      <code>START TRACK: $00
+START SECTOR: $0A       <-- change this
+END TRACK: $22
+END SECTOR: $0F</code>
+    </div>
+    <div class="terminal_output">
+      <code>INCREMENT: 1</code>
+      <code>MAX # OF RETRIES: 0</code>
+      <code>COPY FROM DRIVE 1
+TO DRIVE: 2
+=======================================
+16SC $00,$0A-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <p class="seen">And here we go...</p>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:...................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0: ..................................
+SC1: ..................................
+SC2: ..................................
+SC3: ..................................
+SC4: ..................................
+SC5: ..................................
+SC6: ..................................
+SC7: ..................................
+SC8: ..................................
+SC9: ..................................
+SCA:...................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:...................................
+=======================================
+16SC $00,$0A-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+]LOAD HELLO,S6,D2
+]LIST</code>
+    </div>
+    <div class="terminal_output">
+      <code> 1  TEXT : HOME : NORMAL : SPEED=
+     255: PRINT : PRINT  CHR$ (4)
+     "MAXFILES1": HIMEM: 35752: PRINT
+      CHR$ (4)"BRUNMCS LOGO": POKE
+     230,32: POKE  - 16297,0: POKE
+      - 16302,0: POKE  - 16304,0
+ 10  POKE 104,65: POKE 16640,0: PRINT
+      CHR$ (4) + "RUNMCS INTRO" +
+      CHR$ (13)</code>
+    </div>
+    <p>Finally, I can undo the modifications to the RWTS and the bootloader.</p>
+    <p>Undo the "JSR $B74B" at $BD06: T00,S07,$06 change "204BB7" to "8CF806"</p>
+    <p>Undo the "JSR $BCEF" at $B8D3: T00,S02,$EF change "20EFBC" to "2A913E"</p>
+    <p>Undo the "JSR $BCDF" at $B805: T00,S02,$05 change "20DFBC" to "B13E4A"</p>
+    <p>Neutralize the nibble check at $BB34: T00,S05,$34 change "A9" to "60"</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

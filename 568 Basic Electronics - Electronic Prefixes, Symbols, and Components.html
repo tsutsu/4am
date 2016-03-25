@@ -1,0 +1,311 @@
+<!doctype html>
+<html><head>
+<title>Basic Electronics - Electronic Prefixes, Symbols, and Components</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">unable to read any track</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">no errors, but copy reboots endlessly</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p>all tracks use standard prologues (address: D5 AA 96, data: D5 AA AD) but modified epilogues (address: ED AA EB, data: EE AA EB)</p>
+    <p class="seen">Disk Fixer</p>
+    <p>["O" -> "Input/Output Control"] set Address Epilogue to "ED AA EB" set Data Epilogue to "EE AA EB"</p>
+    <p>Success! All tracks readable! T00 -> looks like a DOS 3.3 RWTS T11 -> DOS 3.3 disk catalog T01,S09 -> startup program is "ELEC.P.S.C-PROG.INIT"</p>
+    <p class="seen">T00,S06 has an interesting message:</p>
+    <div class="curses">
+      <code>------------- DISK EDIT ---------------
+TRACK $00/SECTOR $06/VOLUME $FE/BYTE$00
+---------------------------------------
+$00:>A0<A0 A0 A0 A0 A0 A0 A0
+$08: A0 A0 A0 A0 D4 C8 C9 D3       THIS
+$10: A0 C4 C9 D3 CB A0 D0 D2    DISK PR
+$18: CF D4 C5 C3 D4 C5 C4 A0   OTECTED
+$20: C2 D9 A0 D3 D4 C5 D6 C5   BY STEVE
+$28: A0 C7 CC C5 CE CE C5 D2    GLENNER
+$30: A7 D3 A0 A2 D4 C8 C5 A0   'S "THE
+$38: D3 C1 C6 C5 A2 A0 A0 A0   SAFE"
+$40: A0 A0 A0 A0 A0 A0 A0 A0
+$48: A0 A0 A0 A0 A0 A0 A0 A0
+$50: A0 A0 A0 A0 A0 A0 38 BD         8=
+$58: 8D C0 BD 8E C0 30 5E A9   .@=.@0^)
+$60: FF 9D 8F C0 DD 8C C0 48   ...@].@H
+$68: 68 20 C3 BC 20 C3 BC 9D   ( C< C<.
+$70: 8D C0 DD 8C C0 EA 88 D0   .@].@j.P
+$78: F0 A9 D5 20 D5 BC A9 AA   p)U U<)*
+---------------------------------------
+BUFFER 0/SLOT 6/DRIVE 1/MASK OFF/NORMAL</code>
+    </div>
+    <p class="seen">T01,S09 has another:</p>
+    <div class="curses">
+      <code>-------------- DISK EDIT --------------
+TRACK $01/SECTOR $09/VOLUME $FE/BYTE$60
+---------------------------------------
+$60:>F7<0D 00 0B 01 00 FE 00   wM@KA@~@
+$68: 01 00 06 00 01 00 00 00   A@F@A@@@
+$70: 00 00 00 03 00 C5 CC C5   @@@C@ELE
+$78: C3 AE D0 AE D3 AE C3 AD   C.P.S.C-
+$80: D0 D2 CF C7 AE C9 CE C9   PROG.INI
+$88: D4 A0 A0 A0 A0 A0 A0 A0   T
+$90: A0 A0 A0 D0 D2 CF D4 C5      PROTE
+$98: C3 D4 C5 C4 A0 D7 C9 D4   CTED WIT
+$A0: C8 A0 D3 C1 C6 C5 A0 B1   H SAFE 1
+$A8: AE B1 A0 A0 A0 A0 A0 A0   .1
+$B0: A0 03 84 00 00 00 40 00    C.@@@@@
+$B8: C1 D0 D0 CC C5 D3 CF C6   APPLESOF
+$C0: D4 E8 B7 BB B3 BB B4 00   Th7;3;4@
+$C8: C0 7E B3 21 AB 05 AC 57   @>3!+E,W
+$D0: AC 6F AC 2A AD 97 AD EE   ,/,*-.-n
+$D8: AC F5 AC 39 AC 11 AD 8D   ,u,9,Q-.
+---------------------------------------
+BUFFER 0/SLOT 6/DRIVE 1/MASK OFF/NORMAL</code>
+    </div>
+    <div class="terminal_output">
+      <code>---------------------------------------
+COMMAND : _</code>
+    </div>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">Why didn't my EDD copy work?</p>
+    <p class="seen">probably a nibble check during boot (programs do not spontaneously reboot unless someone tells them to)</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. capture RWTS with AUTOTRACE</p>
+    <p class="seen">2. convert disk to standard format with Advanced Demuffin</p>
+    <p class="seen">3. Patch RWTS to read standard format</p>
+    <p class="seen">4. find nibble check and bypass it</p>
+    <p class="seen">Let's go crack "The Safe."</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Attempt To Use The Original Disk As A Weapon Against Itself</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+      <code>]BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>["5" to switch to slot 5]</code>
+      <code>["R" to load a new RWTS module]
+  --> At $B8, load "RWTS" from drive 1</code>
+      <code>["6" to switch to slot 6]</code>
+      <code>["C" to convert disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:...................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:...................................
+SC1:...................................
+SC2:...................................
+SC3:...................................
+SC4:...................................
+SC5:...................................
+SC6:...................................
+SC7:...................................
+SC8:...................................
+SC9:...................................
+SCA:...................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:...................................
+=======================================
+16SC $00,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+]CATALOG,S6,D2</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+065 FREE</code>
+    </div>
+    <div class="line_editing">
+      <code>*A 002 ELEC.P.S.C-PROG.INIT
+*B 016 HELLO
+*A 054 SYM+COMP-1.1
+*A 011 WELCOME.ELEC.SYM+COMP-2
+*A 057 SYM+COMP-2.1
+*B 026 ALL-BINARY
+*A 034 ELEC.PREFIX-2
+*B 010 ALTS.FONT
+*B 002 ID.ELEC.PRE.SYM+COMP
+*A 013 INDEX.ELEC.PRE.SYM+COMP
+*A 012 WELCOME.ELEC.SYM+COMP-1
+*A 002 ELEC.PRE.SYM+COMP-A
+*A 019 ELEC.PRE.SYM+COMP-MR
+*A 024 SYM+COMP-1.2
+*A 038 SYM+COMP-1.3
+*A 053 SYM+COMP-1.4
+*A 007 WELCOME.ELEC.PREFIX
+*A 041 ELEC.PREFIX-1
+*B 006 ELEC.SHAPES.1
+*B 004 ELEC.SHAPES.2</code>
+      <code>]RUN ELEC.P.S.C-PROG.INIT
+...works...</code>
+    </div>
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...grinds then reboots...</code>
+    </div>
+    <p class="seen">Hmm.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Go Safe-Cracking And Discover A Most Curious Lock</h3>
+
+    <div class="line_editing">
+      <code>]PR#5
+]BLOAD BOOT1,A$2600
+]CALL -151</code>
+      <code>*FE89G FE93G     ; disconnect DOS
+*B600<2600.2FFF  ; move DOS into place
+*B700L
+.
+. nothing unusual, until...
+.
+B738-   20 00 BB    JSR   $BB00   <-- !</code>
+    </div>
+    <p class="seen">At $B738, I was expecting a call to $B793, the multi-sector read routine.</p>
+    <p class="seen">There shouldn't be any code at $BB00.</p>
+    <p class="seen">That page is used as scratch space by the RWTS, and it's overwritten on every sector read.</p>
+    <div class="line_editing">
+      <code>*BB00L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">relocate this code to graphics page</p>
+      <code>BB00-   A2 00       LDX   #$00
+BB02-   BD 00 BB    LDA   $BB00,X
+BB05-   9D 00 40    STA   $4000,X
+BB08-   CA          DEX
+BB09-   D0 F7       BNE   $BB02</code>
+      <p class="comment">and continue there</p>
+      <code>BB0B-   4C 0E 40    JMP   $400E</code>
+      <p class="comment">save RWTS parameter table</p>
+      <code>BB0E-   A2 10       LDX   #$10
+BB10-   BD E8 B7    LDA   $B7E8,X
+BB13-   9D 69 40    STA   $4069,X
+BB16-   CA          DEX
+BB17-   10 F7       BPL   $BB10</code>
+      <p class="comment">track $02</p>
+      <code>BB19-   A9 02       LDA   #$02
+BB1B-   8D EC B7    STA   $B7EC</code>
+      <p class="comment">sector $0F</p>
+      <code>BB1E-   A9 0F       LDA   #$0F
+BB20-   8D ED B7    STA   $B7ED</code>
+      <p class="comment">volume $00 (wildcard)</p>
+      <code>BB23-   A9 00       LDA   #$00
+BB25-   8D EB B7    STA   $B7EB</code>
+      <p class="comment">store at $4100</p>
+      <code>BB28-   A9 00       LDA   #$00
+BB2A-   8D F0 B7    STA   $B7F0
+BB2D-   A9 41       LDA   #$41
+BB2F-   8D F1 B7    STA   $B7F1</code>
+      <p class="comment">read</p>
+      <code>BB32-   A9 B7       LDA   #$B7
+BB34-   A0 E8       LDY   #$E8
+BB36-   20 00 BD    JSR   $BD00</code>
+      <p class="comment">fail on read error</p>
+      <code>BB39-   B0 07       BCS   $BB42</code>
+      <p class="comment">read entire track</p>
+      <code>BB3B-   CE ED B7    DEC   $B7ED
+BB3E-   10 F2       BPL   $BB32</code>
+      <p class="comment">continue at $BB45</p>
+      <code>BB40-   30 03       BMI   $BB45</code>
+      <p class="comment">failure path is here -- reboot immediately (this explains the behavior I saw on my failed bit copy)</p>
+      <code>BB42-   4C 00 C6    JMP   $C600</code>
+      <p class="comment">copy protection continues here</p>
+      <code>BB45-   EA          NOP
+BB46-   EA          NOP
+BB47-   EA          NOP</code>
+      <p class="comment">sector $00</p>
+      <code>BB48-   A9 00       LDA   #$00
+BB4A-   8D ED B7    STA   $B7ED</code>
+      <p class="comment">write?!?</p>
+      <code>BB4D-   A9 02       LDA   #$02
+BB4F-   8D F4 B7    STA   $B7F4</code>
+      <p class="comment">call RWTS to write the sector we just read (back to T02,S00)</p>
+      <code>BB52-   A9 B7       LDA   #$B7
+BB54-   A0 E8       LDY   #$E8
+BB56-   20 00 BD    JSR   $BD00</code>
+      <p class="comment">aha! if that *worked*, fail</p>
+      <code>BB59-   90 E7       BCC   $BB42</code>
+      <p class="comment">restore original RWTS parameter table</p>
+      <code>BB5B-   A2 10       LDX   #$10
+BB5D-   BD 69 40    LDA   $4069,X
+BB60-   9D E8 B7    STA   $B7E8,X
+BB63-   CA          DEX
+BB64-   10 F7       BPL   $BB5D</code>
+      <p class="comment">continue to real multi-sector read</p>
+      <code>BB66-   4C 93 B7    JMP   $B793</code>
+    </div>
+    <p class="seen">Did you catch that? This is a very elaborate way of checking that the disk is... write-protected.</p>
+    <p class="seen">To verify this, I went back to the copy</p>
+    <p class="seen">I made with EDD 4 bit copy, and write- protected the disk. It boots right up without complaint.</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which We Remove All Traces Of Copy Protection Using An Automated Tool That I Wrote For Just Such An Occasion</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+]BRUN PDP</code>
+    </div>
+    <p class="seen">; fix epilogue byte checking in RWTS</p>
+    <p>T00,S03,$91 change ED to DE T00,S03,$35 change EE to DE T00,S06,$AE change ED to DE T00,S02,$9E change EE to DE</p>
+    <p class="seen">; bypass copy protection</p>
+    <p class="seen">T00,S01,$39 change 00BB to 93B7</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<section>
+  <h2>Changelog</h2>
+
+    <div class="terminal_output">
+      <code>2016-01-14</code>
+    </div>
+    <p class="seen">- typo</p>
+    <div class="terminal_output">
+      <code>2016-01-13</code>
+    </div>
+    <p class="seen">- initial release</p>
+</section>
+
+</body></html>

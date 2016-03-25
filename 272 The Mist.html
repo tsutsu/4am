@@ -1,0 +1,299 @@
+<!doctype html>
+<html><head>
+<title>The Mist</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">unable to read any track</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">no errors, but copy reboots endlessly</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">all tracks use standard prologues (address: D5 AA 96, data: D5 AA AD) but modified epilogues (address: FF FF EB, data: FF FF EB)</p>
+    <p class="seen">Disk Fixer</p>
+    <p class="seen">["O" -> "Input/Output Control"] set Address Epilogue to "FF FF EB" set Data Epilogue to "FF FF EB"</p>
+    <p>Success! All tracks readable!</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">Why didn't my EDD copy work?</p>
+    <p class="seen">probably a nibble check during boot</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Super Demuffin</p>
+    <p>2. Patch RWTS (if necessary)</p>
+    <p class="seen">3. Find nibble check and bypass it</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Choose The Right Tool For The Job</h3>
+
+    <p>I'm going to use Super Demuffin here (instead of my usual go-to conversion tool, Advanced Demuffin). The disk is</p>
+    <p>Pascal-based, so my AUTOTRACE script on my work disk won't capture the RWTS.</p>
+    <p>But luckily, the RWTS modifications are minor -- custom epilogue bytes, same on every track -- so Super Demuffin will work just fine.</p>
+    <p class="seen">When you first run Super Demuffin, it asks for the parameters of the original disk. In this case, the prologue bytes are the same, but the epilogues are "FF FF EB" instead of "DE AA EB".</p>
+    <div class="curses">
+      <code>      SUPER-DEMUFFIN AND FAST COPY
+Modified by: The Saltine/Coast to Coast</code>
+      <code>
+   Address prologue: D5 AA 96</code>
+      <code>   Address epilogue: FF FF EB    DISK
+                     ^^^^^     ORIGINAL
+             *change from "DE AA"</code>
+      <code>      Data prologue: D5 AA AD</code>
+      <code>      Data epilogue: FF FF EB
+                     ^^^^^
+             *change from "DE AA"</code>
+      <code>
+ Ignore write errors while demuffining!</code>
+      <code>
+  D - Edit parameters
+      <SPACE> - Advance to next parm
+      <RETURN> - Exit edit mode
+  R - Restore DOS 3.3 parameters
+  O - Edit Original disk's parameters
+  C - Edit Copy disk's parameters
+  G - Begin demuffin process</code>
+    </div>
+    <p class="seen">Pressing "G" switches to the Locksmith</p>
+    <p class="seen">Fast Disk Copy UI. It assumes that both disks are in slot 6, and that drive 1 is the original and drive 2 is the copy.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>     LOCKSMITH 7.0  FAST DISK BACKUP</code>
+      <code>
+   R...................................
+   W***********************************
+HEX 00000000000000001111111111111111222
+TRK 0123456789ABCDEF0123456789ABCDEF012
+   0...................................
+   1...................................
+   2...................................
+   3...................................
+   4...................................
+   5...................................
+   6...................................
+   7...................................
+   8...................................
+   9...................................
+   A...................................
+   B...................................
+   C...................................
+   D...................................
+12 E...................................
+   F...................................
+[               ] PRESS [RESET] TO EXIT</code>
+    </div>
+    <p class="seen">There are two problems with this copy:</p>
+    <p class="seen">1. Depending on how the original disk</p>
+    <p class="seen">was written, this copy may or may not be able to read itself. I may need to patch the disk's RWTS to deal with the fact that the disk is now in a standard format.</p>
+    <p class="seen">2. Even if it can read itself, it won't</p>
+    <p class="seen">run. The copies I tried to make -- even the bit copies -- just rebooted endlessly, which means there is some code being executed during boot to check if the disk is original. (Hint: it's not.)</p>
+    <p class="seen">Just by booting the copy, I can rule out problem #1. The disk seems to read itself just fine. It makes it exactly as far as the failed bit copy -- far enough to figure out that it's not an original disk and reboot.</p>
+    <p class="seen">It's time for a little boot tracing.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>Every Day A Little Boot Trace</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0</code>
+      <code>]CALL -151</code>
+      <code>*800<2800.28FFM</code>
+      <code>*801L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">only supports booting from slot 6</p>
+      <code>0801-   E0 60       CPX   #$60
+0803-   F0 03       BEQ   $0808
+0805-   4C E3 08    JMP   $08E3</code>
+      <p class="comment">this is a loop that reuses the disk controller ROM routine to read several more sectors from track 0</p>
+      <code>0808-   AD 00 08    LDA   $0800
+080B-   C9 06       CMP   #$06</code>
+      <p class="comment">break out of read loop</p>
+      <code>080D-   B0 0A       BCS   $0819
+080F-   69 02       ADC   #$02
+0811-   8D 00 08    STA   $0800
+0814-   E6 3D       INC   $3D</code>
+      <p class="comment">jump to ROM to read the sector into the memory page given in zero page $3D (this jumps back to $801 when it finishes, which is why this read loop is actually a loop)</p>
+      <code>0816-   4C 5C C6    JMP   $C65C</code>
+      <p class="comment">out of the read loop</p>
+      <code>0819-   A9 00       LDA   #$00</code>
+      <p class="comment">don't know what this does yet</p>
+      <code>081B-   20 00 0B    JSR   $0B00</code>
+    </div>
+    <p class="seen">This is where I need to interrupt the boot process.</p>
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up callback after boot0 breaks out of the initial read loop</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D 19 08    STA   $0819
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D 1A 08    STA   $081A
+9702-   A9 97       LDA   #$97
+9704-   8D 1B 08    STA   $081B</code>
+      <p class="comment">start the boot</p>
+      <code>9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">callback is here turn off slot 6 drive motor</p>
+      <code>970A-   AD E8 C0    LDA   $C0E8</code>
+      <p class="comment">relocate the boot1 code to hi-res page 1 so it will survive a reboot</p>
+      <code>970D-   A2 04       LDX   #$04
+970F-   A0 00       LDY   #$00
+9711-   B9 00 08    LDA   $0800,Y
+9714-   99 00 28    STA   $2800,Y
+9717-   C8          INY
+9718-   D0 F7       BNE   $9711
+971A-   EE 13 97    INC   $9713
+971D-   EE 16 97    INC   $9716
+9720-   CA          DEX
+9721-   D0 EE       BNE   $9711</code>
+      <p class="comment">reboot to my work disk</p>
+      <code>9723-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE1,A$9600,L$126</code>
+      <code>*9600G
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]BSAVE BOOT1,A$2800,L$400
+]CALL-151</code>
+      <code>*800<2800.2BFFM</code>
+      <code>*B00L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">usually holds current track (so the RWTS knows whether it needs to adjust the drive head, and in which direction)</p>
+      <code>0B00-   8D 78 04    STA   $0478</code>
+      <p class="comment">save zero page</p>
+      <code>0B03-   A2 FF       LDX   #$FF
+0B05-   B5 00       LDA   $00,X
+0B07-   9D 00 30    STA   $3000,X
+0B0A-   CA          DEX
+0B0B-   D0 F8       BNE   $0B05
+0B0D-   A9 0A       LDA   #$0A
+0B0F-   85 50       STA   $50
+0B11-   A6 2B       LDX   $2B</code>
+      <p class="comment">turn on drive motor manually and go into read mode -- this is always suspicious (outside of RWTS code)</p>
+      <code>0B13-   BD 89 C0    LDA   $C089,X
+0B16-   BD 8E C0    LDA   $C08E,X
+0B19-   A9 97       LDA   #$97
+0B1B-   85 48       STA   $48
+0B1D-   A9 0B       LDA   #$0B
+0B1F-   85 49       STA   $49
+0B21-   A9 80       LDA   #$80
+0B23-   85 51       STA   $51</code>
+      <p class="comment">looks like the beginnings of a nibble check, with the failure path leading to $0B90</p>
+      <code>0B25-   C6 51       DEC   $51</code>
+      <p class="comment">if zero page $51 counts down to 0, give up</p>
+      <code>0B27-   F0 67       BEQ   $0B90</code>
+      <p class="comment">this subroutine positions the drive head to (presumably) where the nibble check needs it</p>
+      <code>0B29-   20 9F 0B    JSR   $0B9F</code>
+      <p class="comment">if that failed, give up</p>
+      <code>0B2C-   B0 62       BCS   $0B90</code>
+      <p class="comment">Search for a specific sequence of nibbles in the "dead zone" between the address field and data field.</p>
+      <p class="comment">This area is normally not important, so COPYA didn't copy it precisely because normal disks don't care. (Actually, it's even more evil than that, because the original disk is written with timing bits in specific non-standard places between the nibbles in the dead zone. This code not only requires the right nibbles in the right order, it reads them just slightly slower than normal. So the timing bits need to be in the right places too, or else this code will read the wrong nibble values while it's out of sync. This will trip up even the best bit copiers.</p>
+      <p class="comment">And you can forget about making a disk image for emulators -- those don't store timing bits at all.)</p>
+      <code>0B2E-   A5 2E       LDA   $2E
+0B30-   C9 05       CMP   #$05
+0B32-   D0 F1       BNE   $0B25
+0B34-   A0 00       LDY   #$00
+0B36-   BD 8C C0    LDA   $C08C,X
+0B39-   10 FB       BPL   $0B36
+0B3B-   88          DEY</code>
+      <p class="comment">give up</p>
+      <code>0B3C-   F0 52       BEQ   $0B90
+0B3E-   C9 D5       CMP   #$D5
+0B40-   D0 F4       BNE   $0B36
+0B42-   A0 00       LDY   #$00
+0B44-   BD 8C C0    LDA   $C08C,X
+0B47-   10 FB       BPL   $0B44
+0B49-   88          DEY</code>
+      <p class="comment">give up</p>
+      <code>0B4A-   F0 44       BEQ   $0B90
+0B4C-   C9 E7       CMP   #$E7
+0B4E-   D0 F4       BNE   $0B44
+0B50-   BD 8C C0    LDA   $C08C,X
+0B53-   10 FB       BPL   $0B50
+0B55-   C9 E7       CMP   #$E7</code>
+      <p class="comment">give up</p>
+      <code>0B57-   D0 37       BNE   $0B90
+0B59-   BD 8C C0    LDA   $C08C,X
+0B5C-   10 FB       BPL   $0B59
+0B5E-   C9 E7       CMP   #$E7</code>
+      <p class="comment">give up</p>
+      <code>0B60-   D0 2E       BNE   $0B90</code>
+      <p class="comment">kill some time to get out of sync with the "proper" start of nibbles)</p>
+      <code>0B62-   BD 8D C0    LDA   $C08D,X
+0B65-   A0 10       LDY   #$10
+0B67-   24 06       BIT   $06</code>
+      <p class="comment">now start looking for nibbles that don't really exist (except they do, because we're out of sync and reading timing bits as data)</p>
+      <code>0B69-   BD 8C C0    LDA   $C08C,X
+0B6C-   10 FB       BPL   $0B69
+0B6E-   88          DEY</code>
+      <p class="comment">give up</p>
+      <code>0B6F-   F0 1F       BEQ   $0B90
+0B71-   C9 EE       CMP   #$EE
+0B73-   D0 F4       BNE   $0B69</code>
+      <p class="comment">check for nibble sequence stored in reverse order at $0B97</p>
+      <code>0B75-   A0 07       LDY   #$07
+0B77-   BD 8C C0    LDA   $C08C,X
+0B7A-   10 FB       BPL   $0B77
+0B7C-   D1 48       CMP   ($48),Y</code>
+      <p class="comment">give up</p>
+      <code>0B7E-   D0 10       BNE   $0B90
+0B80-   88          DEY
+0B81-   10 F4       BPL   $0B77</code>
+      <p class="comment">restore zero page</p>
+      <code>0B83-   A2 FF       LDX   #$FF
+0B85-   BD 00 30    LDA   $3000,X
+0B88-   95 00       STA   $00,X
+0B8A-   CA          DEX
+0B8B-   D0 F8       BNE   $0B85</code>
+      <p class="comment">if we made it this far, the nibble check passed -- load X register with $60 (presumably the slot number x 16) and exit gracefully</p>
+      <code>0B8D-   A2 60       LDX   #$60
+0B8F-   60          RTS</code>
+      <p class="comment">failure path is here -- decrement a counter and eventually give up and reboot</p>
+      <code>0B90-   C6 50       DEC   $50
+0B92-   D0 8D       BNE   $0B21
+0B94-   4C 00 C6    JMP   $C600</code>
+    </div>
+    <p class="seen">To sum up: if the nibble check fails enough times, it gives up and reboots (at $0B94). If the nibble check passes, it just changes the X register to $60 (at $0B8D) and returns gracefully. It doesn't even set or clear the carry flag.</p>
+    <p class="seen">To bypass this, it should be enough to change the original "JSR $0B00" to "STA $0478" (which was the first instruction at $0B00 and is what is usually there in the boot0 code in the first place).</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which We Remove All Traces Of Copy Protection Using An Automated Tool That I Wrote For Just Such An Occasion</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+]BRUN PDP</code>
+    </div>
+    <p class="seen">T00,S00,$1B change 20000B to 8D7804</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

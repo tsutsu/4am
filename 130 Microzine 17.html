@@ -1,0 +1,315 @@
+<!doctype html>
+<html><head>
+<title>Microzine 17</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+
+    <p>"Microzine" was an educational disk- based magazine published by Scholastic between 1983 and 1992. Issue no. 17 is a double-sided disk that features "MicroAgent of the Body Guard" and "Marvelous Menagerie."</p>
+    <div class="curses_input">
+      <code>[The copy protection is identical to
+several other titles I've seen before,
+including</code>
+    </div>
+    <p class="seen">- "Gertrude's Secrets, "Bumble Games,"</p>
+    <p class="seen">"Juggles' Rainbow, "Moptown Parade," "Reader Rabbit," and "Wizard of</p>
+    <p class="seen">Words" by The Learning Company</p>
+    <p class="seen">- "Xevious" by Mindscape</p>
+    <p class="seen">- "The Notable Phantom" by DesignWare</p>
+    <p class="seen">- "Animal Kingdom" and "Race Car</p>
+    <p class="seen">'Rithmetic" by Unicorn Software</p>
+    <p class="seen">- "Pitstop II" by Epyx</p>
+    <p>- Microzine 12 by Scholastic</p>
+    <p>That's six different companies using identical copy protection, presumably sourced from the same vendor. Who was it? I wish I knew.</p>
+    <p class="seen">Anyway, this write-up is quite similar to those, with a few updates and corrections.]</p>
+    <p class="seen">Side B is unprotected. However, side A is uncopyable by any automated method. COPYA fails miserably and immediately. EDD 4 bit copy gives no read errors, but the copy it creates only gets as far as loading DOS and displaying the BASIC prompt before filling the screen with garbage and rebooting.</p>
+    <p class="seen">In my experience, disks do not spontaneously reboot unless someone tells them to.</p>
+    <p class="seen">Turning to my trusty Disk Fixer sector editor, I press "O" to get to the</p>
+    <p class="seen">Input/Output Control and set "CHECKSUM ENABLED" to "NO". This will ignore the checksum bytes and epilogue sequences. i.e. As long as the address and data prologue are standard ("D5 AA 96" and "D5 AA AD", respectively), this will allow me to read each sector. And lo and behold, it works! I can read the data from every sector on every track.</p>
+    <p class="seen">Track $11 does appear to contain a disk catalog, which strongly suggests this program is file-based.</p>
+    <p class="seen">Based on my limited experience cracking other disks, I would guess that this disk has</p>
+    <p class="seen">- Standard prologue bytes before the</p>
+    <p class="seen">address and data fields [otherwise a sector editor would give read errors, even when ignoring checksums]</p>
+    <p class="seen">- Non-standard epilogue bytes after the</p>
+    <p class="seen">address and data fields [otherwise COPYA would work]</p>
+    <p class="seen">- Some secondary protection [otherwise</p>
+    <p class="seen">the bit copy created with EDD 4 would work]</p>
+    <p class="seen">Given the (relatively) weak structural protection, I used to turn to the DOS</p>
+    <p class="seen">3.3 master disk, patch the RWTS to ignore checksums and epilogue bytes (changing $B942 from "SEC" to "CLC"), and run COPYA. Then, one fine day, and completely by accident, I came across an original disk with a bad sector. I suppose this shouldn't surprise me.</p>
+    <p class="seen">These floppies are decades old by now; it's amazing any of them work at all.</p>
+    <p class="seen">The point is, I shouldn't be using tools that ignore potentially serious read errors. There are other tools, like Super Demuffin, that can convert a disk like this (with non-standard epilogue bytes) into a standard format.</p>
+    <p class="seen">It requires figuring out what the actual epilogue bytes are, but it has the advantage of surfacing a read error if the original disk actually has a read error.</p>
+    <p class="seen">So... no more COPYA+B942:18 patch. From now on, it's Super Demuffin or Advanced</p>
+    <p class="seen">Demuffin to convert disks to a standard format. Just by looking at the first few sectors, it appears that this disk uses a DOS 3.3-derived RWTS, which means that my AUTOTRACE program should be able to extract the RWTS from the original disk.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk, side A]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+/!\ BOOT0 JUMPS TO $08C0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS
+/!\ NIBBLE CHECK AT $BB00</code>
+    </div>
+    <p class="seen">Well, that worked flawlessly. My work disk first runs AUTOTRACE0, which sets up a minimal boot trace to capture the first sector of track 0 and saves it to the file "BOOT0" (on my work disk, not the original disk). If the first sector looks reasonably normal, it runs AUTOTRACE1, which sets up a more involved boot trace to capture the rest of track 0 and save it to the file "BOOT1". If *that* looks reasonably normal, it saves the RWTS to a file, unimaginatively named "RWTS", which can be loaded with Advanced Demuffin to copy each track of the original disk to a duplicate with standard address/data prologue/epilogue sequences.</p>
+    <p>Along the way, it noticed that boot0 is jumping to $08C0, and that there's a possible nibble check at $BB00. I'll definitely want to look at those later, but first I'm going to use Advanced</p>
+    <p>Demuffin to convert this disk to a standard format.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk, side A]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>[press "5" to switch to slot 5]</code>
+      <code>[press "R" to load a new RWTS module]
+  --> At $B8, load "RWTS" from drive 1</code>
+      <code>[press "6" to switch to slot 6]</code>
+      <code>[press "C" to convert disk]</code>
+    </div>
+    <p class="seen">This disk is 16 sectors, and the default options (copy the entire disk, all tracks, all sectors) don't need to be changed unless something goes horribly wrong.</p>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:...................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:...................................
+SC1:...................................
+SC2:...................................
+SC3:...................................
+SC4:...................................
+SC5:...................................
+SC6:...................................
+SC7:...................................
+SC8:...................................
+SC9:...................................
+SCA:...................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:...................................
+=======================================
+16SC $00,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <p class="seen">The disk's own RWTS gave no read errors on any track. This is the power and the genius of Advanced Demuffin. Every disk must be able to read itself. So, let it read itself, then capture the data and write it out in a standard format.</p>
+    <p class="seen">There are two problems with this copy:</p>
+    <p class="seen">1. Depending on how the original disk</p>
+    <p class="seen">was written, this copy may or may not be able to read itself. I may need to patch the disk's RWTS to deal with the fact that the disk is now in a standard format.</p>
+    <p class="seen">2. Even if it can read itself, it won't</p>
+    <p class="seen">run. The copies I tried to make -- even the bit copies -- just rebooted endlessly, which means there is some code being executed during boot to check if the disk is original. (Hint: it's not.)</p>
+    <p class="seen">Just by booting my copy, I can rule out problem #1. The disk seems to read itself just fine. It makes it exactly as far as my failed bit copy -- far enough to figure out that it's not an original disk, fill the screen with garbage, and reboot.</p>
+    <p class="seen">But wait...</p>
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]CATALOG,S6,D1</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+007 FREE</code>
+      <code> A 005 HELLO
+ B 010 HRCG
+ B 002 UNP
+ B 006 MZ3
+ B 013 QQ
+ B 002 SOUNDS
+ A 035 CONTENTS
+ B 014 PICDRAW
+ B 014 PICDRAWL
+ T 002 SIDE
+ T 002 TXT
+ T 006 BODY INDEX
+ T 005 SAVE GAME
+ A 054 TIX BODY
+ B 003 GUMDROP.SSH
+ B 003 SURFER.SSH
+ B 002 FACE/C.SPC
+ B 011 BODY.ANM
+ B 002 BODY.SPC
+ B 003 SF.SPC
+ B 012 TITLE.SPC
+ B 006 A.SPC
+ B 006 B.SPC
+ B 006 C.SPC
+ B 007 D.SPC
+ B 006 E.SPC
+ B 009 F.SPC
+ B 005 G.SPC
+ B 014 H.SPC
+ B 011 I.SPC
+ B 008 J.SPC
+ B 003 K.SPC
+ B 005 L.SPC
+ B 015 M.SPC
+ B 013 N.SPC
+ B 012 O.SPC
+ B 013 P.SPC
+ B 009 Q.SPC
+ A 005 INSTRUCTIONS
+ T 130 BODY</code>
+    </div>
+    <div class="line_editing">
+      <code>]RUN HELLO</code>
+    </div>
+    <p class="seen">It works! All further disk access is done through DOS functions, and it doesn't seem to mind being booted from a third-party DOS. That's great news, because it narrows down the search field significantly. Whatever is preventing it from booting is confined to the DOS area in tracks 0-2.</p>
+    <p class="seen">My AUTOTRACE program warned that there was a nibble check at $BB00. Let's see if that's true.</p>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]BLOAD BOOT0,A$800
+]CALL -151</code>
+      <code>*801L
+...</code>
+    </div>
+    <p class="seen">Everything here looks pretty normal (i.e. just like an unprotected DOS 3.3 disk), until it goes to jump to the boot1 code. Usually that happens with an indirect JMP ($08FD), which, in a normal boot0, will end up continuing execution at $B700 which is stored in track 0, sector 1. But in this case, I see:</p>
+    <div class="listing">
+      <code>084A-   4C C0 08    JMP   $08C0</code>
+    </div>
+    <div class="line_editing">
+      <code>*8C0L</code>
+    </div>
+    <div class="listing">
+      <code>08C0-   8E E9 B7    STX   $B7E9
+08C3-   6C FD 08    JMP   ($08FD)</code>
+    </div>
+    <p>Once I load up the boot1 code I captured earlier, it becomes clear why boot0 needed to take a little detour.</p>
+    <div class="line_editing">
+      <code>*BLOAD BOOT1,A$2600</code>
+      <code>*FE89G FE93G     ; disconnect DOS</code>
+      <code>*B600<2600.2FFFM ; move RWTS into place</code>
+      <code>*B700L</code>
+    </div>
+    <div class="listing">
+      <code>B700-   20 00 BB    JSR   $BB00</code>
+    </div>
+    <p>Aha! I've learned from previous cracks (and from actually reading "Beneath</p>
+    <p>Apple DOS" instead of, you know, just staring at it on my bookshelf) that, in a standard DOS-3.3-derived RWTS, the area from $BB00 to $BC55 is overwritten during every disk read. (It's used as scratch space during denibblization, which is totally a real word that I just made up.)</p>
+    <p class="seen">So why is there executable code there?</p>
+    <p>I've captured it already. Let's see.</p>
+    <div class="line_editing">
+      <code>*BB00L</code>
+    </div>
+    <div class="listing">
+      <code>BB00-   A0 00       LDY   #$00
+BB02-   B9 00 BB    LDA   $BB00,Y
+BB05-   99 00 02    STA   $0200,Y
+BB08-   88          DEY
+BB09-   D0 F7       BNE   $2B02
+BB0B-   60          RTS</code>
+    </div>
+    <p class="seen">Well that's definitely suspicious.</p>
+    <p class="seen">Relocating yourself into the input buffer at $0200? Seriously, who does that?</p>
+    <p class="seen">I'm guessing that the first instruction after this is the entry point, so after relocation, that would be $020C.</p>
+    <div class="line_editing">
+      <code>*20C<BB0C.BBFFM</code>
+      <code>*20CL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">this subroutine seeks to track $11 and sets the reset vector to something unfriendly</p>
+      <code>020C-   20 CF 02    JSR   $02CF
+020F-   A9 0A       LDA   #$0A
+0211-   85 2A       STA   $2A</code>
+      <p class="comment">initialize disk motor (highly suspicious)</p>
+      <code>0213-   AE E9 B7    LDX   $B7E9
+0216-   BD 89 C0    LDA   $C089,X
+0219-   BD 8E C0    LDA   $C08E,X</code>
+      <p class="comment">set some counters</p>
+      <code>021C-   A9 C7       LDA   #$C7
+021E-   85 48       STA   $48
+0220-   A9 02       LDA   #$02
+0222-   85 49       STA   $49
+0224-   A9 80       LDA   #$80
+0226-   85 29       STA   $29
+0228-   C6 29       DEC   $29</code>
+      <p class="comment">reboots (bad)</p>
+      <code>022A-   F0 67       BEQ   $0293</code>
+      <p class="comment">position the drive head to where the nibble check needs it</p>
+      <code>022C-   20 44 B9    JSR   $B944
+022F-   B0 62       BCS   $0293
+0231-   A5 2D       LDA   $2D
+0233-   C9 0D       CMP   #$0D
+0235-   D0 F1       BNE   $0228
+0237-   A0 00       LDY   #$00
+0239-   BD 8C C0    LDA   $C08C,X
+023C-   10 FB       BPL   $0239
+023E-   88          DEY</code>
+      <p class="comment">reboots (bad)</p>
+      <code>023F-   F0 52       BEQ   $0293</code>
+      <p class="comment">Search for a specific sequence of nibbles in the "dead zone" between the address field and data field.</p>
+      <p class="comment">This area is normally not important, so COPYA didn't copy it precisely because normal disks don't care. (Actually, it's even more evil than that, because the original disk is written with timing bits in specific non-standard places between the nibbles in the dead zone. This code not only requires the right nibbles in the right order, it reads them just slightly slower than normal. So the timing bits need to be in the right places too, or else this code will read the wrong nibble values while it's out of sync. This will trip up even the best bit copiers.</p>
+      <p class="comment">And you can forget about making a disk image for emulators -- those don't store timing bits at all.)</p>
+      <code>0241-   C9 D5       CMP   #$D5
+0243-   D0 F4       BNE   $0239
+0245-   A0 00       LDY   #$00
+0247-   BD 8C C0    LDA   $C08C,X
+024A-   10 FB       BPL   $0247
+024C-   88          DEY</code>
+      <p class="comment">reboots (bad)</p>
+      <code>024D-   F0 44       BEQ   $0293
+024F-   C9 E7       CMP   #$E7
+0251-   D0 F4       BNE   $0247
+0253-   BD 8C C0    LDA   $C08C,X
+0256-   10 FB       BPL   $0253
+0258-   C9 E7       CMP   #$E7</code>
+      <p class="comment">reboots (bad)</p>
+      <code>025A-   D0 37       BNE   $0293
+025C-   BD 8C C0    LDA   $C08C,X
+025F-   10 FB       BPL   $025C
+0261-   C9 E7       CMP   #$E7</code>
+      <p class="comment">reboots (bad)</p>
+      <code>0263-   D0 2E       BNE   $0293</code>
+      <p class="comment">kill some time to get out of sync with the "proper" start of nibbles)</p>
+      <code>0265-   BD 8D C0    LDA   $C08D,X
+0268-   A0 10       LDY   #$10
+026A-   24 06       BIT   $06</code>
+      <p class="comment">now start looking for nibbles that don't really exist (except they do, because we're out of sync and reading timing bits as data)</p>
+      <code>026C-   BD 8C C0    LDA   $C08C,X
+026F-   10 FB       BPL   $026C
+0271-   88          DEY</code>
+      <p class="comment">reboots (bad)</p>
+      <code>0272-   F0 1F       BEQ   $0293
+0274-   C9 EE       CMP   #$EE
+0276-   D0 F4       BNE   $026C</code>
+      <p class="comment">check for nibble sequence stored in reverse order at $2C7</p>
+      <code>0278-   A0 07       LDY   #$07
+027A-   BD 8C C0    LDA   $C08C,X
+027D-   10 FB       BPL   $027A
+027F-   D1 48       CMP   ($48),Y
+0281-   D0 10       BNE   $0293
+0283-   88          DEY
+0284-   10 F4       BPL   $027A</code>
+      <p class="comment">if we made it this far, the nibble check passed</p>
+      <code>0286-   A9 80       LDA   #$80
+0288-   8D 4E 9E    STA   $9E4E
+028B-   A9 A1       LDA   #$A1
+028D-   8D 4F 9E    STA   $9E4F
+0290-   4C 4D 9E    JMP   $9E4D</code>
+    </div>
+    <p class="seen">That last section at $0286..$0290 is interesting. After the nibble check passes, it replaces two bytes at $9E4E and $9E4F, then immediately jumps to $9E4D. That implies that this nibble check is called via an unconditional jump, not a JSR. With my trusty Disk</p>
+    <p>Fixer sector editor, I searched the disk for "4C 0C 02" (JMP $020C) and found only one instance, on track 00, sector $0B. If I change that to jump to $A180 instead, it should bypass the nibble check that was copied to low memory earlier.</p>
+    <p class="seen">T00,S0B,$4E change "0C 02" to "80 A1"</p>
+    <p class="seen">Success! The disk boots and runs with no complaint. There doesn't appear to be any further protection.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

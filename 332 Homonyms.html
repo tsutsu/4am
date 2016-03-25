@@ -1,0 +1,664 @@
+<!doctype html>
+<html><head>
+<title>Homonyms</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">can't read anything beyond T00,S00</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">works</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">appears to be 13-sector, 5-3 encoded address prologue "D5 AA B5" (normal) epilogue "DA AA EB" (modified) data prologue "D5 AA AD" (normal) epilogue "DA AA EB" (modified)</p>
+    <p class="seen">Disk Fixer</p>
+    <p class="seen">T00,S00 looks like hybrid DOS 3.2/3.3 bootloader otherwise useless on 5-3 encoded disk</p>
+    <p class="seen">Copy ][ Plus 5.5 sector editor</p>
+    <p class="seen">["P" for sector editor patcher] ["DOS 3.2"] ["CUSTOM"] ["WANTED EPILOG" = "DA AA" (both)]</p>
+    <p class="seen">Should look like this (important bits are highlighted):</p>
+    <div class="terminal_output">
+      <code>SECTOR EDITOR PATCHER            DISK A</code>
+      <code>DOS 3.3
+DOS 3.3 PATCHED
+DOS 3.2
+DOS 3.2 PATCHED
+CUSTOM <<
+---------------------------------------
+CUSTOM</code>
+      <code>                ADDRESS  DATA</code>
+      <code>        PROLOG: D5 AA B5 D5 AA AD
+                      ^^</code>
+      <code> WANTED EPILOG: DA AA    DA AA EB FF FF
+                ^^       ^^</code>
+      <code>   READ EPILOG= DA AA    DA AA EB FF FF
+CHECK CHECKSUM? YES      YES
+  CHECK EPILOG? YES      YES
+   CHECK TRACK? YES
+          DATA ENCODING: 5&3
+                         ^^^</code>
+      <code>          CHECKSUM SEED: 00
+        CHECKSUM RESULT= 00</code>
+    </div>
+    <p>Success! T00,S0B - T22,S0C readable! T11 -> looks like disk catalog T01,S0B -> startup program is "HELLO"</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p class="seen">not a 16-sector disk</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">not a 16-sector disk</p>
+    <p class="seen">EDD worked. What does that tell us?</p>
+    <p class="seen">no half or quarter tracks almost certainly no nibble check just structural changes to prologues/ epilogues</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Capture 13-sector RWTS with AUTOTRACE</p>
+    <p class="seen">2. Convert to 16-sector format with</p>
+    <p class="seen">Advanced Demuffin</p>
+    <p class="seen">3. Copy files to freshly formatted DOS 3.3 disk</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Show Off The New Shiny</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+/!\ BOOT0 RELOCATES TO $0200
+CAPTURING BOOT0 STAGE 2
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0 STAGE 2
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS
+/!\ 13-SECTOR RWTS</code>
+    </div>
+    <p class="seen">Some recent upgrades to my AUTOTRACE program come in handy here. T00,S00 relocates itself to low memory, then re-uses the disk controller ROM routine to read one sector into $0300. That loads a full copy of DOS 3.2, including the final RWTS used to read the rest of the disk. The pattern is common enough that I automated detection and tracing.</p>
+    <p class="seen">Here's what it captured automatically:</p>
+    <div class="line_editing">
+      <code>]BLOAD BOOT0,A$800
+]CALL -151</code>
+      <code>*801L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">immediately move this code to the input buffer at $0200</p>
+      <code>0801-   A0 0F       LDY   #$0F
+0803-   B9 00 08    LDA   $0800,Y
+0806-   99 00 02    STA   $0200,Y
+0809-   C8          INY
+080A-   D0 F7       BNE   $0803
+080C-   4C 0F 02    JMP   $020F</code>
+    </div>
+    <div class="line_editing">
+      <code>*20F<80F.8FFM</code>
+      <code>*20FL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up nibble translation table</p>
+      <code>020F-   A2 20       LDX   #$20
+0211-   A9 03       LDA   #$03
+0213-   85 3C       STA   $3C
+0215-   18          CLC
+0216-   88          DEY
+0217-   98          TYA
+0218-   24 3C       BIT   $3C
+021A-   F0 F5       BEQ   $0211
+021C-   26 3C       ROL   $3C
+021E-   90 F8       BCC   $0218
+0220-   C0 D5       CPY   #$D5
+0222-   F0 ED       BEQ   $0211
+0224-   CA          DEX
+0225-   8A          TXA
+0226-   99 00 08    STA   $0800,Y
+0229-   D0 E6       BNE   $0211
+022B-   85 3D       STA   $3D</code>
+      <p class="comment">$00 into zero page $26 and $03 into $27 means we're probably going to be loading data into $0300..$03FF soon.</p>
+      <code>022D-   85 26       STA   $26
+022F-   A9 03       LDA   #$03
+0231-   85 27       STA   $27</code>
+      <code>0233-   A6 2B       LDX   $2B
+0235-   20 5D 02    JSR   $025D</code>
+    </div>
+    <div class="line_editing">
+      <code>*25DL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">read a sector from track $00 (this is similar to the disk controller ROM routine at $C65C, but it looks for an address prologue of "D5 AA B5" and uses the 5-3 encoding translation table we set up earlier at $020F</p>
+      <code>025D-   18          CLC
+025E-   08          PHP
+025F-   BD 8C C0    LDA   $C08C,X
+0262-   10 FB       BPL   $025F
+0264-   49 D5       EOR   #$D5
+0266-   D0 F7       BNE   $025F
+0268-   BD 8C C0    LDA   $C08C,X
+026B-   10 FB       BPL   $0268
+026D-   C9 AA       CMP   #$AA
+026F-   D0 F3       BNE   $0264
+0271-   EA          NOP
+0272-   BD 8C C0    LDA   $C08C,X
+0275-   10 FB       BPL   $0272
+0277-   C9 B5       CMP   #$B5
+0279-   F0 09       BEQ   $0284
+027B-   28          PLP
+027C-   90 DF       BCC   $025D
+027E-   49 AD       EOR   #$AD
+0280-   F0 1F       BEQ   $02A1
+0282-   D0 D9       BNE   $025D
+0284-   A0 03       LDY   #$03
+0286-   84 2A       STY   $2A
+0288-   BD 8C C0    LDA   $C08C,X
+028B-   10 FB       BPL   $0288
+028D-   2A          ROL
+028E-   85 3C       STA   $3C
+0290-   BD 8C C0    LDA   $C08C,X
+0293-   10 FB       BPL   $0290
+0295-   25 3C       AND   $3C
+0297-   88          DEY
+0298-   D0 EE       BNE   $0288
+029A-   28          PLP
+029B-   C5 3D       CMP   $3D
+029D-   D0 BE       BNE   $025D
+029F-   B0 BD       BCS   $025E
+02A1-   A0 9A       LDY   #$9A
+02A3-   84 3C       STY   $3C
+02A5-   BC 8C C0    LDY   $C08C,X
+02A8-   10 FB       BPL   $02A5
+02AA-   59 00 08    EOR   $0800,Y
+02AD-   A4 3C       LDY   $3C
+02AF-   88          DEY
+02B0-   99 00 08    STA   $0800,Y
+02B3-   D0 EE       BNE   $02A3
+02B5-   84 3C       STY   $3C
+02B7-   BC 8C C0    LDY   $C08C,X
+02BA-   10 FB       BPL   $02B7
+02BC-   59 00 08    EOR   $0800,Y
+02BF-   A4 3C       LDY   $3C</code>
+      <p class="comment">store partially decoded data at $0300 (target address set at $022D)</p>
+      <code>02C1-   91 26       STA   ($26),Y
+02C3-   C8          INY
+02C4-   D0 EF       BNE   $02B5
+02C6-   BC 8C C0    LDY   $C08C,X
+02C9-   10 FB       BPL   $02C6
+02CB-   59 00 08    EOR   $0800,Y
+02CE-   D0 8D       BNE   $025D
+02D0-   60          RTS</code>
+    </div>
+    <div class="line_editing">
+      <code>*238L</code>
+    </div>
+    <div class="listing">
+      <code>0238-   4C D1 02    JMP   $02D1</code>
+    </div>
+    <div class="line_editing">
+      <code>*2D1L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">finish decoding nibbles</p>
+      <code>02D1-   A8          TAY
+02D2-   A2 00       LDX   #$00
+02D4-   B9 00 08    LDA   $0800,Y
+02D7-   4A          LSR
+02D8-   3E CC 03    ROL   $03CC,X
+02DB-   4A          LSR
+02DC-   3E 99 03    ROL   $0399,X
+02DF-   85 3C       STA   $3C
+02E1-   B1 26       LDA   ($26),Y
+02E3-   0A          ASL
+02E4-   0A          ASL
+02E5-   0A          ASL
+02E6-   05 3C       ORA   $3C
+02E8-   91 26       STA   ($26),Y
+02EA-   C8          INY
+02EB-   E8          INX
+02EC-   E0 33       CPX   #$33
+02EE-   D0 E4       BNE   $02D4
+02F0-   C6 2A       DEC   $2A
+02F2-   D0 DE       BNE   $02D2</code>
+      <p class="comment">checksum</p>
+      <code>02F4-   CC 00 03    CPY   $0300
+02F7-   D0 03       BNE   $02FC</code>
+      <p class="comment">checksum passed, continue with boot</p>
+      <code>02F9-   4C 3B 02    JMP   $023B</code>
+      <p class="comment">checksum failed, print "ERR" and exit</p>
+      <code>02FC-   4C 2D FF    JMP   $FF2D</code>
+    </div>
+    <div class="line_editing">
+      <code>*23BL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">Weird. This code is modifying the code it just read from disk. Not sure why yet.</p>
+      <code>023B-   A9 A9       LDA   #$A9
+023D-   8D 1F 03    STA   $031F
+0240-   A9 02       LDA   #$02
+0242-   8D 20 03    STA   $0320</code>
+      <p class="comment">jump to the code we just read</p>
+      <code>0245-   4C 01 03    JMP   $0301</code>
+    </div>
+    <p class="seen">At this point, AUTOTRACE interrupts the boot and captures the sector we just read into $0300. Let's see what that looks like.</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Capture An RWTS And We're Off To The Races!</h3>
+
+    <div class="line_editing">
+      <code>*BLOAD BOOT0 0300-03FF,A$300
+*301L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">data table fiddling</p>
+      <code>0301-   B9 00 08    LDA   $0800,Y
+0304-   0A          ASL
+0305-   0A          ASL
+0306-   0A          ASL
+0307-   99 00 08    STA   $0800,Y
+030A-   C8          INY
+030B-   D0 F4       BNE   $0301</code>
+      <p class="comment">slot number (x16)</p>
+      <code>030D-   A6 2B       LDX   $2B</code>
+      <p class="comment">looks like we're loading the next phase into $0900</p>
+      <code>030F-   A9 09       LDA   #$09
+0311-   85 27       STA   $27</code>
+      <p class="comment">don't know what this is yet</p>
+      <code>0313-   AD CC 03    LDA   $03CC
+0316-   85 41       STA   $41</code>
+    </div>
+    <div class="line_editing">
+      <code>*3CC</code>
+    </div>
+    <div class="listing">
+      <code>03CC- B6</code>
+      <code>0318-   84 40       STY   $40
+031A-   8A          TXA
+031B-   4A          LSR
+031C-   4A          LSR
+031D-   4A          LSR
+031E-   4A          LSR</code>
+      <p class="comment">This is the instruction that got replaced at $023B. Looking at the previous few instructions (which are useless because this modified instruction blows away the contents of the accumulator), it appears that this code can be used to re-use the disk controller ROM routine to read sectors, but has been modified to use the routine at $025D instead.</p>
+      <code>031F-   A9 02       LDA   #$02
+0321-   85 3F       STA   $3F
+0323-   A9 5D       LDA   #$5D
+0325-   85 3E       STA   $3E</code>
+      <p class="comment">read a sector via ($3E) (so, $025D)</p>
+      <code>0327-   20 43 03    JSR   $0343</code>
+      <p class="comment">decode nibble data</p>
+      <code>032A-   20 46 03    JSR   $0346</code>
+    </div>
+    <div class="line_editing">
+      <code>*346L</code>
+    </div>
+    <div class="listing">
+      <code>0346-   A2 32       LDX   #$32
+0348-   A0 00       LDY   #$00
+034A-   BD 00 08    LDA   $0800,X
+034D-   4A          LSR
+034E-   4A          LSR
+034F-   4A          LSR
+0350-   85 3C       STA   $3C
+0352-   4A          LSR
+0353-   85 2A       STA   $2A
+0355-   4A          LSR</code>
+      <p class="comment">Ah, I see what's going on now. The routine at $025D stores raw data in the target page ($0900), but doesn't decode it. This routine now takes that data and decodes it (using the data table we set up at $0800), then it stores the final data in ($40). ($40) was initialized as $00/<$03CC>, which is $B6. So this is storing data at $B600 and up.</p>
+      <code>0356-   1D 00 09    ORA   $0900,X
+0359-   91 40       STA   ($40),Y
+035B-   C8          INY
+035C-   BD 33 08    LDA   $0833,X
+035F-   4A          LSR
+0360-   4A          LSR
+0361-   4A          LSR
+0362-   4A          LSR
+0363-   26 3C       ROL   $3C
+0365-   4A          LSR
+0366-   26 2A       ROL   $2A
+0368-   1D 33 09    ORA   $0933,X
+036B-   91 40       STA   ($40),Y
+036D-   C8          INY
+036E-   BD 66 08    LDA   $0866,X
+0371-   4A          LSR
+0372-   4A          LSR
+0373-   4A          LSR
+0374-   4A          LSR
+0375-   26 3C       ROL   $3C
+0377-   4A          LSR
+0378-   26 2A       ROL   $2A
+037A-   1D 66 09    ORA   $0966,X
+037D-   91 40       STA   ($40),Y
+037F-   C8          INY
+0380-   A5 2A       LDA   $2A
+0382-   29 07       AND   #$07
+0384-   1D 99 09    ORA   $0999,X
+0387-   91 40       STA   ($40),Y
+0389-   C8          INY
+038A-   A5 3C       LDA   $3C
+038C-   29 07       AND   #$07
+038E-   1D CC 09    ORA   $09CC,X
+0391-   91 40       STA   ($40),Y
+0393-   C8          INY
+0394-   CA          DEX
+0395-   10 B3       BPL   $034A
+0397-   AD 99 08    LDA   $0899
+039A-   4A          LSR
+039B-   4A          LSR
+039C-   4A          LSR
+039D-   0D FF 09    ORA   $09FF
+03A0-   91 40       STA   ($40),Y
+03A2-   A6 2B       LDX   $2B
+03A4-   60          RTS</code>
+    </div>
+    <p class="seen">Returning to caller...</p>
+    <div class="line_editing">
+      <code>*32DL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">Zero page $3D is a counter for the number of sectors read already. $03FF is the total number of sectors.</p>
+      <code>032D-   A5 3D       LDA   $3D
+032F-   4D FF 03    EOR   $03FF</code>
+      <p class="comment">if we've read enough sectors, break out of the loop</p>
+      <code>0332-   F0 06       BEQ   $033A</code>
+    </div>
+    <div class="line_editing">
+      <code>*3FF</code>
+    </div>
+    <div class="listing">
+      <code>03FF- 09</code>
+    </div>
+    <p class="seen">We're reading $0A sectors. (The comparison happens before the count is incremented, so add 1.)</p>
+    <div class="listing">
+      <p class="comment">increment target page (starts at $B6)</p>
+      <code>0334-   E6 41       INC   $41</code>
+      <p class="comment">increment sector count</p>
+      <code>0336-   E6 3D       INC   $3D</code>
+      <p class="comment">this is really an unconditional jump</p>
+      <code>0338-   D0 ED       BNE   $0327</code>
+      <p class="comment">Break out of loop here (from $0332).</p>
+      <p class="comment">Accumulator is always zero at this point.</p>
+      <code>033A-   85 3E       STA   $3E</code>
+      <p class="comment">still $B6</p>
+      <code>033C-   AD CC 03    LDA   $03CC
+033F-   85 3F       STA   $3F</code>
+      <p class="comment">now $B7</p>
+      <code>0341-   E6 3F       INC   $3F</code>
+      <p class="comment">jump to $B700 to continue the boot</p>
+      <code>0343-   6C 3E 00    JMP   ($003E)</code>
+    </div>
+    <p class="seen">At this point, AUTOTRACE interrupts the boot again by changing the instruction at $033C to jump to a callback that captures the new code at $B600..$BFFF.</p>
+    <div class="line_editing">
+      <code>*BLOAD BOOT1,A$2600
+*FE89G FE93G
+*B600<2600.2FFFM
+*B700L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">well, would you look at that -- we've managed to load a more-or-less normal DOS-shaped boot1</p>
+      <code>B700-   8E E9 B7    STX   $B7E9
+B703-   8E F7 B7    STX   $B7F7
+B706-   A9 01       LDA   #$01
+B708-   8D F8 B7    STA   $B7F8
+B70B-   8D EA B7    STA   $B7EA
+B70E-   AD E0 B7    LDA   $B7E0
+B711-   8D E1 B7    STA   $B7E1
+B714-   A9 00       LDA   #$00
+B716-   8D EC B7    STA   $B7EC
+B719-   AD E2 B7    LDA   $B7E2
+B71C-   8D ED B7    STA   $B7ED
+B71F-   AD E3 B7    LDA   $B7E3
+B722-   8D F1 B7    STA   $B7F1
+B725-   A9 01       LDA   #$01
+B727-   8D F4 B7    STA   $B7F4</code>
+    </div>
+    <div class="line_editing">
+      <code>*B7E2</code>
+    </div>
+    <div class="listing">
+      <code>B7E2- 0B</code>
+    </div>
+    <p class="seen">This RWTS starts reading at track $00 (hard-coded), sector $0B (from $B7E2).</p>
+    <div class="line_editing">
+      <code>*B7E3</code>
+    </div>
+    <div class="listing">
+      <code>B7E3- 9D</code>
+    </div>
+    <p class="seen">Into $9D00.</p>
+    <div class="line_editing">
+      <code>*B7E0</code>
+    </div>
+    <div class="listing">
+      <code>B7E0- 19</code>
+    </div>
+    <p class="seen">$19 sectors, so $9D00..$B5FF. Basically a full copy of DOS.</p>
+    <div class="listing">
+      <code>B72A-   8A          TXA
+B72B-   4A          LSR
+B72C-   4A          LSR
+B72D-   4A          LSR
+B72E-   4A          LSR
+B72F-   AA          TAX
+B730-   A9 00       LDA   #$00
+B732-   9D F8 04    STA   $04F8,X
+B735-   9D 78 04    STA   $0478,X</code>
+      <p class="comment">read it</p>
+      <code>B738-   20 93 B7    JSR   $B793
+B73B-   A2 FF       LDX   #$FF
+B73D-   9A          TXS
+B73E-   8E EB B7    STX   $B7EB
+B741-   20 93 FE    JSR   $FE93
+B744-   20 89 FE    JSR   $FE89</code>
+      <p class="comment">jump to DOS boot2</p>
+      <code>B747-   4C 84 9D    JMP   $9D84</code>
+    </div>
+    <div class="line_editing">
+      <code>*BD00L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">it even has a normal RWTS entry point (so I can use Advanced Demuffin to get all the data off this disk)</p>
+      <code>BD00-   84 48       STY   $48
+BD02-   85 49       STA   $49
+BD04-   A0 01       LDY   #$01
+BD06-   B1 48       LDA   ($48),Y
+BD08-   AA          TAX
+BD09-   8C F8 04    STY   $04F8
+BD0C-   A0 0F       LDY   #$0F
+BD0E-   D1 48       CMP   ($48),Y
+BD10-   F0 1B       BEQ   $BD2D</code>
+    </div>
+    <p class="seen">Things are not quite where I expect to find them (other than the $BD00 entry point), but after a bit of poking around, I found the reason I can't read the original disk with standard DOS 3.2 tools:</p>
+    <div class="line_editing">
+      <code>*B950L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">data epilogue "DA AA"</p>
+      <code>B950-   BD 8C C0    LDA   $C08C,X
+B953-   10 FB       BPL   $B950
+B955-   C9 DA       CMP   #$DA
+B957-   D0 0A       BNE   $B963
+B959-   EA          NOP
+B95A-   BD 8C C0    LDA   $C08C,X
+B95D-   10 FB       BPL   $B95A
+B95F-   C9 AA       CMP   #$AA
+B961-   F0 5C       BEQ   $B9BF
+B963-   38          SEC
+B964-   60          RTS</code>
+    </div>
+    <div class="line_editing">
+      <code>*B9ACL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">address prologue "DA AA"</p>
+      <code>B9AC-   BD 8C C0    LDA   $C08C,X
+B9AF-   10 FB       BPL   $B9AC
+B9B1-   C9 DA       CMP   #$DA
+B9B3-   D0 AE       BNE   $B963
+B9B5-   EA          NOP
+B9B6-   BD 8C C0    LDA   $C08C,X
+B9B9-   10 FB       BPL   $B9B6
+B9BB-   C9 AA       CMP   #$AA
+B9BD-   D0 A4       BNE   $B963
+B9BF-   18          CLC
+B9C0-   60          RTS</code>
+    </div>
+    <p class="seen">That's it: modified epilogue sequences, $DA instead of $DE. Just what I saw in the Copy II Plus nibble editor earlier.</p>
+    <p class="seen">The entire region $B600..$BFFF is saved as BOOT1, and the region $B800..$BFFF is saved as RWTS. I can feed that file into Advanced Demuffin to read the data off the disk and save it to a 16-sector disk in a standard format.</p>
+    <p class="seen">Here endeth the automation.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>MOAR AUTO-MA-SHUN</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>[press "5" to switch to slot 5]</code>
+      <code>[press "R" to load a new RWTS module]
+  --> At $B8, load "RWTS" from drive 1</code>
+      <code>[press "6" to switch to slot 6]</code>
+      <code>[press "C" to convert disk]</code>
+      <code>[press "Y" to change default values]</code>
+    </div>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======================================</code>
+      <code>
+INPUT ALL VALUES IN HEX</code>
+    </div>
+    <div class="curses">
+      <code>
+SECTORS PER TRACK? (13/16) 13 <--change</code>
+      <code>START TRACK: $00
+START SECTOR: $0B             <--change
+END TRACK: $22
+END SECTOR: $0C               <--change</code>
+    </div>
+    <div class="terminal_output">
+      <code>INCREMENT: 1</code>
+      <code>MAX # OF RETRIES: 0</code>
+      <code>COPY FROM DRIVE 1
+TO DRIVE: 2
+=======================================
+13SC $00,$0B-$22,$0C BY$01 S6,D1->S6,D2</code>
+    </div>
+    <div class="curses_input">
+      <code>[press RETURN to start copy]</code>
+    </div>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:...................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0: ..................................
+SC1: ..................................
+SC2: ..................................
+SC3: ..................................
+SC4: ..................................
+SC5: ..................................
+SC6: ..................................
+SC7: ..................................
+SC8: ..................................
+SC9: ..................................
+SCA: ..................................
+SCB:...................................
+SCC:...................................
+SCD:
+SCE:
+SCF:
+=======================================
+13SC $00,$0B-$22,$0C BY1.0 S6,D1->S6,D2</code>
+    </div>
+</section>
+
+<section>
+
+    <p class="seen">Of course the demuffin'd disk is not bootable, since it's missing, you know, a bootloader. But look at this:</p>
+    <div class="line_editing">
+      <code>]PR#5
+...
+]CATALOG,S6,D2</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+006 FREE</code>
+    </div>
+    <div class="line_editing">
+      <code>*A 003 HELLO
+*A 005 MENU
+*A 023 CREATE WORDLIST
+*A 026 CHANGE WORDLIST
+*A 014 STUDENT PLANNING
+*A 027 SKILL12
+*B 010 LARGE CHARS
+*B 003 HR
+ T 041 RESPONSES.F
+*T 001</code>
+    </div>
+    <div class="terminal_output">
+      <code>           COPYRIGHT (C) 1982
+*T 001   HARTLEY COURSEWARE INC.
+*T 001     ALL RIGHTS RESERVED
+ T 014 HO1
+ T 011 HO2
+ T 011 HO3
+ T 012 HO4
+ T 010 HO5
+ T 013 HO6
+ T 013 HO7
+ T 013 HO8
+ T 012 HO9
+ T 010 HO10
+ T 013 HO11
+ T 012 HO12
+ T 014 HO13
+ T 013 HO14
+ T 010 HO15
+ T 013 HO16
+ T 012 HO17
+ T 013 HO18
+ T 012 HO19
+ T 011 HO20</code>
+    </div>
+    <div class="line_editing">
+      <code>]RUN HELLO
+...works...</code>
+    </div>
+    <p class="seen">The entire program is file-based. It works from DOS 3.3. It even works from</p>
+    <p class="seen">Diversi-DOS 64K (which relocates most of DOS to the language card). Even if the files are on drive 2.</p>
+    <p class="seen">Hooray for compatibility!</p>
+    <p class="seen">So, what I need is a blank formatted DOS 3.3 disk, and Copy II+ 5.5. (Later versions have a bug that refuse to recognize that the demuffin'd disk has a disk catalog on track $11, because the VTOC points to T11,S0C instead of the usual T11,S0F. Bah.)</p>
+    <div class="curses_input">
+      <code>[S6,D1=freshly formatted DOS 3.3 disk]
+[S6,D2=demuffin'd copy]</code>
+      <code>[Copy II+ 5.5]
+  [COPY]
+    [FILES]
+      [DISK B TO DISK A]
+        [select all files]</code>
+    </div>
+    <p>The startup program is already "HELLO", so let's try booting it.</p>
+    <div class="line_editing">
+      <code>]PR#6
+...works...</code>
+    </div>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

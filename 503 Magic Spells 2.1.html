@@ -1,0 +1,398 @@
+<!doctype html>
+<html><head>
+<title>Magic Spells 2.1</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p>no errors, but the copy boots ProDOS and BASIC.SYSTEM, shows a graphical title screen, then hangs with the drive motor off</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">ditto</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">ditto</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">nothing suspicious</p>
+    <p class="seen">Disk Fixer</p>
+    <p>T00 -> standard ProDOS bootloader and disk catalog</p>
+    <p class="seen">Why didn't any of my copies work?</p>
+    <p>There was no disk grinding, and the disk motor turned off, which suggests it's not just getting stuck reading an extra track ($23) or a half track.</p>
+    <p>It's most likely a nibble check that deliberately hangs on failure.</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Trace the startup program</p>
+    <p class="seen">2. Find nibble check and disable it</p>
+    <p class="seen">3. Declare victory(*)</p>
+    <p class="seen">(*) Take a nap.</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>You Are In A Maze Of Twisty Little POKEs, All Alike</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S7,D1=ProDOS hard drive]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#7
+...
+]CAT,S6,D1</code>
+      <code>/MAGIC.SPELLS</code>
+    </div>
+    <div class="terminal_output">
+      <code> NAME           TYPE  BLOCKS  MODIFIED</code>
+    </div>
+    <div class="line_editing">
+      <code>*PRODOS          SYS      30  18-SEP-84
+*BASIC.SYSTEM    SYS      21  18-JUN-84
+ STARTUP         BAS       3  <NO DATE>
+ SP              BAS      37  <NO DATE>
+ MENU            BAS       8  <NO DATE>
+ GAMEINIT        BAS       4  <NO DATE>
+*PICS            DIR       1  <NO DATE>
+*COMMON.UTILS    DIR       1  <NO DATE>
+*EDITOR          DIR       1  <NO DATE>
+*LISTS           DIR       1  <NO DATE></code>
+    </div>
+    <div class="terminal_output">
+      <code>BLOCKS FREE:    0     BLOCKS USED:  280</code>
+    </div>
+    <div class="line_editing">
+      <code>]PREFIX /MAGIC.SPELLS
+]LOAD STARTUP
+]LIST</code>
+    </div>
+    <div class="terminal_output">
+      <code> 1  ONERR  GOTO 50000</code>
+      <p class="comment">UNPACK = $5C5B PP = $5000 PC = $6000 MT = $4271</p>
+      <code>11 B$ = "FIRST VAR":D$ =  CHR$ (
+     4):UNPACK = 23643:PP = 5 * 4
+     096:PC = 6 * 4096:MT = 17009</code>
+      <p class="comment">AD = $1000 AH = $10 AL = $00</p>
+      <code> 21 AD = 4096:AH = AD / 256:AL =
+     AD - AH * 256 + 1: IF  PEEK
+     (103) <  > AL OR  PEEK (104)
+      <  > AH OR  PEEK (AD) <  >
+     0 THEN  POKE 103,AL: POKE 10
+     4,AH: POKE AD,0: PRINT  CHR$
+     (4);"RUN STARTUP"</code>
+    </div>
+    <p>According to the framed Beagle Bros. "Peeks, Pokes and Pointers" chart that hangs above my desk and reminds me that technical writing should be wondrous, useful, and fun (but not always in that order), zero page 103-104 ($67.$68) is the starting address of the Applesoft BASIC program in memory.</p>
+    <p>We are re-running ourselves at a higher memory location, $1000 instead of $800.</p>
+    <div class="terminal_output">
+      <p class="comment">set reset vector</p>
+      <code> 31  POKE 1010,0: POKE 1011, PEEK
+     (48700) + 192: POKE 1012,32:
+      POKE 975,9: POKE 974,60</code>
+      <p class="comment">not sure what all these POKEs do, but they don't appear to be code</p>
+      <code> 35 FG =  PEEK (975) * 100 +  PEEK
+     (974)
+ 39 SF = FG:KY = FG + 1:FT = FG +
+     2:PW = FG + 3:GD = FG + 4:CM
+      = FG + 5:NC = FG + 6:CS = F
+     G + 7:PF = CS + 6
+ 40  POKE SF,1: POKE KY,1: POKE F
+     T,3: POKE PW,1: POKE GD,1: POKE
+     CM,1: POKE NC,1: POKE CS,1: POKE
+     974,0</code>
+      <p class="comment">load title screen and display it (I can call this manually from the BASIC prompt, even on my non-working copy, so I don't think this is copy protection-related.)</p>
+      <code> 41  PRINT D$;"BLOAD PICS/MS.TITL
+     E.PAC,A$4000": CALL UNPACK: POKE
+     49232,0: POKE 49234,0: POKE
+     49239,0: GOSUB 10020</code>
+    </div>
+    <div class="line_editing">
+      <code>]LIST 10020,</code>
+    </div>
+    <div class="terminal_output">
+      <code> 10020  FOR I = 0 TO 7: READ P: POKE
+     PP + I,P: NEXT : RETURN
+...
+ 60010  DATA   32,0,96,96,96,96,1
+     12,254</code>
+    </div>
+    <p>Line 10020 is reading data from line 60010 and creating executable code at PP (=$5000).</p>
+    <div class="line_editing">
+      <code>]PP=20480
+]GOSUB 10020
+]CALL-151</code>
+      <code>*5000L</code>
+    </div>
+    <div class="listing">
+      <code>5000-   20 00 60    JSR   $6000
+5003-   60          RTS
+5004-   60          RTS
+5005-   60          RTS
+5006-   70 FE       BVS   $5006</code>
+    </div>
+    <div class="line_editing">
+      <code>*3D0G</code>
+    </div>
+    <p>Continuing after line 41...</p>
+    <div class="terminal_output">
+      <code> 45  PRINT D$"BLOAD PICS/MS.PICS2
+     ,A"PC: CALL PP</code>
+    </div>
+    <p>Now we're calling PP (=$5000), so we're calling the small routine we just POKEd from the DATA values.</p>
+    <div class="line_editing">
+      <code>PICS/MS.PICS2 is loaded at PC (=$6000),
+so let's simulate that.</code>
+      <code>]BLOAD PICS/MS.PICS2,A$6000
+]CALL -151</code>
+    </div>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Hit Paydirt And It Looks A Lot Like 6502</h3>
+
+    <div class="line_editing">
+      <code>*6000L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">save some of zero page on the stack</p>
+      <code>6000-   A2 03       LDX   #$03
+6002-   B5 00       LDA   $00,X
+6004-   48          PHA
+6005-   CA          DEX
+6006-   10 FA       BPL   $6002</code>
+      <p class="comment">put an "RTS" at $00</p>
+      <code>6008-   A9 60       LDA   #$60
+600A-   85 00       STA   $00</code>
+      <p class="comment">and call it</p>
+      <code>600C-   20 00 00    JSR   $0000</code>
+      <p class="comment">manipulate the stack</p>
+      <code>600F-   BA          TSX
+6010-   CA          DEX
+6011-   CA          DEX
+6012-   9A          TXS</code>
+      <p class="comment">and set up a pointer to the address that was pushed to the stack by the "JSR $0000" earlier</p>
+      <code>6013-   68          PLA
+6014-   85 00       STA   $00
+6016-   68          PLA
+6017-   85 01       STA   $01</code>
+    </div>
+    <p>This is very clever. This routine can be literally anywhere in memory, and by now, ($00) will point to the third byte of the JSR statement ($600E in this case).</p>
+    <div class="listing">
+      <p class="comment">now use that calculated pointer to decrypt the following bytes in memory</p>
+      <code>6019-   A0 89       LDY   #$89
+601B-   A9 FF       LDA   #$FF
+601D-   51 00       EOR   ($00),Y
+601F-   91 00       STA   ($00),Y
+6021-   88          DEY
+6022-   C0 17       CPY   #$17
+6024-   D0 F5       BNE   $601B</code>
+      <p class="comment">everything after this is encrypted, so the disassembly is useless until we decrypt it</p>
+      <code>6026-   51 CF       EOR   ($CF),Y
+6028-   40          RTI
+6029-   42          ???</code>
+    </div>
+    <p>To reproduce this decryption, I'll need to set up ($00) manually, then copy the loop somewhere else so it doesn't fall through to the decrypted code.</p>
+    <div class="line_editing">
+      <code>*319<6019.6025M
+*326:60
+*00:0E 60 N 319G</code>
+      <code>*6026L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">turn on boot drive motor</p>
+      <code>6026-   AE 30 BF    LDX   $BF30
+6029-   BD 89 C0    LDA   $C089,X</code>
+      <p class="comment">a two-part Death Counter</p>
+      <code>602C-   A9 56       LDA   #$56
+602E-   85 03       STA   $03
+6030-   A9 08       LDA   #$08
+6032-   C6 02       DEC   $02
+6034-   D0 04       BNE   $603A
+6036-   C6 03       DEC   $03</code>
+      <p class="comment">if Death Counter hits 0, give up</p>
+      <code>6038-   F0 59       BEQ   $6093</code>
+      <p class="comment">look for an $FB nibble</p>
+      <code>603A-   BC 8C C0    LDY   $C08C,X
+603D-   10 FB       BPL   $603A
+603F-   C0 FB       CPY   #$FB
+6041-   D0 ED       BNE   $6030
+6043-   F0 00       BEQ   $6045</code>
+      <p class="comment">kill a few cycles (not pointless, because the disk spins independently of the CPU, so all of these low-level disk reads are highly time-sensitive)</p>
+      <code>6045-   EA          NOP
+6046-   EA          NOP</code>
+      <p class="comment">read data latch (note: no BPL loop here, we're just reading it once)</p>
+      <code>6047-   BC 8C C0    LDY   $C08C,X</code>
+      <p class="comment">do a compare to set or clear the carry bit (among other things, but it's the carry bit we care about)</p>
+      <code>604A-   C0 08       CPY   #$08</code>
+      <p class="comment">rotate the carry into the low bit of the accumulator</p>
+      <code>604C-   2A          ROL</code>
+      <p class="comment">if we just rolled a "1" bit out of the high bit of the accumulator, take this branch</p>
+      <code>604D-   B0 0B       BCS   $605A</code>
+      <p class="comment">next nibble needs to be $FF</p>
+      <code>604F-   BC 8C C0    LDY   $C08C,X
+6052-   10 FB       BPL   $604F</code>
+      <p class="comment">...otherwise we start over</p>
+      <code>6054-   C0 FF       CPY   #$FF
+6056-   D0 D8       BNE   $6030</code>
+      <p class="comment">loop back to get next nibble</p>
+      <code>6058-   F0 EB       BEQ   $6045</code>
+      <p class="comment">if the accumulator is anything but %00001010, start over</p>
+      <code>605A-   C9 0A       CMP   #$0A
+605C-   D0 D2       BNE   $6030</code>
+    </div>
+    <p class="seen">I got lost several times trying to follow this routine. I think the easiest way to explain it is to show the difference between the original disk and my non-working copy.</p>
+    <p class="seen">Here is the original disk, as seen by the Copy II+ nibble editor. Nibbles with extra "0" bits (timing bits) after them are displayed in inverse on an original machine, marked here with a "+" after the nibble.</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK:     START: 1B1E  LENGTH: 17C1</code>
+      <code>1C70: 9F EB E5 FC D7 D7 D7 EE   VIEW
+1C78: FA E6 E6 FF FE F2 ED FD
+1C80: FF EF ED BA BB DD AF E6
+1C88: B7 A7 CB B7 DE AA EB FF
+1C90: FF FF FF FB+FF FF+FF FF+
+1C98: FD FF+FF+FF+FF+FF+FF+FF+
+1CA0: FF+FF+D5 AA 96 AA AB AA
+1CA8: AA AA AB AA AA DE AA EB+
+1CB0: FF+FF+FF+FF+FF+FF D5 AA
+---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">It's easy to understand why a simple sector copy failed. The sequence that this code is looking for starts at offset $1C93, which is between the end of one sector and the beginning of the next. (The data epilogue is at $1C8C; the next address prologue is at $1CA2.)</p>
+    <p class="seen">Sector copiers discard everything between those delimiters and rebuild the track with a default pattern of sync bytes. That pattern doesn't include an $FB nibble, so the nibble check fails.</p>
+    <p class="seen">But the EDD bit copy also failed. Here is the original disk's pattern at offset $1C93:</p>
+    <p class="seen">- $FB + timing bit - $FF - $FF + timing bit - $FF - $FF + timing bit</p>
+    <p class="seen">And here is what the same part of the track looks like on my failed EDD copy:</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK:     START: 1B1E  LENGTH: 17C1</code>
+      <code>1C70: 9F EB E5 FC D7 D7 D7 EE   VIEW
+1C78: FA E6 E6 FF FE F2 ED FD
+1C80: FF EF ED BA BB DD AF E6
+1C88: B7 A7 CB B7 DE AA EB FF
+1C90: FF FF FF FB+FF FF FF+FF+
+1C98: FD FF+FF+FF+FF+FF+FF+FF+
+1CA0: FF+FF+D5 AA 96 AA AB AA
+1CA8: AA AA AB AA AA DE AA EB+
+1CB0: FF+FF+FF+FF+FF+FF D5 AA
+---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">A subtle difference! The sequence at offset $1C93 now looks like this:</p>
+    <p class="seen">- $FB + timing bit - $FF - $FF - $FF + timing bit - $FF + timing bit</p>
+    <p class="seen">This code is looking for $FF bytes with an alternating pattern of timing bit, no timing bit, timing bit, no timing bit. It doesn't find that on the bit copy, so it knows it's not running on an original disk.</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which We Discover An Innocuous Looking Side Effect</h3>
+
+    <p class="seen">Continuing the code listing...</p>
+    <div class="listing">
+      <p class="comment">now look for the standard address prologue (D5 AA 96)</p>
+      <code>605E-   BD 8C C0    LDA   $C08C,X
+6061-   10 FB       BPL   $605E
+6063-   C9 D5       CMP   #$D5
+6065-   D0 C9       BNE   $6030
+6067-   F0 00       BEQ   $6069
+6069-   BD 8C C0    LDA   $C08C,X
+606C-   10 FB       BPL   $6069
+606E-   C9 AA       CMP   #$AA
+6070-   D0 BE       BNE   $6030
+6072-   F0 00       BEQ   $6074
+6074-   BD 8C C0    LDA   $C08C,X
+6077-   10 FB       BPL   $6074
+6079-   C9 96       CMP   #$96
+607B-   D0 B3       BNE   $6030
+607D-   F0 00       BEQ   $607F</code>
+      <p class="comment">match the disk volume (AA AB = 001)</p>
+      <code>607F-   BD 8C C0    LDA   $C08C,X
+6082-   10 FB       BPL   $607F
+6084-   C9 AA       CMP   #$AA
+6086-   D0 A8       BNE   $6030
+6088-   F0 00       BEQ   $608A
+608A-   BD 8C C0    LDA   $C08C,X
+608D-   10 FB       BPL   $608A
+608F-   C9 AB       CMP   #$AB
+6091-   D0 9D       BNE   $6030</code>
+      <p class="comment">success path falls through to here, but failure path also ends up here (from $6038)</p>
+      <code>6093-   DD 88 C0    CMP   $C088,X</code>
+      <p class="comment">re-encrypt the nibble check in memory (because we wouldn't want any memory snoopers getting easy access to it!)</p>
+      <code>6096-   A0 89       LDY   #$89
+6098-   A9 FF       LDA   #$FF
+609A-   51 00       EOR   ($00),Y
+609C-   91 00       STA   ($00),Y
+609E-   88          DEY
+609F-   C0 17       CPY   #$17
+60A1-   D0 F5       BNE   $6098</code>
+      <p class="comment">get Death Counter</p>
+      <code>60A3-   A4 03       LDY   $03</code>
+      <p class="comment">restore zero page</p>
+      <code>60A5-   A2 00       LDX   #$00
+60A7-   68          PLA
+60A8-   95 00       STA   $00,X
+60AA-   E8          INX
+60AB-   E0 04       CPX   #$04
+60AD-   D0 F8       BNE   $60A7</code>
+      <p class="comment">check Death Counter</p>
+      <code>60AF-   98          TYA</code>
+      <p class="comment">if we exited the nibble check because the Death Counter hit zero, just hang</p>
+      <code>60B0-   F0 FE       BEQ   $60B0</code>
+      <p class="comment">otherwise fall through to here and... set some things</p>
+      <code>60B2-   A9 00       LDA   #$00
+60B4-   8D D0 6A    STA   $6AD0
+60B7-   A9 C6       LDA   #$C6
+60B9-   8D D1 6A    STA   $6AD1
+60BC-   60          RTS</code>
+    </div>
+    <p>Aha! An innocuous looking side effect! (Just kidding. Side effects are never innocuous. Especially not ones that are executed after a self-decrypting nibble check.)</p>
+    <p>If I change that "BEQ" at $60B0 to jump to $60B2 instead of $60B0, the routine will continue regardless of the result of the nibble check.</p>
+    <div class="curses_input">
+      <code>[Disk Fixer]
+  ["O" for Input/Output Control]
+    [change "DOS TYPE" to "PRODOS"]
+  ["D"irectory mode]
+    [select "PICS/MS.PICS2"]</code>
+    </div>
+    <p>Interestingly, the cleanup and side effect code (starting at offset $98) are not encrypted! (I didn't notice earlier, but the byte offsets line up.</p>
+    <p>It only decrypts -- and re-encrypts -- the code from $6026 to $6097. Possibly a bug in the original code?</p>
+    <div class="terminal_output">
+      <code>T14,S00
+----------- DISASSEMBLY MODE ----------
+0098:A9 FF          LDA   #$FF
+009A:51 00          EOR   ($00),Y
+009C:91 00          STA   ($00),Y
+009E:88             DEY
+009F:C0 17          CPY   #$17
+00A1:D0 F5          BNE   $0098
+00A3:A4 03          LDY   $03
+00A5:A2 00          LDX   #$00
+00A7:68             PLA
+00A8:95 00          STA   $00,X
+00AA:E8             INX
+00AB:E0 04          CPX   #$04
+00AD:D0 F8          BNE   $00A7
+00AF:98             TYA
+00B0:F0 FE          BEQ   $00B0   <-- !
+00B2:A9 00          LDA   #$00
+00B4:8D D0 6A       STA   $6AD0
+00B7:A9 C6          LDA   #$C6
+00B9:8D D1 6A       STA   $6AD1
+00BC:60             RTS</code>
+    </div>
+    <p>That makes my job much easier. Instead of calculating the proper encrypted value, I can just change the BEQ branch operand directly.</p>
+    <p>T14,S00,$B1 change "FE" to "00"</p>
+    <div class="line_editing">
+      <code>]PR#6
+...works...</code>
+    </div>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

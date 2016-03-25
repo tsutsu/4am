@@ -1,0 +1,129 @@
+<!doctype html>
+<html><head>
+<title>The Incredible Laboratory</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+
+    <p>"The Incredible Laboratory: Strategies in Problem Solving" is a 1984 educational game distributed by</p>
+    <p>Sunburst Communications, Inc. It was programmed by Jay Carlson, with graphics by Melissa Verber.</p>
+    <div class="curses_input">
+      <code>[The copy protection is identical to
+"M-ss-ng L-nks," also distributed by
+Sunburst. This write-up is therefore
+quite similar to that one, with a few
+corrections.]</code>
+    </div>
+    <p class="seen">The original disk is uncopyable by COPYA or Locksmith Fast Disk Backup. EDD 4 bit copy gives read errors on tracks $13 and up. Oddly, when I look at the original disk with the Copy ][+ nibble editor, those "unreadable" tracks do appear to be formatted and to contain data. Needless to say, the copy does not work.</p>
+    <p class="seen">Further inspection in the nibble editor reveals that each track has a different address and data prologue:</p>
+    <p class="seen">Track | Address | Data ------+----------+----------</p>
+    <p class="seen">$00 | D5 AA 96 | D5 AA AD (normal) $01 | D5 AA 97 | D5 AA AE $02 | D5 AA 9A | D5 AA AF $03 | D5 AA 9B | D5 AA B2 $04 | D5 AA 9D | D5 AA B3</p>
+    <p class="seen">And so on.</p>
+    <p class="seen">Time for boot tracing with AUTOTRACE.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+    </div>
+    <p class="seen">For those of you just tuning in, my work disk runs a program I call "AUTOTRACE" to automate the process of boot tracing. For disks that use an entirely custom boot process, AUTOTRACE just captures track 0, sector 0 (saved in a file called "BOOT0") and stops.</p>
+    <p class="seen">For "DOS 3.3-shaped" disks, which load in the more-or-less the same way as an unprotected DOS 3.3 disk loads, it can also capture the next stage of the boot process (to a file called "BOOT1"). "BOOT1" is usually sectors 0-9 on track 0, which are usually loaded into memory at $B600..$BFFF. (Of course, there are exceptions to every rule.)</p>
+    <p class="seen">If the boot1 code is "DOS 3.3-shaped," there's a good chance I'll be able to use a tool called Advanced Demuffin to convert the disk from whatever weird format it uses to store its data into a standard disk readable by unprotected DOS 3.3. In this case, the RWTS was close enough to normal for my AUTOTRACE program (which spot-checks a few locations in memory to guess at its "normalcy"), so it extracted the RWTS routines from $B800..$BFFF and saved them into a third file called "RWTS".</p>
+    <p class="seen">If anything looks fishy or non- standard, AUTOTRACE just stops, and I have to check the files it saved so far to determine why. But in this case, it ran all the way through, automatically capturing BOOT0, BOOT1, and RWTS files.</p>
+    <p class="seen">Now I can use Advanced Demuffin to convert the disk to a standard format.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>[press "5" to switch to slot 5]</code>
+      <code>[press "R" to load a new RWTS module]
+  --> At $B8, load "RWTS" from drive 1</code>
+      <code>[press "6" to switch to slot 6]</code>
+      <code>[press "C" to convert disk]</code>
+    </div>
+    <p class="seen">This disk is 16 sectors, and the default options (copy the entire disk, all tracks, all sectors) don't need to be changed unless something goes horribly wrong.</p>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:...................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:...................................
+SC1:...................................
+SC2:...................................
+SC3:...................................
+SC4:...................................
+SC5:...................................
+SC6:...................................
+SC7:...................................
+SC8:...................................
+SC9:...................................
+SCA:...................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:...................................
+=======================================
+16SC $00,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <p class="seen">The disk's own RWTS gave no read errors on any track. This is the power and the genius of Advanced Demuffin. Every disk must be able to read itself. So, let it read itself, then capture the data and write it out in a standard format.</p>
+    <p class="seen">Rebooting my work disk, I can now see the catalog on the demuffin'd copy.</p>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]CATALOG,S6,D2</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+420 FREE</code>
+      <code> A 002 LOGO
+ B 033 LOGO.BIN
+ A 003 TIL
+ B 033 TILOGO
+ B 005 LOADER.OBJ</code>
+    </div>
+    <div class="line_editing">
+      <code>]RUN LOGO</code>
+    </div>
+    <p class="seen">The game loads and runs without complaint. All further disk access is done through standard DOS functions. (It even runs from drive 2!) There doesn't appear to be any kind of nibble check or other copy protection, beyond the custom RWTS.</p>
+    <p class="seen">Now I need to make my copy bootable.</p>
+    <p class="seen">Remember, it still has the original RWTS on it. Advanced Demuffin does not do any post-conversion patching, so it often leaves you with a disk that can't read itself.</p>
+    <p class="seen">Since I've confirmed that this disk has a standard DOS 3.3 disk catalog and can be run from my work disk, I'm just going to blow away the entire DOS and replace it with an unmodified DOS 3.3.</p>
+    <p class="seen">Using Copy ][+, I can "copy DOS" from a freshly initialized DOS 3.3 disk onto the demuffin'd copy. This function of</p>
+    <p class="seen">Copy ][+ just sector-copies tracks 0-2 from one disk to another, but it's easier than setting that up manually in some other copy program.</p>
+    <p class="seen">Copy ][+</p>
+    <p class="seen">--> COPY --> DOS --> from slot 6, drive 2 --> to slot 6, drive 1</p>
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]
+[S6,D2=newly formatted DOS 3.3 disk]</code>
+    </div>
+    <p class="seen">...read read read... ...write write write...</p>
+    <p class="seen">And finally, I need to change the startup program from "HELLO" to "LOGO".</p>
+    <p class="seen">Copy ][+ has a dedicated function for this, too. It presents a list interface to choose a file from the catalog, then sector-edits track 1, sector 9 to set the name of the program that DOS runs (instead of "HELLO").</p>
+    <p class="seen">Copy ][+</p>
+    <p class="seen">--> CHANGE BOOT PROGRAM --> on slot 6, drive 1 --> LOGO</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

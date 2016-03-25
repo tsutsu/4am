@@ -1,0 +1,403 @@
+<!doctype html>
+<html><head>
+<title>Multiplication and Division</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+
+    <p>"Multiplication and Division" is a 1987 educational game distributed by Silver</p>
+    <p>Burdett Company.</p>
+    <p>COPYA fails miserably and immediately. EDD 4 bit copy gives no read errors, but the copy it creates only gets as far as loading DOS and displaying the BASIC prompt before crashing into the monitor at address $910A.</p>
+    <p class="seen">Turning to my trusty Disk Fixer sector editor, I press "O" to get to the</p>
+    <p class="seen">Input/Output Control and set "CHECKSUM ENABLED" to "NO". This will ignore the checksum bytes and epilogue sequences. i.e. As long as the address and data prologue are standard ("D5 AA 96" and "D5 AA AD", respectively), this will allow me to read each sector. And lo and behold, it works! I can read the data from every sector on every track.</p>
+    <p class="seen">Track $11 does appear to contain a disk catalog, which strongly suggests this program is file-based.</p>
+    <p class="seen">Based on my limited experience cracking other disks, I would guess that this disk has</p>
+    <p class="seen">- Standard prologue bytes before the</p>
+    <p class="seen">address and data fields [otherwise a sector editor would give read errors, even when ignoring checksums]</p>
+    <p class="seen">- Non-standard epilogue bytes after the</p>
+    <p class="seen">address and data fields [otherwise COPYA would work]</p>
+    <p class="seen">- Some secondary protection [otherwise</p>
+    <p class="seen">the bit copy created with EDD 4 would work]</p>
+    <p class="seen">Given the (relatively) weak structural protection, I used to turn to the DOS</p>
+    <p class="seen">3.3 master disk, patch the RWTS to ignore checksums and epilogue bytes (changing $B942 from "SEC" to "CLC"), and run COPYA. Then, one fine day, and completely by accident, I came across an original disk with a bad sector. I suppose this shouldn't surprise me.</p>
+    <p class="seen">These floppies are decades old by now; it's amazing any of them work at all.</p>
+    <p class="seen">The point is, I shouldn't be using tools that ignore potentially serious read errors. There are other tools, like Super Demuffin, that can convert a disk like this (with non-standard epilogue bytes) into a standard format.</p>
+    <p class="seen">It requires figuring out what the actual epilogue bytes are, but it has the advantage of surfacing a read error if the original disk actually has a read error.</p>
+    <p class="seen">So... no more COPYA+B942:18 patch. From now on, it's Super Demuffin or Advanced</p>
+    <p class="seen">Demuffin to convert disks to a standard format. Just by looking at the first few sectors, it appears that this disk uses a DOS 3.3-derived RWTS, which means that my AUTOTRACE program should be able to extract the RWTS from the original disk.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+    </div>
+    <p class="seen">Well, that worked flawlessly. My work disk first runs AUTOTRACE0, which sets up a minimal boot trace to capture the first sector of track 0 and saves it to the file "BOOT0" (on my work disk, not the original disk). If the first sector looks reasonably normal, it runs AUTOTRACE1, which sets up a more involved boot trace to capture the rest of track 0 and save it to the file "BOOT1". If *that* looks reasonably normal, it saves the RWTS to a file, unimaginatively named "RWTS", which can be loaded with Advanced Demuffin to copy each track of the original disk to a duplicate with standard address/data prologue/epilogue sequences.</p>
+    <p class="seen">Now I can use Advanced Demuffin to convert the disk to a standard format.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>[press "5" to switch to slot 5]</code>
+      <code>[press "R" to load a new RWTS module]
+  --> At $B8, load "RWTS" from drive 1</code>
+      <code>[press "6" to switch to slot 6]</code>
+      <code>[press "C" to convert disk]</code>
+    </div>
+    <p class="seen">This disk is 16 sectors, and the default options (copy the entire disk, all tracks, all sectors) don't need to be changed unless something goes horribly wrong.</p>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:...................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:...................................
+SC1:...................................
+SC2:...................................
+SC3:...................................
+SC4:...................................
+SC5:...................................
+SC6:...................................
+SC7:...................................
+SC8:...................................
+SC9:...................................
+SCA:...................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:...................................
+=======================================
+16SC $00,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <p class="seen">The disk's own RWTS gave no read errors on any track. This is the power and the genius of Advanced Demuffin. Every disk must be able to read itself. So, let it read itself, then capture the data and write it out in a standard format.</p>
+    <p class="seen">There are two problems with this copy:</p>
+    <p class="seen">1. Depending on how the original RWTS</p>
+    <p class="seen">was written, a demuffin'd disk may not be able to read itself. Some developers just patch the RWTS to ignore epilogue bytes, while others patch the RWTS to look for specific non-standard epilogue bytes.</p>
+    <p class="seen">Demuffin'd disks in the latter category will grind immediately on boot, since as soon as the RWTS is loaded, all further disk reads will look for the original (non-standard) epilogue bytes and not find them.</p>
+    <p class="seen">2. Even if it can read itself, it won't</p>
+    <p>run. The copies I tried to make -- even the bit copies -- just crashed.</p>
+    <p>The original disk boots fine, which means there is some code being executed during boot to check if the disk is original. (Hint: it's not.)</p>
+    <p class="seen">This disk appears to be in the "strict RWTS" category. My demuffin'd copy just grinds on boot, which tells me that the RWTS is looking for specific (non- standard) epilogue bytes and failing to find them. So I need to patch the RWTS to undo the modifications and look for the standard epilogue bytes instead.</p>
+    <p class="seen">For future reference (mostly mine), here's a nice chart of the memory locations for all the prologues and epilogues in a DOS 3.3-shaped RWTS. If the RWTS stores $B700 in T00,S01 (most do), then $B8xx will be in T00,S02; $B9xx in T00,S03; and so on.</p>
+    <p class="seen"></p>
+    <p class="seen">0x | read | write</p>
+    <p class="seen">---------------+-------+------- D5 | $B955 | $BC7A prologue AA | $B95F | $BC7F / 96 | $B96A | $BC84 ADDRESS -------+-------+------- \ DE | $B991 | $BCAE epilogue AA | $B99B | $BCB3 EB | | $BCB8 ---------------+-------+------- D5 | $B8E7 | $B853 prologue AA | $B8F1 | $B858 / AD | $B8FC | $B85D DATA ----------+-------+------- \ DE | $B935 | $B89E epilogue AA | $B93F | $B8A3 EB | | $B8A8 ---------------+-------+-------</p>
+    <p class="seen"></p>
+    <p class="seen">Here are the patches to normalize the RWTS. (Note to self: make an RWTS comparison tool.)</p>
+    <p>T00,S03,$91 change "AB" to "DE" T00,S03,$9B change "FF" to "AA"</p>
+    <p>Now my demuffin'd copy boots, loads DOS, displays a prompt, runs a boot program, and... crashes in exactly the same way that my failed bit copy did.</p>
+    <p>As expected, I can now CATALOG all the files on this disk:</p>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]CATALOG,S6,D1</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+008 FREE</code>
+      <code> A 008 HELLO
+ B 006 DBS16                 03/12/86
+ B 004 BS.NUM                03/14/86
+ B 005 BS.LARGE.CHAR         09/16/85
+ B 006 BS.SMALL.CHAR         09/16/85
+ B 002 BS.OBJ                02/21/86
+ B 006 BS.OWL                02/05/86
+ B 002 DBFLIP                03/19/86
+ B 004 MUS.MOV               11/19/85
+ B 004 DB.INPUT              03/12/86
+ B 006 PAC.SB                09/10/85
+ B 003 DB.COMMA              03/14/86
+ A 023 MENUS                 04/26/86
+ A 011 ROUTINES              03/14/86
+ A 015 P.ROUTINES            03/14/86
+ A 010 G.ROUTINES            11/19/85
+ A 012 INSTRUCTION           03/14/86
+ A 010 I.PRACTICE            03/14/86
+ A 025 I.GAME                04/26/86
+ A 017 M.L.BASFACT           03/31/86
+ A 029 M.L.DIGITS            04/28/86
+ A 029 M.L.ESTIMATE          04/02/86
+ A 019 M.P.BASFACT           03/14/86
+ A 027 M.P.DIGITS            03/31/86
+ A 044 M.G.DIGITS            04/01/86
+ A 014 D.L.BASFACT           03/14/86
+ A 036 D.L.DIGITS            03/31/86
+ A 014 D.P.BASFACT           03/14/86
+ A 033 D.P.DIGITS            03/28/86
+ A 051 D.G.DIGITS            05/09/86
+ B 006 MEM.SWITCH            03/12/86
+ B 004 ESI.STARTUP
+ B 003 XMGPRT</code>
+    </div>
+    <p>Ooh, interesting. This disk is using a modified DOS that stores modification dates in the end of each file. The down side is that I can't run the program from my work disk, because it doesn't know to ignore the last 8 bytes of each filename.</p>
+    <p>According to Copy ][+, the boot program on this disk is a binary file called "XMGPRT" that is loaded at $9000. ("CHANGE BOOT PROGRAM" will show the current boot program, even if you don't want to change it. "CATALOG DISK" -> "W/ FILE LENGTHS" will show the start address of each file.)</p>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]BLOAD XMGPRT,S6,D1
+]CALL -151</code>
+      <code>*9000L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">get address of RWTS parameter table</p>
+      <code>9000-   20 E3 03    JSR   $03E3
+9003-   85 FB       STA   $FB
+9005-   84 FA       STY   $FA</code>
+      <p class="comment">hmm</p>
+      <code>9007-   A9 C5       LDA   #$C5
+9009-   48          PHA</code>
+      <p class="comment">copy RWTS parameters</p>
+      <code>900A-   A9 00       LDA   #$00
+900C-   85 FC       STA   $FC
+900E-   A2 03       LDX   #$03
+9010-   BC 4C 90    LDY   $904C,X
+9013-   91 FA       STA   ($FA),Y
+9015-   CA          DEX
+9016-   10 F8       BPL   $9010
+9018-   8A          TXA</code>
+      <p class="comment">hmm</p>
+      <code>9019-   48          PHA</code>
+    </div>
+    <p class="seen">The X register will be $FF after the loop, so this means we've pushed $C5FF to the stack. At this point, a bare RTS will "return" to $C5FF+1, i.e. reboot.</p>
+    <div class="listing">
+      <code>901A-   20 3C 90    JSR   $903C</code>
+    </div>
+    <div class="line_editing">
+      <code>*903CL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">call the RWTS (most likely just to move the drive head to the proper position for an impending nibble check)</p>
+      <code>903C-   20 E3 03    JSR   $03E3
+903F-   20 D9 03    JSR   $03D9
+9042-   A9 00       LDA   #$00
+9044-   85 48       STA   $48</code>
+      <p class="comment">if that fails, off to The Badlands</p>
+      <code>9046-   B0 65       BCS   $90AD
+9048-   60          RTS</code>
+    </div>
+    <p class="seen">Caller was $901A, so resuming at $901D:</p>
+    <div class="line_editing">
+      <code>*901DL</code>
+    </div>
+    <div class="listing">
+      <code>901D-   A0 01       LDY   #$01
+901F-   B1 FA       LDA   ($FA),Y
+9021-   AA          TAX
+9022-   20 6B 90    JSR   $906B</code>
+    </div>
+    <div class="line_editing">
+      <code>*906BL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">turning on the drive motor manually is always suspicious</p>
+      <code>906B-   BD 89 C0    LDA   $C089,X</code>
+      <p class="comment">set up a Death Counter</p>
+      <code>906E-   A9 56       LDA   #$56
+9070-   85 FD       STA   $FD
+9072-   A9 08       LDA   #$08
+9074-   C6 FC       DEC   $FC
+9076-   D0 04       BNE   $907C</code>
+      <p class="comment">If the Death Counter hits zero, that would be bad. Which part of "Death</p>
+      <p class="comment">Counter" sounded good to you, anyway?</p>
+      <code>9078-   C6 FD       DEC   $FD
+907A-   F0 7E       BEQ   $90FA</code>
+      <p class="comment">look for a specific nibble ($FB)</p>
+      <code>907C-   BC 8C C0    LDY   $C08C,X
+907F-   10 FB       BPL   $907C
+9081-   C0 FB       CPY   #$FB
+9083-   D0 ED       BNE   $9072</code>
+      <code>9085-   F0 00       BEQ   $9087</code>
+      <p class="comment">kill a few cycles (not pointless, because the disk spins independently of the CPU, so all of these low-level disk reads are highly time-sensitive)</p>
+      <code>9087-   EA          NOP
+9088-   EA          NOP</code>
+      <p class="comment">read data latch (note: no BPL loop here, we're just reading it once)</p>
+      <code>9089-   BC 8C C0    LDY   $C08C,X</code>
+      <p class="comment">do a compare to set or clear the carry bit (among other things, but it's the carry bit we care about)</p>
+      <code>908C-   C0 08       CPY   #$08</code>
+      <p class="comment">rotate the carry into the low bit of the accumulator</p>
+      <code>908E-   2A          ROL</code>
+      <p class="comment">if we just rolled a "1" bit out of the high bit of the accumulator, take this branch</p>
+      <code>908F-   B0 0B       BCS   $909C</code>
+      <p class="comment">next nibble needs to be $FF</p>
+      <code>9091-   BC 8C C0    LDY   $C08C,X
+9094-   10 FB       BPL   $9091</code>
+      <p class="comment">...otherwise we start over</p>
+      <code>9096-   C0 FF       CPY   #$FF
+9098-   D0 D8       BNE   $9072</code>
+      <p class="comment">loop back to get next nibble</p>
+      <code>909A-   F0 EB       BEQ   $9087</code>
+      <p class="comment">execution continues here (from $908F) get another nibble</p>
+      <code>909C-   BC 8C C0    LDY   $C08C,X
+909F-   10 FB       BPL   $909C</code>
+      <p class="comment">stash it in zero page</p>
+      <code>90A1-   84 FC       STY   $FC</code>
+      <p class="comment">if the accumulator is anything but %00001010, start over</p>
+      <code>90A3-   C9 0A       CMP   #$0A
+90A5-   D0 CB       BNE   $9072</code>
+    </div>
+    <p class="seen">I got lost several times trying to follow this routine. I think the easiest way to explain it is to show the difference between the original disk and my non-working copy.</p>
+    <p class="seen">Here is the original disk, as seen by the Copy II+ nibble editor. Nibbles with extra "0" bits (timing bits) after them are displayed in inverse on an original machine, marked here with a "+" after the nibble.</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK:     START: 1B1E  LENGTH: 17C1</code>
+      <code>1C70: 9F EB E5 FC D7 D7 D7 EE   VIEW
+1C78: FA E6 E6 FF FE F2 ED FD
+1C80: FF EF ED BA BB DD AF E6
+1C88: B7 A7 CB B7 DE AA EB FF
+1C90: FF FF FF FB+FF FF+FF FF+
+1C98: FD FF+FF+FF+FF+FF+FF+FF+
+1CA0: FF+FF+D5 AA 96 AA AB AA
+1CA8: AA AA AB AA AA DE AA EB+
+1CB0: FF+FF+FF+FF+FF+FF D5 AA
+---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">It's easy to understand why a simple sector copy failed. The sequence that this code is looking for starts at offset $1C93, which is between the end of one sector and the beginning of the next. (The data epilogue is at $1C8C; the next address prologue is at $1CA2.)</p>
+    <p class="seen">Sector copiers discard everything between those delimiters and rebuild the track with a default pattern of sync bytes. That pattern doesn't include an $FB nibble, so the nibble check fails.</p>
+    <p class="seen">But the EDD bit copy also failed. Here is the original disk's pattern at offset $1C93:</p>
+    <p class="seen">- $FB + timing bit - $FF - $FF + timing bit - $FF - $FF + timing bit</p>
+    <p class="seen">And here is what the same part of the track looks like on my failed EDD copy:</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK:     START: 1B1E  LENGTH: 17C1</code>
+      <code>1C70: 9F EB E5 FC D7 D7 D7 EE   VIEW
+1C78: FA E6 E6 FF FE F2 ED FD
+1C80: FF EF ED BA BB DD AF E6
+1C88: B7 A7 CB B7 DE AA EB FF
+1C90: FF FF FF FB+FF FF FF+FF+
+1C98: FD FF+FF+FF+FF+FF+FF+FF+
+1CA0: FF+FF+D5 AA 96 AA AB AA
+1CA8: AA AA AB AA AA DE AA EB+
+1CB0: FF+FF+FF+FF+FF+FF D5 AA
+---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">A subtle difference! The sequence at offset $1C93 now looks like this:</p>
+    <p class="seen">- $FB + timing bit - $FF - $FF - $FF + timing bit - $FF + timing bit</p>
+    <p class="seen">This code is looking for $FF bytes with an alternating pattern of timing bit, no timing bit, timing bit, no timing bit. It doesn't find that on the bit copy, so it knows it's not running on an original disk.</p>
+    <p class="seen">Continuing the code listing...</p>
+    <div class="listing">
+      <p class="comment">get a nibble</p>
+      <code>90A7-   BD 8C C0    LDA   $C08C,X
+90AA-   10 FB       BPL   $90A7</code>
+      <p class="comment">more bit twiddling</p>
+      <code>90AC-   38          SEC
+90AD-   2A          ROL</code>
+      <p class="comment">AND it with the previously stashed nibble</p>
+      <code>90AE-   25 FC       AND   $FC
+90B0-   49 FF       EOR   #$FF</code>
+      <p class="comment">branch to failure path</p>
+      <code>90B2-   D0 46       BNE   $90FA</code>
+      <p class="comment">success path falls through to here -- turn off the drive motor and (eventually) return to the caller</p>
+      <code>90B4-   DD 88 C0    CMP   $C088,X
+.
+.
+.
+; failure path (a.k.a. "The Badlands",
+; from which there is no return)
+90FA-   A8          TAY
+90FB-   DD 88 C0    CMP   $C088,X</code>
+      <p class="comment">manually pop the return address of the immediate caller (which leaves the manually pushed $C5FF address on the top of the stack to "return" to)</p>
+      <code>90FE-   68          PLA
+90FF-   68          PLA</code>
+      <p class="comment">destroy all trace of this program in memory</p>
+      <code>9100-   99 00 90    STA   $9000,Y
+9103-   C8          INY
+9104-   C0 00       CPY   #$00
+9106-   D0 F8       BNE   $9100
+9108-   00          BRK
+9109-   00          BRK</code>
+    </div>
+    <p>Literally, that's it. I'm pretty sure they meant to have an "RTS" here (which would reboot), but they had an off-by-1 bug in saving this file and the "RTS" instruction went missing.</p>
+    <p class="seen">Meanwhile, the success path returns to the real caller and continues execution at $9025:</p>
+    <div class="line_editing">
+      <code>*9025L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">remove the dummy address that we manually pushed to the stack earlier (which would reboot if "returned" to)</p>
+      <code>9025-   68          PLA
+9026-   68          PLA</code>
+      <p class="comment">umm, I'm no expert, but this looks like an infinite loop</p>
+      <code>9027-   A0 00       LDY   #$00
+9029-   84 FE       STY   $FE
+902B-   B9 50 90    LDA   $9050,Y
+902E-   09 80       ORA   #$80
+9030-   20 39 90    JSR   $9039
+9033-   A4 FE       LDY   $FE
+9035-   C8          INY
+9036-   4C 29 90    JMP   $9029
+9039-   6C 36 00    JMP   ($0036)</code>
+    </div>
+    <p>Zero page $36 is the DOS output vector, so this prints stuff. In an infinite loop. And this is the *success* path.</p>
+    <p class="seen">Never a dull moment in the land of</p>
+    <p class="seen">Apple II copy protection.</p>
+    <p>Whatever it's printing, it starts at $9050. This is what's at $9050:</p>
+    <div class="line_editing">
+      <code>*9050.9070</code>
+    </div>
+    <div class="listing">
+      <code>9050- 04 42 52 55 4E 20 45 53
+9058- 49 2E 53 54 41 52 54 55
+9060- 50 20 20 20 20 20 20 20
+9068- 20 0D 00 BD 89 C0 A9 56
+9070- 85
+*</code>
+    </div>
+    <div class="line_editing">
+      <code>*FC58G N 400<9050.906AM</code>
+    </div>
+    <div class="terminal_output">
+      <code>DBRUN ESI.STARTUP        M@</code>
+    </div>
+    <p class="seen">Aha! It's not an infinite loop after all. Well, it is, technically, but it won't actually run forever. It's not easy to show in plain text, but the initial "D" and the final "M@" are in inverse. So that string starts with</p>
+    <p class="seen">Ctrl-D and ends with Ctrl-M and a null byte. Since DOS is already loaded, printing this through the DOS vector will execute that command, as if you typed it from a prompt yourself. Since that program never returns to the caller, it will break out of the seemingly "infinite" loop.</p>
+    <p>Since there are no side effects to the copy protection routine, I can change this file to simply skip over it and go straight to running the real startup program.</p>
+    <div class="line_editing">
+      <code>*9000:4C 27 90</code>
+      <code>*BSAVE XMGPRT,A$9000,L$0108</code>
+    </div>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<section>
+  <h2>Changelog</h2>
+
+    <div class="terminal_output">
+      <code>2015-09-06</code>
+    </div>
+    <p class="seen">- Vastly improved explanation of the</p>
+    <p class="seen">actual protection routine. Thanks to qkumba for pointing out that my original explanation was inaccurate.</p>
+    <div class="terminal_output">
+      <code>2014-09-29</code>
+    </div>
+    <p class="seen">- initial release</p>
+</section>
+
+</body></html>

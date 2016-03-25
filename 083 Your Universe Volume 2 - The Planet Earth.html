@@ -1,0 +1,281 @@
+<!doctype html>
+<html><head>
+<title>Your Universe Volume 2 - The Planet Earth</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+
+    <p>"Your Universe Volume 2: The Planet</p>
+    <p>Earth" is a 1985 educational game developed by Larry Cunningham, programmed by Alan Biegelman, edited by</p>
+    <p>Joseph London, and distributed by Focus</p>
+    <p class="seen">Media, Inc.</p>
+    <div class="curses_input">
+      <code>[The copy protection is identical to
+"Who Am I? Birds, Trees, and Flowers,"
+also distributed by Focus Media. This
+write-up is therefore quite similar to
+that one, with a few corrections.]</code>
+    </div>
+    <p>The original disk boots, loads DOS, displays a BASIC prompt, then runs a HELLO program of some sort.</p>
+    <p class="seen">COPYA fails miserably and immediately with a disk read error. EDD 4 bit copy gives no read errors, but the copy grinds the disk drive on boot and never gets any further.</p>
+    <p class="seen">My trusty Copy ][+ sector editor can read track 0, sectors 0-9 without any trouble. Everything beyond that, even the rest of the sectors on track 0, is unreadable. Ignoring epilogue bytes (press "P" to get to the Sector Editor</p>
+    <p class="seen">Patcher, then select "DOS 3.3 PATCHED") makes no difference.</p>
+    <p class="seen">Switching to the nibble editor, it appears that all the tracks are in a fairly standard 16-sector format, but the data prologue has been changed from "D5 AA AD" to "D5 AA FF".</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+----------------------------------------</code>
+      <code>TRACK: 01  START: 1E35  LENGTH: 015F</code>
+    </div>
+    <div class="curses">
+      <code>1E10: FF FF FF FF FF FF FF FF   VIEW
+1E18: FF FF FF FF FF FF FF FF
+1E20: FF FF FF FF FF FF E7 F9
+1E28: FE FF FF FF FF FF FF FF
+1E30: FF FF FF FF FF D5 AA 96  <-1E35
+                     ^^^^^^^^
+             standard address prologue</code>
+      <code>1E38: FF FE AA AB AA AA FF FF
+1E40: AB AA CF F3 FC FF FF FF
+      ^^^^^^^^
+non-standard address epilogue</code>
+      <code>1E48: FF FF FF D5 AA FF CF CA
+               ^^^^^^^^
+      non-standard data prologue</code>
+    </div>
+    <div class="terminal_output">
+      <code>1E50: DF BE BA BA A9 AF BF BD</code>
+      <code>----------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">All tracks appears to use the same prologue and epilogue sequences (except for the first 10 sectors on track 0).</p>
+    <p class="seen">The sectors I can read on track 0 appear to be a standard(-ish) DOS 3.3 RWTS. Of course, there are some modifications to accommodate the non-standard prologue and epilogue sequences, but a cursory glance shows no other obvious pitfalls. Of course, it's always the non-obvious pitfalls that bite you, so let's forget I mentioned it.</p>
+    <p class="seen">Go go gadget AUTOTRACE!</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS
+SAVING IOB</code>
+    </div>
+    <p class="seen">For those of you just tuning in, my work disk uses a custom program that I affectionately call "AUTOTRACE" to automate the process of boot tracing as far as possible. For some disks, this just captures track 0, sector 0 (saved in a file called "BOOT0") and stops.</p>
+    <p class="seen">For other disks that load in the same way that an unprotected DOS 3.3 disk loads, it captures the next stage of the boot process as well (in a file called "BOOT1"). BOOT1 contains sectors 0-9 on track 0, which are loaded into memory at $B600..$BFFF. This generally contains the RWTS routines which the program uses to read the rest of the disk.</p>
+    <p class="seen">If the RWTS is fairly normal as well (and my AUTOTRACE program just spot- checks a few memory locations to guess at its "normalcy"), there's a good chance I'll be able to use a tool called Advanced Demuffin (written in 1983 by The Stack) to convert the disk from whatever weird format it uses to store its sector data into a standard disk readable by unprotected DOS 3.3 disks or any other third-party tools.</p>
+    <p class="seen">In this case, AUTOTRACE extracts the RWTS routines (generally loaded from track 0, sectors 2-9 into $B800..$BFFF) and saves *that* into a third file called "RWTS".</p>
+    <p>But wait, there's more! The latest feature I added to my AUTOTRACE program is automatic IOB module creation. What the heck is an IOB module? Well, the author of Advanced Demuffin anticipated that he couldn't anticipate everything, so he made the program extensible.</p>
+    <p>Quoting from the Advanced Demuffin softdocs (included on my work disk):</p>
+    <div class="curses">
+      <code>An IOB module is an interface for the
+source RWTS. Advanced Demuffin uses the
+IOB module to set up the IOB table and
+jump to RWTS.  The IOB module is stored
+from $1400-$14FB. When Advanced
+Demuffin loads in a IOB module, it
+reads the first sector of the file off
+the track-sector list and stores it at
+$13FC-$14FB. When Advanced Demuffin
+wants to read a sector it JSRs to the
+IOB module with the phase number,
+sector number, and the page number
+stored in the A, Y and X registers
+respectively. Since the source drive
+always has to be drive one, Advanced
+Demuffin can make the IOB module very
+compact. After it gets the page,track
+and sector Advanced Demuffin sets up
+the IOB for RWTS using this infor-
+mation, and JMPs to RWTS. (It jumps
+instead of JSRing, because it lets the
+RWTS do the RTS.) Here is a list of the
+IOB module that is built in to Advanced
+Demuffin:</code>
+    </div>
+    <div class="listing">
+      <p class="comment">Convert phase # to track #</p>
+      <code>1400-   4A          LSR</code>
+      <p class="comment">Store track number</p>
+      <code>1401-   8D 22 0F    STA   $0F22</code>
+      <p class="comment">Store sector number</p>
+      <code>1404-   8C 23 0F    STY   $0F23</code>
+      <p class="comment">Store page number [note: original docs have incorrect hex opcode on this line]</p>
+      <code>1407-   8E 27 0F    STX   $0F27</code>
+      <code>140A-   A9 01       LDA   #$01</code>
+      <p class="comment">Store the drive number</p>
+      <code>140C-   8D 20 0F    STA   $0F20</code>
+      <p class="comment">Store the read code</p>
+      <code>140F-   8D 2A 0F    STA   $0F2A</code>
+      <p class="comment">With high byte of IOB</p>
+      <code>1412-   A9 0F       LDA   #$0F</code>
+      <p class="comment">With low byte of IOB</p>
+      <code>1414-   A0 1E       LDY   #$1E</code>
+      <p class="comment">Goto RWTS</p>
+      <code>1416-   4C 00 BD    JMP   $BD00</code>
+    </div>
+    <p class="seen">Basically, Advanced Demuffin only knows how to call a custom RWTS if it</p>
+    <p class="seen">1. is loaded at $B800..$BFFF</p>
+    <p class="seen">2. uses a standard RWTS parameter table</p>
+    <p class="seen">3. has an entry point at $BD00 that</p>
+    <p class="seen">takes the address of the parameter tables in A and Y</p>
+    <p class="seen">4. doesn't require initialization</p>
+    <p>As it turns out, that covers a *lot* of copy protected disks, but it doesn't cover this one because the RWTS on disk is loaded at $3800..$3FFF and has its entry point at $3D00. If I told</p>
+    <p>Advanced Demuffin to load this RWTS at $B800 and call it at $BD00, it would crash quite spectacularly.</p>
+    <p>So, I added a check to AUTOTRACE to detect that the RWTS is loaded in a non-standard location (lines 279-300 in the HELLO program on my work disk) and automatically create an IOB file that can tell Advanced Demuffin how to access it. Here's what it looks like:</p>
+    <div class="line_editing">
+      <code>]BLOAD IOB,A$1400
+]CALL -151</code>
+      <code>*1400L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">Most of this is identical to the standard IOB module that comes with</p>
+      <p class="comment">Advanced Demuffin (explained above).</p>
+      <code>1400-   4A          LSR
+1401-   8D 22 0F    STA   $0F22
+1404-   8C 23 0F    STY   $0F23
+1407-   8E 27 0F    STX   $0F27
+140A-   A9 01       LDA   #$01
+140C-   8D 20 0F    STA   $0F20
+140F-   8D 2A 0F    STA   $0F2A</code>
+      <p class="comment">One problem with having an RWTS at $3800..$3FFF is that that range is normally used to store track data during the copy process. If we just let Advanced Demuffin run, it will overwrite the custom RWTS almost immediately and crash. In the ADVANCED DEMUFFIN TECH NOTES (also included on my work disk), the author mentions that you can control how many sectors Advanced Demuffin reads at a time, and where it puts it in memory. Normally $1CF0 is $20 and $1CF1 is $90, meaning that it will copy 7 tracks worth of data at a time into $2000..$8FFF. Changing the end parameter to $30 will only copy one track at a time, but has the distinct advantage of not overwriting the RWTS and crashing.</p>
+      <code>1412-   A9 30       LDA   #$30
+1414-   8D F1 1C    STA   $1CF1</code>
+      <p class="comment">get the address of the RWTS parameter table at $0F1E and call the RWTS entry point at $3D00 (instead of the usual $BD00)</p>
+      <code>1417-   A9 0F       LDA   #$0F
+1419-   A0 1E       LDY   #$1E
+141B-   4C 00 3D    JMP   $3D00</code>
+    </div>
+    <p>Now I can use Advanced Demuffin to convert the disk to a standard format.</p>
+    <p>It uses the disk's own RWTS to read the original (stored in the RWTS file, accessed via the IOB module), then a standard DOS 3.3-compatible RWTS to write out the data, sector by sector.</p>
+    <p>Advanced Demuffin will only load RWTS and IOB files from a drive in slot 6, which is annoying since mine is in slot</p>
+    <p>5. Note to self: patch that someday. In the meantime, I'm swapping floppy disks like some kind of 16th century monk.</p>
+    <div class="curses_input">
+      <code>[S6,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+]BRUN ADVANCED DEMUFFIN 1.1</code>
+    </div>
+    <p class="seen">--> LOAD NEW RWTS MODULE</p>
+    <p class="seen">At $38, load "RWTS" from D1</p>
+    <p class="seen">--> LOAD NEW IOB MODULE</p>
+    <p class="seen">load "IOB" from D1</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>--> FORMAT TARGET DISK</code>
+    </div>
+    <p class="seen">...grind grind grind...</p>
+    <div class="terminal_output">
+      <code>--> CONVERT DISK</code>
+      <code>--> CHANGE DEFAULT VALUES? N</code>
+    </div>
+    <p class="seen">This disk is 16 sectors, and the default options (copy the entire disk, all tracks, all sectors) don't need to be changed unless something goes horribly wrong.</p>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.1  - COPYRIGHT 1983
+WRITTEN BY THE STACK -CORRUPT COMPUTING
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:R..................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:R..................................
+SC1:R..................................
+SC2:R..................................
+SC3:R..................................
+SC4:R..................................
+SC5:R..................................
+SC6:R..................................
+SC7:R..................................
+SC8:R..................................
+SC9:R..................................
+SCA:...................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:...................................
+=======================================
+16 SC $00,$00 TO $22,$0F BY $01 TO DRV2</code>
+    </div>
+    <p class="seen">The disk's own RWTS can't read the first 10 sectors of track 0, but that's to be expected -- they were in a different format than the rest of the disk. What I really care about is the rest of the disk, and that part went flawlessly. That's the power and the genius of Advanced Demuffin. Every disk must be able to read itself. So, let it read itself, then capture the data and write it out in a standard format.</p>
+    <p class="seen">Of course, my copy won't boot, because it doesn't have any boot code in the first 10 sectors of track 0! But check this out...</p>
+    <div class="curses_input">
+      <code>[S6,D1=my work disk]
+[S6,D2=demuffin'd copy]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...</code>
+      <code>]CATALOG,S6,D2</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+152 FREE</code>
+      <code> A 003 HELLO
+ B 034 INTRO
+ T 003 HELP1TXT
+ T 003 HELP2TXT
+ T 004 HELP3TXT
+ T 003 HELP4TXT
+ T 003 HELP5TXT
+ T 003 HELP6TXT
+ T 004 HELP7TXT
+ T 003 HELP8TXT
+ T 003 HELP9TXT
+ T 004 HELP10TXT
+ T 004 HELP11TXT
+ T 004 HELP12TXT
+ T 003 HELP13TXT
+ T 003 HELP14TXT
+ A 018 START
+*B 002 MOVE
+*B 002 HRU2
+ T 004 HELP15TXT
+ T 002 HELP16TXT
+ T 003 HELP18TXT
+ B 014 HELP17PK
+*B 003 RBOOT
+*B 005 RLOAD
+*R 012 HRCG
+*B 002 SKIGUYS.SHP
+*B 002 SWAP
+ B 013 ESC1PK
+ T 039 QUESTIONS
+*B 002 SOUND
+ T 057 ANSWERS
+ A 033 GAME
+ T 003 POINTERS
+ A 017 START
+ B 004 SLOPE
+ T 023 QUESTIONSSEQ</code>
+    </div>
+    <div class="line_editing">
+      <code>]RUN HELLO</code>
+    </div>
+    <p class="seen">The game loads and runs without complaint. All further disk access is done through standard DOS functions. (It even runs from drive 2!) There doesn't appear to be any kind of nibble check or other copy protection, beyond the custom DOS.</p>
+    <p>Now to make the disk be able to read itself. Using Copy ][+, I can "copy DOS" from a freshly initialized DOS 3.3 disk onto the demuffin'd copy. This function of Copy ][+ just sector-copies tracks 0-2 from one disk to another, but it's easier than setting that up manually in some other copy program.</p>
+    <p class="seen">Copy ][+</p>
+    <p class="seen">--> COPY --> DOS --> from slot 6, drive 2 --> to slot 6, drive 1</p>
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]
+[S6,D2=newly formatted DOS 3.3 disk]</code>
+    </div>
+    <p class="seen">...read read read... ...write write write...</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

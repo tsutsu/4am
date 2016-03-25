@@ -1,0 +1,317 @@
+<!doctype html>
+<html><head>
+<title>Decimals Practice</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">unable to read any track</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">no errors, but copy hangs on boot with the drive motor on</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">all tracks use standard prologues (address: D5 AA 96, data: D5 AA AD) but modified epilogues (address: FF FF FF, data: FF FF FF)</p>
+    <p class="seen">Disk Fixer</p>
+    <p class="seen">["O" -> "Input/Output Control"] set Address Epilogue to "FF FF FF" set Data Epilogue to "FF FF FF"</p>
+    <p class="seen">Success! All tracks readable! T00 -> looks like a DOS 3.3 RWTS T11 -> DOS 3.3 disk catalog T01,S09 -> startup program is "HELLO"</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">Why didn't my EDD copy work?</p>
+    <p class="seen">probably a nibble check during boot</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. capture RWTS with AUTOTRACE</p>
+    <p class="seen">2. convert disk to standard format with Advanced Demuffin</p>
+    <p class="seen">3. find nibble check and bypass it</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Attempt To Use The Original Disk As A Weapon Against Itself</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+/!\ BOOT0 JUMPS TO ($BBFE)
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+      <code>]BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>["5" to switch to slot 5]</code>
+      <code>["R" to load a new RWTS module]
+  --> At $B8, load "RWTS" from drive 1</code>
+      <code>["6" to switch to slot 6]</code>
+      <code>["C" to convert disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:R..................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:...................................
+SC1:...................................
+SC2:...................................
+SC3:...................................
+SC4:...................................
+SC5:...................................
+SC6:...................................
+SC7:...................................
+SC8:...................................
+SC9:...................................
+SCA:R..................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:...................................
+=======================================
+16SC $00,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <p class="seen">Hmm. Even the disk's own RWTS can't read T00,S0A. I'm hoping that part of the copy protection and not a bad disk.</p>
+    <div class="line_editing">
+      <code>]PR#5
+]CATALOG,S6,D2</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+309 FREE</code>
+    </div>
+    <div class="line_editing">
+      <code>*A 003 HELLO
+*B 002 LOMEM:
+*B 026 DARTS.GEN
+*B 017 RUNTIME
+*B 022 DDARTS.TITLE.OBJ
+*B 007 BALLOON.SHP
+*B 003 DARTS.SHP
+*B 024 DDARTS.P1.OBJ
+*B 066 DDARTS.P2.OBJ
+*B 002 NAME.SHP</code>
+      <code>]RUN HELLO
+...crashes...</code>
+    </div>
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...hangs...</code>
+    </div>
+    <p class="seen">But it's _progress_.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Run Into An Old Friend Who Disapproves Of Our Hobbies And Actively Tries To Block Us So Not Really That Good Of A Friend</h3>
+
+    <div class="line_editing">
+      <code>]PR#5
+...
+]BLOAD BOOT0,A$800
+]CALL -151
+*801L
+.
+.
+.
+084A-   6C FE BB    JMP   ($BBFE)</code>
+    </div>
+    <p class="seen">Hmm.</p>
+    <div class="line_editing">
+      <code>*BLOAD BOOT1,A$2600</code>
+      <code>*FE89G FE93G     ; disconnect DOS
+*B600<2600.2FFFM ; move RWTS into place</code>
+      <code>*BBFE.BBFF</code>
+    </div>
+    <div class="listing">
+      <code>BBFE- 00 BB</code>
+    </div>
+    <div class="line_editing">
+      <code>*BB00L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">Ah, I recognize this routine already.</p>
+      <p class="comment">It was used by several different publishers, and it apparently had tweakable options. Turning off an option would generate code that makes no sense at first glance.</p>
+      <p class="comment">First, set the RUN flag so that, even if I manage to break out to a BASIC prompt, any command will act like RUN</p>
+      <code>BB00-   A9 FF       LDA   #$FF
+BB02-   85 D6       STA   $D6</code>
+      <p class="comment">Some disks have a "LDA $C08E,X" here to require that the disk be write- protected. With the option off, it's just an unconditional jump.</p>
+      <code>BB07-   A9 FF       LDA   #$FF
+BB09-   EA          NOP
+BB0A-   30 05       BMI   $BB11</code>
+      <p class="comment">[always skipped] BB0C- A2 B1 LDX #$B1 BB0E- 4C F0 BB JMP $BBF0</p>
+      <p class="comment">Some disks check the low-level reset vector (I think this was protection against "boot inspectors" like Watson that installed themselves in the language card and left it active during boot). This disk changes the CMP to an "LDA #$00", making this another unconditional jump.</p>
+      <code>BB11-   AD FD FF    LDA   $FFFD
+BB14-   A9 00       LDA   #$00
+BB16-   F0 05       BEQ   $BB1D</code>
+      <p class="comment">[always skipped] BB18- A2 B2 LDX #$B2 BB1A- 4C F0 BB JMP $BBF0</p>
+      <code>BB1D-   BD 8C C0    LDA   $C08C,X</code>
+      <p class="comment">Set the first character of the input buffer to null. This can be checked later to ensure that an attacker (me) hasn't interrupted the boot and been typing things.</p>
+      <code>BB20-   A9 00       LDA   #$00
+BB22-   8D 00 02    STA   $0200</code>
+      <p class="comment">look for a magic nibble sequence on track 0</p>
+      <code>BB25-   BD 8C C0    LDA   $C08C,X
+BB28-   10 FB       BPL   $BB25
+BB2A-   C9 EB       CMP   #$EB
+BB2C-   D0 F7       BNE   $BB25
+BB2E-   BD 8C C0    LDA   $C08C,X
+BB31-   10 FB       BPL   $BB2E
+BB33-   C9 D5       CMP   #$D5
+BB35-   D0 EE       BNE   $BB25
+BB37-   BD 8C C0    LDA   $C08C,X
+BB3A-   10 FB       BPL   $BB37
+BB3C-   C9 AA       CMP   #$AA
+BB3E-   D0 E5       BNE   $BB25</code>
+      <p class="comment">wipe most of memory ($0800..$95FF) although, ironically, not the part</p>
+      <p class="comment">I'm using for boot tracing</p>
+      <code>BB40-   A9 4C       LDA   #$4C
+BB42-   A0 00       LDY   #$00
+BB44-   99 00 95    STA   $9500,Y
+BB47-   88          DEY
+BB48-   D0 FA       BNE   $BB44
+BB4A-   CE 46 BB    DEC   $BB46
+BB4D-   AD 46 BB    LDA   $BB46
+BB50-   C9 07       CMP   #$07
+BB52-   D0 EC       BNE   $BB40</code>
+      <p class="comment">fiddle with the RWTS to ignore epilogue bytes</p>
+      <code>BB54-   A9 18       LDA   #$18
+BB56-   8D 42 B9    STA   $B942</code>
+      <p class="comment">sector $0A</p>
+      <code>BB59-   A9 0A       LDA   #$0A
+BB5B-   8D ED B7    STA   $B7ED
+BB5E-   D0 05       BNE   $BB65
+...[some zeroes used for data later]...</code>
+      <p class="comment">track $00</p>
+      <code>BB65-   A9 00       LDA   #$00
+BB67-   8D EC B7    STA   $B7EC</code>
+      <p class="comment">into $4000</p>
+      <code>BB6A-   8D F0 B7    STA   $B7F0
+BB6D-   A9 40       LDA   #$40
+BB6F-   8D F1 B7    STA   $B7F1</code>
+      <p class="comment">read command</p>
+      <code>BB72-   A9 01       LDA   #$01
+BB74-   8D F4 B7    STA   $B7F4</code>
+      <p class="comment">set up rest of RWTS table</p>
+      <code>BB77-   8D F8 B7    STA   $B7F8
+BB7A-   8D EA B7    STA   $B7EA
+BB7D-   8E E9 B7    STX   $B7E9
+BB80-   8E F7 B7    STX   $B7F7</code>
+      <p class="comment">more RWTS fiddling, so sector reads save raw nibble data in $6C00 range</p>
+      <code>BB83-   A0 6C       LDY   #$6C
+BB85-   8C 10 B9    STY   $B910
+BB88-   8C CE B8    STY   $B8CE
+BB8B-   8C D2 B8    STY   $B8D2
+BB8E-   88          DEY
+BB8F-   8C 21 B9    STY   $B921</code>
+      <p class="comment">a sector read, with modified RWTS</p>
+      <code>BB92-   20 E7 BB    JSR   $BBE7</code>
+      <p class="comment">copy the raw nibble data elsewhere</p>
+      <code>BB95-   A0 55       LDY   #$55
+BB97-   B9 00 6C    LDA   $6C00,Y
+BB9A-   99 00 5C    STA   $5C00,Y
+BB9D-   88          DEY
+BB9E-   10 F7       BPL   $BB97
+BBA0-   AD 02 6B    LDA   $6B02
+BBA3-   85 06       STA   $06</code>
+      <p class="comment">another sector read</p>
+      <code>BBA5-   20 E7 BB    JSR   $BBE7
+BBA8-   AD 02 6B    LDA   $6B02
+BBAB-   85 07       STA   $07</code>
+      <p class="comment">and another</p>
+      <code>BBAD-   20 E7 BB    JSR   $BBE7
+BBB0-   AD 02 6B    LDA   $6B02
+BBB3-   85 08       STA   $08</code>
+      <p class="comment">compare this read's nibble data to the previous read's nibble data</p>
+      <code>BBB5-   A0 55       LDY   #$55
+BBB7-   B9 00 6C    LDA   $6C00,Y
+BBBA-   D9 00 5C    CMP   $5C00,Y</code>
+      <p class="comment">fail if anything doesn't match</p>
+      <code>BBBD-   D0 2F       BNE   $BBEE
+BBBF-   88          DEY
+BBC0-   10 F5       BPL   $BBB7</code>
+      <p class="comment">more comparisons of the side effects generated by the modified RWTS</p>
+      <code>BBC2-   A5 06       LDA   $06
+BBC4-   C5 07       CMP   $07
+BBC6-   D0 04       BNE   $BBCC
+BBC8-   C5 08       CMP   $08
+BBCA-   F0 17       BEQ   $BBE3</code>
+      <p class="comment">success path is here -- first, restore the RWTS code</p>
+      <code>BBCC-   A9 38       LDA   #$38
+BBCE-   8D 42 B9    STA   $B942
+BBD1-   A0 BC       LDY   #$BC
+BBD3-   8C 10 B9    STY   $B910
+BBD6-   8C CE B8    STY   $B8CE
+BBD9-   8C D2 B8    STY   $B8D2
+BBDC-   88          DEY
+BBDD-   8C 21 B9    STY   $B921</code>
+      <p class="comment">then continue with boot1 as normal</p>
+      <code>BBE0-   4C 00 B7    JMP   $B700
+BBE3-   4C 54 BB    JMP   $BB54
+...
+BBE7-   A9 B7       LDA   #$B7
+BBE9-   A0 E8       LDY   #$E8
+BBEB-   4C B5 B7    JMP   $B7B5</code>
+      <p class="comment">failure path from comparison at $BBBD</p>
+      <code>BBEE-   A2 B3       LDX   #$B3</code>
+      <p class="comment">general failure path is here -- clear screen, show text screen, write error code, and jump to The Badlands</p>
+      <code>BBF0-   20 58 FC    JSR   $FC58
+BBF3-   20 2D FF    JSR   $FF2D
+BBF6-   8E 03 04    STX   $0403
+BBF9-   4C 5B B7    JMP   $B75B</code>
+    </div>
+    <p class="seen">I'm guessing my non-working copy never got as far as wiping main memory, since the search for the nibble sequence is unconditional and neverending. That explains the behavior I saw -- it spun forever with the drive motor on, and it never got off track 0.</p>
+    <p class="seen">The important takeaway here is that there don't appear to be any long-term side effects of this copy protection.</p>
+    <p class="seen">If it succeeds, it restores everything that it modified (in the RWTS code), then it just jumps to $B700 to start the boot1 phase. But that's it; nothing else seems to rely on some magic number that it pulls from the raw nibbles or anything. It doesn't decrypt anything.</p>
+    <p class="seen">It doesn't even clear the carry flag.</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which We Remove All Traces Of Copy Protection Using An Automated Tool That I Wrote For Just Such An Occasion</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+]BRUN PDP</code>
+    </div>
+    <p class="seen">; fix epilogue byte checking in RWTS</p>
+    <p class="seen">T00,S03,$91 change FF to DE T00,S03,$9B change FF to AA T00,S03,$35 change FF to DE T00,S03,$3F change FF to AA T00,S02,$9E change FF to DE T00,S02,$A3 change FF to AA T00,S02,$A8 change FF to EB</p>
+    <p>; neutralize RWTS swappers (called when ; the program needs to switch between ; reading the protected program disk ; and the unprotected data disk -- I ; don't think this disk uses any data ; disks, but the protection is generic)</p>
+    <p class="seen">T00,S04,$69 change A9 to 60 T00,S04,$7D change A9 to 60</p>
+    <p class="seen">; bypass nibble check after boot0</p>
+    <p class="seen">T00,S00,$4B change FEBB to FD08</p>
+    <p class="seen">; fix nibble tables (ooh, I didn't see ; these in my investigation -- hooray ; for automation)</p>
+    <p class="seen">T00,S04,$29 change AA to 96 T00,S04,$AA change 00 to AA</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<section>
+  <h2>Compatibility Notes</h2>
+
+    <p>The original disk crashes at $08B8 on an enhanced //e or later, for reasons unrelated to copy protection. I looked into it briefly -- there's a bug in the machine ID detection in DARTS.GEN, similar to one I saw in Microzine 1 -- but fixing that bug just uncovered another, and I gave up.</p>
+</section>
+
+</body></html>

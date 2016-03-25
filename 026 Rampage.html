@@ -1,0 +1,341 @@
+<!doctype html>
+<html><head>
+<title>Rampage</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+
+    <p>Rampage is a 1988 arcade game distributed by Activision, Inc.</p>
+    <p>COPYA copies the original disk, but the copy does not work. It loads the (double hi-res!) title screen, then glitches out and reboots.</p>
+    <p>The boot does not sound like DOS 3.3, ProDOS, or Pascal, and there is no evidence of any known file system on the disk. (I checked T11,S0F for signs of a DOS 3.3 catalog, then T00,S0B for ProDOS or Pascal.) With nothing else to go on, it's time for boot tracing.</p>
+    <div class="curses_input">
+      <code>[S6D1=original disk]
+[S5D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0</code>
+    </div>
+    <p>My AUTOTRACE program can capture the boot0 code on T00,S00, boot1 code on T00,S00-09 if boot0 is close enough to DOS 3.3, and even the RWTS (again, if boot1 is close enough to DOS 3.3). In this case, it only got as far as boot0, which means this boot code is probably completely unlike DOS 3.3.</p>
+    <p>AUTOTRACE relocates the boot0 code to $2800..$28FF so it can survive the reboot, so let's see what we have.</p>
+    <div class="line_editing">
+      <code>]CALL-151</code>
+      <code>*800<2800.28FFM
+*801L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">looks like we're going to be loading boot1 starting at $8000. (Normal DOS</p>
+      <p class="comment">3.3 boot0 code starts with a branch like this as a way of determining whether it's done its one-time initialization yet, but it checks for #$09 instead of #$80.)</p>
+      <code>0801-   A5 27       LDA   $27
+0803-   C9 80       CMP   #$80
+0805-   B0 52       BCS   $0859</code>
+      <p class="comment">Zero page $2B has the slot number x 16 at this point. Store it in $0100?</p>
+      <p class="comment">Odd. Noted for future reference.</p>
+      <code>0807-   A5 2B       LDA   $2B
+0809-   8D 00 01    STA   $0100</code>
+      <p class="comment">figure out where the sector read routine is in the disk controller ROM based on the slot number we booted from. If we're booting from slot 6, this will end up being $C65C.</p>
+      <code>080C-   4A          LSR
+080D-   4A          LSR
+080E-   4A          LSR
+080F-   4A          LSR
+0810-   09 C0       ORA   #$C0
+0812-   85 3F       STA   $3F
+0814-   8D 3C 08    STA   $083C
+0817-   A9 5C       LDA   #$5C
+0819-   85 3E       STA   $3E</code>
+      <p class="comment">never seen this before, but it seems to always be zero, therefore branch</p>
+      <code>081B-   A0 A3       LDY   #$A3
+081D-   B1 3E       LDA   ($3E),Y
+081F-   F0 30       BEQ   $0851</code>
+    </div>
+    <div class="terminal_output">
+      <code>...</code>
+    </div>
+    <div class="listing">
+      <p class="comment">loop to re-use the disk controller ROM routine to read the rest of track 0 into $8000..$8FFF</p>
+      <code>0851-   A9 80       LDA   #$80
+0853-   85 27       STA   $27
+0855-   A9 FF       LDA   #$FF
+0857-   85 3D       STA   $3D
+0859-   A5 3D       LDA   $3D
+085B-   18          CLC
+085C-   69 01       ADC   #$01
+085E-   C9 10       CMP   #$10
+0860-   90 06       BCC   $0868
+0862-   C9 11       CMP   #$11
+0864-   F0 07       BEQ   $086D
+0866-   A9 01       LDA   #$01
+0868-   85 3D       STA   $3D
+086A-   6C 3E 00    JMP   ($003E)</code>
+      <p class="comment">execution continues at code we just read in from one of the other sectors</p>
+      <code>086D-   4C 70 80    JMP   $8070</code>
+    </div>
+    <p>OK, that looks like a good place to interrupt the boot process and see what's going on.</p>
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up callback after reading all the sectors from track 0</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D 6D 08    STA   $086D
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D 6E 08    STA   $086E
+9702-   A9 97       LDA   #$97
+9704-   8D 6F 08    STA   $086F</code>
+      <p class="comment">start the boot</p>
+      <code>9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">callback is here -- capture the boot1 code and reboot</p>
+      <code>970A-   A2 10       LDX   #$10
+970C-   B9 00 80    LDA   $8000,Y
+970F-   99 00 20    STA   $2000,Y
+9712-   C8          INY
+9713-   D0 F7       BNE   $970C
+9715-   EE 0E 97    INC   $970E
+9718-   EE 11 97    INC   $9711
+971B-   CA          DEX
+971C-   D0 EE       BNE   $970C
+971E-   AD E8 C0    LDA   $C0E8
+9721-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE1,A$9600,L$124
+*9600G
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]BSAVE BOOT1,A$2000,L$1000
+]CALL -151
+*8000<2000.2FFFM</code>
+    </div>
+    <p>What evil awaits us in boot1?</p>
+    <div class="line_editing">
+      <code>*8070L</code>
+    </div>
+    <div class="listing">
+      <code>8070-   8D 01 01    STA   $0101
+8073-   A2 FE       LDX   #$FE
+8075-   9A          TXS</code>
+      <p class="comment">test for 128K</p>
+      <code>8076-   8D 09 C0    STA   $C009
+8079-   A9 4B       LDA   #$4B
+807B-   85 00       STA   $00
+807D-   C5 00       CMP   $00
+807F-   D0 08       BNE   $8089
+8081-   49 FF       EOR   #$FF
+8083-   85 00       STA   $00
+8085-   C5 00       CMP   $00
+8087-   F0 24       BEQ   $80AD</code>
+      <p class="comment">print "128K REQUIRED" and fail</p>
+      <code>8089-   8D 08 C0    STA   $C008
+808C-   20 58 FC    JSR   $FC58
+808F-   A2 0C       LDX   #$0C
+8091-   BD 9F 80    LDA   $809F,X
+8094-   09 80       ORA   #$80
+8096-   9D B5 05    STA   $05B5,X
+8099-   CA          DEX
+809A-   10 F5       BPL   $8091
+809C-   4C 8B 82    JMP   $828B</code>
+      <p class="comment">128K test passed, execution continues</p>
+      <code>80AD-   8D 08 C0    STA   $C008
+80B0-   2C 89 C0    BIT   $C089
+80B3-   2C 89 C0    BIT   $C089
+80B6-   AD 01 01    LDA   $0101</code>
+      <p class="comment">$0101 is #$11 at this point, so this branch is always taken</p>
+      <code>80B9-   D0 11       BNE   $80CC</code>
+    </div>
+    <div class="line_editing">
+      <code>*80CCL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">relocate code from $83A0 to $D000</p>
+      <code>80CC-   A9 A0       LDA   #$A0
+80CE-   85 FC       STA   $FC
+80D0-   A9 83       LDA   #$83
+80D2-   85 FD       STA   $FD
+80D4-   A9 00       LDA   #$00
+80D6-   85 FA       STA   $FA
+80D8-   A9 D0       LDA   #$D0
+80DA-   85 FB       STA   $FB
+80DC-   A2 07       LDX   #$07
+80DE-   A0 00       LDY   #$00
+80E0-   B1 FC       LDA   ($FC),Y
+80E2-   91 FA       STA   ($FA),Y
+80E4-   C8          INY
+80E5-   D0 F9       BNE   $80E0
+80E7-   E6 FD       INC   $FD
+80E9-   E6 FB       INC   $FB
+80EB-   CA          DEX
+80EC-   D0 F2       BNE   $80E0</code>
+    </div>
+    <p>From a quick inspection, $83A0 appears to be the entry point to an RWTS of some kind, and now it's at $D000 (in the language card).</p>
+    <div class="listing">
+      <code>80EE-   2C 8B C0    BIT   $C08B
+80F1-   2C 8B C0    BIT   $C08B
+80F4-   A9 01       LDA   #$01
+80F6-   85 42       STA   $42
+80F8-   AD 00 01    LDA   $0100
+80FB-   85 43       STA   $43
+80FD-   A9 00       LDA   #$00
+80FF-   85 44       STA   $44
+8101-   85 47       STA   $47
+8103-   A9 40       LDA   #$40
+8105-   85 45       STA   $45
+8107-   A9 08       LDA   #$08
+8109-   85 46       STA   $46
+810B-   A9 02       LDA   #$02
+810D-   85 FE       STA   $FE
+810F-   A9 10       LDA   #$10
+8111-   85 FF       STA   $FF</code>
+      <p class="comment">call RWTS</p>
+      <code>8113-   20 00 D0    JSR   $D000
+8116-   90 03       BCC   $811B
+8118-   4C 8B 82    JMP   $828B</code>
+      <p class="comment">loop to read multiple sectors from multiple tracks</p>
+      <code>811B-   E6 45       INC   $45
+811D-   E6 45       INC   $45
+811F-   E6 46       INC   $46
+8121-   C6 FF       DEC   $FF
+8123-   D0 EE       BNE   $8113
+8125-   A9 20       LDA   #$20
+8127-   85 45       STA   $45
+8129-   C6 FE       DEC   $FE
+812B-   D0 E2       BNE   $810F</code>
+      <p class="comment">copy half of double hi-res title screen to extended memory</p>
+      <code>812D-   8D 05 C0    STA   $C005
+8130-   A9 00       LDA   #$00
+8132-   85 FC       STA   $FC
+8134-   A9 40       LDA   #$40
+8136-   85 FD       STA   $FD
+8138-   A9 00       LDA   #$00
+813A-   85 FA       STA   $FA
+813C-   A9 20       LDA   #$20
+813E-   85 FB       STA   $FB
+8140-   A2 20       LDX   #$20
+8142-   A0 00       LDY   #$00
+8144-   B1 FC       LDA   ($FC),Y
+8146-   91 FA       STA   ($FA),Y
+8148-   C8          INY
+8149-   D0 F9       BNE   $8144
+814B-   E6 FD       INC   $FD
+814D-   E6 FB       INC   $FB
+814F-   CA          DEX
+8150-   D0 F2       BNE   $8144</code>
+      <p class="comment">display double hi-res title screen</p>
+      <code>8152-   8D 04 C0    STA   $C004
+8155-   8D 5E C0    STA   $C05E
+8158-   8D 0D C0    STA   $C00D
+815B-   8D 00 C0    STA   $C000
+815E-   2C 50 C0    BIT   $C050
+8161-   2C 52 C0    BIT   $C052
+8164-   2C 57 C0    BIT   $C057
+8167-   2C 54 C0    BIT   $C054</code>
+    </div>
+    <p>OK, my (non-working) copy did get this far, because it successfully displayed the double hi-res title screen. The glitching and rebooting and whatnot happened after this point.</p>
+    <div class="listing">
+      <p class="comment">branch based on the value of $0101 (always taken)</p>
+      <code>816A-   A2 00       LDX   #$00
+816C-   A0 00       LDY   #$00
+816E-   AD 01 01    LDA   $0101
+8171-   D0 04       BNE   $8177</code>
+    </div>
+    <div class="line_editing">
+      <code>*8177L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">more disk reads</p>
+      <code>8177-   86 46       STX   $46
+8179-   84 47       STY   $47
+817B-   A9 01       LDA   #$01
+817D-   85 42       STA   $42
+817F-   AD 00 01    LDA   $0100
+8182-   85 43       STA   $43
+8184-   A9 00       LDA   #$00
+8186-   85 44       STA   $44
+8188-   A9 08       LDA   #$08
+818A-   85 45       STA   $45
+818C-   20 00 D0    JSR   $D000</code>
+      <p class="comment">Hmm, another branch based on $0101.</p>
+      <p class="comment">Educated guess about the purpose of $0101: this code stays in memory and can be run more than once. When it's run for the second time, a bunch of stuff is still in memory so it can skip re-reading it from disk. The first time around, the value is #$11 (the last value set in boot0).</p>
+      <code>818F-   AD 01 01    LDA   $0101
+8192-   D0 05       BNE   $8199</code>
+      <p class="comment">not executed (at least during boot)</p>
+      <code>8194-   B0 0D       BCS   $81A3
+8196-   4C 8B 82    JMP   $828B</code>
+      <p class="comment">execution continues here</p>
+      <code>8199-   A9 00       LDA   #$00
+819B-   85 FC       STA   $FC
+819D-   AE 00 01    LDX   $0100
+81A0-   20 3E 82    JSR   $823E</code>
+    </div>
+    <div class="line_editing">
+      <code>*823EL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">manually turning on disk motor is always suspicious</p>
+      <code>823E-   BD 89 C0    LDA   $C089,X
+8241-   A9 56       LDA   #$56
+8243-   85 FD       STA   $FD
+8245-   A9 08       LDA   #$08
+8247-   C6 FC       DEC   $FC
+8249-   D0 04       BNE   $824F
+824B-   C6 FD       DEC   $FD</code>
+      <p class="comment">this address looks familiar -- yup, it's The Badlands again (the code from which there is no return)</p>
+      <code>824D-   F0 3C       BEQ   $828B</code>
+      <p class="comment">nibble check</p>
+      <code>824F-   BC 8C C0    LDY   $C08C,X
+8252-   10 FB       BPL   $824F
+8254-   C0 FB       CPY   #$FB
+8256-   D0 ED       BNE   $8245
+8258-   F0 00       BEQ   $825A
+825A-   EA          NOP
+825B-   EA          NOP
+825C-   BC 8C C0    LDY   $C08C,X
+825F-   C0 08       CPY   #$08
+8261-   2A          ROL
+8262-   B0 0B       BCS   $826F
+8264-   BC 8C C0    LDY   $C08C,X
+8267-   10 FB       BPL   $8264
+8269-   C0 FF       CPY   #$FF
+826B-   D0 D8       BNE   $8245
+826D-   F0 EB       BEQ   $825A
+826F-   BC 8C C0    LDY   $C08C,X
+8272-   10 FB       BPL   $826F
+8274-   84 FC       STY   $FC
+8276-   C9 0A       CMP   #$0A
+8278-   D0 CB       BNE   $8245
+827A-   BD 8C C0    LDA   $C08C,X
+827D-   10 FB       BPL   $827A
+827F-   38          SEC
+8280-   2A          ROL
+8281-   25 FC       AND   $FC
+8283-   49 FF       EOR   #$FF
+8285-   D0 04       BNE   $828B</code>
+      <p class="comment">nibble check passed turn off disk motor and exit</p>
+      <code>8287-   DD 88 C0    CMP   $C088,X
+828A-   60          RTS</code>
+      <p class="comment">nibble check failed wipe memory and reboot</p>
+      <code>828B-   A8          TAY
+828C-   DD 88 C0    CMP   $C088,X
+828F-   68          PLA
+8290-   68          PLA
+8291-   99 00 08    STA   $0800,Y
+8294-   C8          INY
+8295-   D0 FA       BNE   $8291
+8297-   EE 93 82    INC   $8293
+829A-   AD 93 82    LDA   $8293
+829D-   C9 82       CMP   #$82
+829F-   D0 F0       BNE   $8291
+82A1-   2C 81 C0    BIT   $C081
+82A4-   2C 81 C0    BIT   $C081
+82A7-   6C F2 03    JMP   ($03F2)</code>
+    </div>
+    <p>Jackpot! Just your garden variety nibble check. If it succeeds, it just returns gracefully; it doesn't set flags, doesn't set memory, doesn't even say "thank you." And if it fails, it wipes most of main memory and reboots. That means I should be able to put an "RTS" at the beginning of it ($823E) to bypass the entire thing.</p>
+    <p>T00,S0D,$3E change "BD" to "60"</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

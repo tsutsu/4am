@@ -1,0 +1,452 @@
+<!doctype html>
+<html><head>
+<title>Conan</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+
+    <p>Conan is a 1984 arcade game distributed by DataSoft, Inc. It comes on a single double-sided 5.25" floppy disk and uses both sides.</p>
+    <p>COPYA fails immediately with a disk read error. EDD 4 bit copy appears to copy both sides of the disk, and in fact the copy of side A boots to the animated title screen. But after it asks to flip the disk, it accesses the disk and reboots.</p>
+    <p>In my experience, programs do not spontaneously reboot unless someone tells them to.</p>
+    <p>My trusty Copy ][+ sector editor can't read a single sector of side A. But wait! Once I go into the Sector Editor</p>
+    <p>Patcher (press "P") and select "DOS 3.3 PATCHED" to ignore epilogue bytes and checksums, it can read all of track 0.</p>
+    <p>But nothing else.</p>
+    <p>Furthermore, the Copy ][+ nibble editor can't make heads or tails of anything above track 0. By which I mean, pressing "A" to analyze the track just jumps to a random position within the raw nibble stream. Pressing <space> to re-read the track, then searching for "D5 AA 96" (the standard address prologue) unsurprisingly finds no matches. But searching for "D5 AA AD" (the standard data prologue) does find several matches.</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK: 01  START: 1800  LENGTH: 3DFF</code>
+    </div>
+    <p>18B0: FF FF FF FF FF FF FF FF VIEW 18B8: FF CC 96 AA FF FE AA AB</p>
+    <p>^^^^^^^^^^^</p>
+    <p>first half of address field?</p>
+    <p>18C0: AF AA FA FF DE AA FF FF</p>
+    <p>^^^^^^^^^^^ second half of address field?</p>
+    <p>18C8: FF FF FF FF FF FF FF FF 18D0: D5 AA AD FF EA 9F DB B6 <-18D0</p>
+    <p>^^^^^^^^ possible data prologue here</p>
+    <div class="terminal_output">
+      <code>18D8: CE AF F2 D9 97 FE B9 FC
+18E0: DE FF AE FB DF B7 DF D3
+18E8: A6 9B B4 FB D6 CB F2 EA
+18F0: CE 96 DA EB 9E DD F5 BE</code>
+    </div>
+    <p>That looks like a normal 16-sector disk with a standard data prologue ("D5 AA AD") but a custom address prologue (possibly "CC 96 AA"). Searching for "CC 96 AA" finds several more matches on track 1, as well as tracks 2 and 3.</p>
+    <p>That's certainly promising, and it suggests that the only reason I couldn't read the disk with a sector editor is that it uses a custom address prologue. (I'm not sure why that particular address prologue confuses the nibble editor's auto-analyze routine, but it does.)</p>
+    <p>Let's see if my AUTOTRACE program can capture the RWTS. If not, I'll need to find another tool to read the disk and convert it to a standard format.</p>
+    <div class="curses_input">
+      <code>[S6D1=original disk, side A]
+[S5D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0</code>
+    </div>
+    <p>Well that's not encouraging. Let's see what we have.</p>
+    <div class="line_editing">
+      <code>]CALL -151
+*800<2800.28FFM
+*801L
+.
+. nothing unusual, until...
+.
+084A-   4C B4 08    JMP   $08B4</code>
+    </div>
+    <p>Normally this would be JMP ($08FD) or JMP $B700, which is where the boot1 code starts. But it's doing something, ...extra... before continuing to the next boot stage. I don't like extra.</p>
+    <p>Extra is bad.</p>
+    <div class="line_editing">
+      <code>*8B4L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">OK, normal RWTS initialization code</p>
+      <code>08B4-   8E E9 B7    STX   $B7E9
+08B7-   8A          TXA
+08B8-   4A          LSR
+08B9-   4A          LSR
+08BA-   4A          LSR
+08BB-   4A          LSR
+08BC-   AA          TAX
+08BD-   A9 00       LDA   #$00
+08BF-   9D F8 04    STA   $04F8,X
+08C2-   9D 78 04    STA   $0478,X</code>
+      <p class="comment">hmm</p>
+      <code>08C5-   20 CB B6    JSR   $B6CB</code>
+      <p class="comment">OK, jump to boot1 code</p>
+      <code>08C8-   4C 00 B7    JMP   $B700</code>
+    </div>
+    <p>What's at $B6CB? Well, this sector (T00,S00) is loaded twice: once by the disk controller ROM routine at $0800, then again by itself, as part of the boot1 code, at $B600. So I can find out what's at $B6CB by looking at $08CB.</p>
+    <div class="line_editing">
+      <code>*8CBL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">read a sector</p>
+      <code>08CB-   A9 B7       LDA   #$B7
+08CD-   A0 E8       LDY   #$E8
+08CF-   20 B5 B7    JSR   $B7B5</code>
+      <p class="comment">loop to read more sectors</p>
+      <code>08D2-   AC ED B7    LDY   $B7ED
+08D5-   88          DEY
+08D6-   10 05       BPL   $08DD
+08D8-   A0 0F       LDY   #$0F
+08DA-   CE EC B7    DEC   $B7EC
+08DD-   CE F1 B7    DEC   $B7F1
+08E0-   8C ED B7    STY   $B7ED
+08E3-   CE E1 B7    DEC   $B7E1
+08E6-   D0 E3       BNE   $08CB</code>
+      <p class="comment">hmm</p>
+      <code>08E8-   A9 CC       LDA   #$CC
+08EA-   8D 55 B9    STA   $B955
+08ED-   4C CC BF    JMP   $BFCC</code>
+    </div>
+    <p>The code at $08CB..$08E7 seems to be a harmless multi-sector read loop, using a bog standard RWTS (parameter table at $B7E8, entry point at $B7B5). But the code at $08E8 is suspicious. It's directly modifying bits of the RWTS, and I want to know what and why.</p>
+    <p>The boot0 code is close enough to the normal DOS 3.3 code that my AUTOTRACE program should be able to capture the boot1 code, and hopefully the RWTS as well.</p>
+    <div class="line_editing">
+      <code>*BRUN AUTOTRACE1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+    </div>
+    <p>Yay! Now let's see what evil lurks at $BFCC. I can't move the code there (my work disk runs Diversi-DOS, which occupies $BF00..$BFFF), so we'll just have to load it in a safe place and do some address arithmetic and hope things don't get too complicated.</p>
+    <div class="line_editing">
+      <code>]BLOAD BOOT1,A$2600
+]CALL -151</code>
+      <code>*2FCCL</code>
+    </div>
+    <div class="listing">
+      <code>2FCC-   A9 96       LDA   #$96
+2FCE-   8D 5F B9    STA   $B95F
+2FD1-   A9 AA       LDA   #$AA
+2FD3-   8D 6A B9    STA   $B96A
+2FD6-   60          RTS</code>
+    </div>
+    <p>Well that wasn't complicated at all.</p>
+    <p>But what is it doing? Disassembling the code near those addresses provides the answer: it's twiddling the RWTS again.</p>
+    <p>Both this routine and the code at $08E8 work together to change the address prologue sequence that the RWTS expects to find on disk reads, from "D5 AA 96" to "CC 96 AA". Which, incidentally, is just what I saw in the nibble editor: an address prologue of "CC 96 AA" on every track above track 0.</p>
+    <p>I have a plan. The original disk has two RWTS routines. The first one will read track 0. Then the boot code modifies the RWTS so it will read track 1 and up.</p>
+    <p>So, I need two RWTS files.</p>
+    <div class="line_editing">
+      <code>]BLOAD RWTS,A$2800</code>
+      <code>]CALL -151</code>
+      <code>*2955:CC</code>
+      <code>*295F:96</code>
+      <code>*296A:AA</code>
+      <code>*BSAVE RWTS TRACK 1+,A$2800,L$800</code>
+    </div>
+    <div class="curses_input">
+      <code>[S6D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>*BRUN ADVANCED DEMUFFIN 1.1,S6,D1</code>
+    </div>
+    <p class="seen">--> LOAD NEW RWTS MODULE</p>
+    <p class="seen">At $B8, load "RWTS" from D1</p>
+    <div class="curses_input">
+      <code>[S6D1=original disk side A]
+[S6D2=blank disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>--> FORMAT TARGET DISK</code>
+    </div>
+    <p class="seen">...grind grind grind...</p>
+    <div class="terminal_output">
+      <code>--> CONVERT DISK</code>
+      <code>"CHANGE DEFAULT VALUES?" Y</code>
+    </div>
+    <p>This RWTS file can only read track 0, so let's only read track 0.</p>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.1  - COPYRIGHT 1983
+WRITTEN BY THE STACK -CORRUPT COMPUTING
+=======================================</code>
+      <code>INPUT ALL VALUES IN HEX</code>
+      <code>SECTORS PER TRACK? (13/16) 16</code>
+      <code>START TRACK: $00
+START SECTOR: $00</code>
+    </div>
+    <p>END TRACK: $00</p>
+    <p>^^-- important</p>
+    <div class="terminal_output">
+      <code>END SECTOR: $0F</code>
+      <code>INCREMENT: 1</code>
+      <code>MAX # OF RETRIES: 0</code>
+      <code>COPY FROM DRIVE 1
+TO DRIVE: 2
+=======================================
+16 SC $00,$00 TO $00,$0F BY $01 TO DRV2</code>
+    </div>
+    <p class="seen"></p>
+    <p class="seen">And go...</p>
+    <div class="terminal_output">
+      <code>
+ADVANCED DEMUFFIN 1.1  - COPYRIGHT 1983
+WRITTEN BY THE STACK -CORRUPT COMPUTING
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:.
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:.
+SC1:.
+SC2:.
+SC3:.
+SC4:.
+SC5:.
+SC6:.
+SC7:.
+SC8:.
+SC9:.
+SCA:.
+SCB:.
+SCC:.
+SCD:.
+SCE:.
+SCF:.
+=======================================
+16 SC $00,$00 TO $00,$0F BY $01 TO DRV2</code>
+    </div>
+    <p class="seen"></p>
+    <p>Now I need to use the other RWTS file to read the rest of the disk.</p>
+    <div class="curses_input">
+      <code>[S6D1=my work disk]</code>
+    </div>
+    <p class="seen">--> LOAD NEW RWTS MODULE</p>
+    <p>At $B8, load "RWTS TRACK 1+" from D1</p>
+    <div class="curses_input">
+      <code>[S6D1=original disk side A]
+[S6D2=disk with track 0 on it]</code>
+    </div>
+    <div class="terminal_output">
+      <code>--> CONVERT DISK</code>
+      <code>"CHANGE DEFAULT VALUES?" Y</code>
+    </div>
+    <p>This RWTS file can only read tracks 1 and 1, so let's make sure we only read tracks 1 and up.</p>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.1  - COPYRIGHT 1983
+WRITTEN BY THE STACK -CORRUPT COMPUTING
+=======================================</code>
+      <code>INPUT ALL VALUES IN HEX</code>
+      <code>SECTORS PER TRACK? (13/16) 16</code>
+    </div>
+    <p class="seen">START TRACK: $01</p>
+    <p class="seen">^^-- important</p>
+    <div class="terminal_output">
+      <code>START SECTOR: $00</code>
+      <code>END TRACK: $22
+END SECTOR: $0F</code>
+      <code>INCREMENT: 1</code>
+      <code>MAX # OF RETRIES: 0</code>
+      <code>COPY FROM DRIVE 1
+TO DRIVE: 2
+=======================================
+16 SC $01,$00 TO $22,$0F BY $01 TO DRV2</code>
+    </div>
+    <p class="seen"></p>
+    <p class="seen">And go...</p>
+    <div class="terminal_output">
+      <code>
+ADVANCED DEMUFFIN 1.1  - COPYRIGHT 1983
+WRITTEN BY THE STACK -CORRUPT COMPUTING
+=======PRESS ANY KEY TO CONTINUE=======
+TRK: ..................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0: ..................................
+SC1: ..................................
+SC2: ..................................
+SC3: ..................................
+SC4: ..................................
+SC5: ..................................
+SC6: ..................................
+SC7: ..................................
+SC8: ..................................
+SC9: ..................................
+SCA: ..................................
+SCB: ..................................
+SCC: ..................................
+SCD: ..................................
+SCE: ..................................
+SCF: ..................................
+=======================================
+16 SC $01,$00 TO $22,$0F BY $01 TO DRV2</code>
+    </div>
+    <p class="seen"></p>
+    <p>As it turns out, side B of the original disk uses the same "CC 96 AA" address prologue throughout the disk. That means I can reuse this "RWTS TRACK 1+" file to copy all of side B.</p>
+    <div class="curses_input">
+      <code>[S6D1=original side side B]
+[S6D2=blank disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>--> FORMAT TARGET DISK</code>
+    </div>
+    <p class="seen">...grind grind grind...</p>
+    <div class="terminal_output">
+      <code>--> CONVERT DISK</code>
+      <code>"CHANGE DEFAULT VALUES?" N</code>
+      <code>ADVANCED DEMUFFIN 1.1  - COPYRIGHT 1983
+WRITTEN BY THE STACK -CORRUPT COMPUTING
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:R..................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:R..................................
+SC1:...................................
+SC2:...................................
+SC3:...................................
+SC4:...................................
+SC5:...................................
+SC6:...................................
+SC7:...................................
+SC8:...................................
+SC9:...................................
+SCA:...................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:...................................
+=======================================
+16 SC $00,$00 TO $22,$0F BY $01 TO DRV2</code>
+    </div>
+    <p class="seen"></p>
+    <p>Well, *almost* all of side B. It seems that T00,S00 uses a standard address prologue (and epilogue!) in order to load just enough code to tell you that you booted the wrong side of the disk.</p>
+    <div class="terminal_output">
+      <code>
+SECTOR EDITOR                   DRIVE 1</code>
+    </div>
+    <p>00- 01 2C 10 C0 A2 00 8E F2 .,.@"..r 08- 03 A9 C6 8D F3 03 49 A5 .)F.s.I% 10- 8D F4 03 20 58 FC 2C 51 .t. X|,Q 18- C0 2C 54 C0 A9 00 20 95 @,T@). . 20- FE A2 0A 20 66 FC CA D0 ~". f|JP 28- FA A2 00 BD 58 08 20 ED z".=X. m 30- FD E8 C9 AE D0 F5 20 62 }hI.Pu b 38- FC 20 66 FC A2 00 BD 77 | f|".=w 40- 08 20 ED FD E8 C9 AE D0 . m}hI.P 48- F5 2C 10 C0 AD 00 C0 10 u,.@-.@. 50- FB C9 8D D0 F7 4C 00 C6 {I.PwL.F 58- A0 A0 A0 A0 A0 A0 A0 A0 60- D0 CC C5 C1 D3 C5 A0 C2 PLEASE B 68- CF CF D4 A0 CF D4 C8 C5 OOT OTHE 70- D2 A0 D3 C9 C4 C5 AE A0 R SIDE. 78- A0 A0 A0 A0 A0 C6 CC C9 FLI 80- D0 A0 C4 C9 D3 CB A0 C1 P DISK A</p>
+    <div class="terminal_output">
+      <code>
+TRACK $00  SECTOR $00   DOS 3.3</code>
+    </div>
+    <p class="seen"></p>
+    <p>I used the sector editor to manually copy T00,S00 to my copy of side B, and that was that.</p>
+    <p>Now I have both sides in a standard disk format, but I still have (at least) two problems:</p>
+    <p>1. My copy can't read itself, since the</p>
+    <p>RWTS still expects most of side A and all of side B to have that non- standard address prologue.</p>
+    <p>2. Even after I fix that, it will still</p>
+    <p>reboot after flipping the disk and trying to play the game.</p>
+    <p>One thing at a time. I know where the boot code modifies the RWTS, so I can just tell it not to do that.</p>
+    <p>Side A,T00,S00,$E8 change "A9" to "60"</p>
+    <p>Now side A boots successfully, loads the title screen and plays the music.</p>
+    <p>The little guy on the horse gallops across the screen, then it asks for side B. Then it reboots.</p>
+</section>
+
+<section>
+  <h2>AN INTERLUDE ABOUT DIFFERENT FORMS OF</h2>
+  <h3>COPY PROTECTION ON APPLE II DISKS</h3>
+
+    <p>I've only been studying Apple II copy protection for a short time, so this is not meant to be the final word on the subject. But so far, I've come across three basic forms of copy protection.</p>
+    <p>The first kind relies on storing data on the disk in weird ways. Conan has some of that; most of side A and all of side B use a non-standard address prologue so that naive disk copiers can't find the start of each sector.</p>
+    <p>(Other possibilities: storing data between tracks; splitting up data into chunks other than 16 sectors per track; metadata that lies, such as sectors on track 1 claiming to be on track 0; physically positioning data on the disk in such a way that the RWTS can make assumptions about how to find data on each track without seeking; using a custom nibble table so that third-party tools can't decode the nibbles into sector data; and on and on. Anything you can imagine, it's been done.)</p>
+    <p>The second kind of protection is to require the user to provide something that is only available outside the disk itself, either a hardware dongle (very rare in the Apple II era) or something physical that was shipped with the original disk. Decoder rings, lookup tables, "third word on page 17 of the manual," that kind of thing. (Remember, in the 1980s, games were shipped on disks and documentation was printed on paper. Photocopying an entire software manual wasn't impossible, but it had a non-zero cost in time and money.) Conan doesn't do any of that.</p>
+    <p>The third kind of protection relies on actual code on the disk that looks at some feature of the disk itself and makes a decision about whether it's an original or a copy. The most popular form of this is the so-called "nibble check," which looks at the raw data between sectors that is more difficult to reproduce faithfully with automated (non-program-specific) disk copiers.</p>
+    <p>If the code decides that the disk is a copy, it can do whatever it wants -- anything from "immediately reboot" to "subtly corrupt the game to make it unwinnable." Most disks choose to wipe memory and reboot, and that appears to be what Conan is doing.</p>
+    <p>Of course, nobody tells you which combination of protection techniques are in use by any particular disk when you buy it. It could be none; it could be all three. That's part of the fun.</p>
+    <p>Every new disk is a blank slate.</p>
+    <p>As a tangent to this tangent, you should absolutely read Andy McFadden's article, "Early Copy Protection on the</p>
+    <p>Apple II," which covers some of the crazy things that Apple II developers in the late 1970s used to prevent users from copying programs distributed on cassette tape. It's currently available at <http://www.fadden.com/techmisc/ cassette-protect.htm></p>
+</section>
+
+<section>
+
+    <p>Since Conan is rebooting, and programs don't just do that without a good reason, I'm guessing there is a nibble check somewhere. One thing that all nibble checks have in common is they need to turn on the drive motor by accessing a specific address in the $C0xx range. For slot 6, it's $C0E9, but to allow disks to boot from any slot, developers usually use code like this:</p>
+    <p>LDX <slot number x 16> LDA $C089,X</p>
+    <p>There's nothing that says where the slot number has to be, although the disk controller ROM routine uses zero page $2B and lots of disks just reuse that. There's also nothing that says you have to use the X-register as the index, or that you must use the accumulator as the load register. But most RWTS code does, out of convention</p>
+    <p>I suppose (or possibly fear of messing up such low-level code in subtle ways).</p>
+    <p>Also, since developers don't actually want people finding their protection- related code, they may try to encrypt it or obfuscate it to prevent people from finding it. But eventually, the code must exist and the code must run, and it must run on my machine, and I have the final say on what my machine does or does not do.</p>
+    <p>But sometimes you get lucky.</p>
+    <p class="seen">Using my trusty Copy ][+ sector editor,</p>
+    <p>I searched side B (of my copy) for the hex sequence "BD 89 C0". No matches.</p>
+    <p>But then I did the same search on side</p>
+    <p>A (because maybe the protection code is loaded earlier but called later), and I found a match on T00,S01, starting at byte $42. The subroutine appears to start at byte $31. (Before that is an unconditional jump.)</p>
+    <p>Keep in mind that the sector editor disassembly listing always shows the code starting at $0E00, but that's not necessarily where it's loaded by the original disk. So the listing is a weird mix of relative branches (listed in the $0E00 range) and absolute addresses (listed as-is). It appears this code is loaded at $B700, which is where T00,S01 is usually loaded.</p>
+    <div class="terminal_output">
+      <code>
+SECTOR EDITOR                   DRIVE 1</code>
+    </div>
+    <div class="listing">
+      <p class="comment">Read a sector, probably to position the drive head over the area of the special nibble sequence.</p>
+      <code>0E31-   A9 00       LDA   #$00
+0E33-   8D F4 B7    STA   $B7F4
+0E36-   A9 10       LDA   #$10
+0E38-   8D EC B7    STA   $B7EC
+0E3B-   A9 B7       LDA   #$B7
+0E3D-   A0 E8       LDY   #$E8
+0E3F-   20 B5 B7    JSR   $B7B5</code>
+      <p class="comment">Turn on the drive motor manually and initialize some counters.</p>
+      <code>0E42-   BD 89 C0    LDA   $C089,X
+0E45-   A9 01       LDA   #$01
+0E47-   8D F4 B7    STA   $B7F4
+0E4A-   A0 FF       LDY   #$FF
+0E4C-   8C AB B7    STY   $B7AB
+0E4F-   EE AB B7    INC   $B7AB
+0E52-   A9 00       LDA   #$00
+0E54-   85 3E       STA   $3E
+0E56-   85 3F       STA   $3F
+0E58-   85 48       STA   $48
+0E5A-   A0 04       LDY   #$04
+0E5C-   C6 3E       DEC   $3E
+0E5E-   D0 04       BNE   $0E64
+0E60-   C6 3F       DEC   $3F</code>
+      <p class="comment">If the counter in zero page $3F hits zero, the nibble check has failed.</p>
+      <code>0E62-   F0 30       BEQ   $0E94</code>
+      <p class="comment">Look for a specific nibble pattern.</p>
+      <code>0E64-   BD 8C C0    LDA   $C08C,X
+0E67-   EA          NOP
+0E68-   10 FA       BPL   $0E64
+0E6A-   D9 A5 B7    CMP   $B7A5,Y
+0E6D-   D0 EB       BNE   $0E5A
+0E6F-   88          DEY
+0E70-   10 F2       BPL   $0E64
+0E72-   A0 08       LDY   #$08
+0E74-   BD 8C C0    LDA   $C08C,X
+0E77-   85 2C       STA   $2C
+0E79-   10 F9       BPL   $0E74
+0E7B-   88          DEY
+0E7C-   D0 F6       BNE   $0E74
+0E7E-   20 AC B7    JSR   $B7AC
+0E81-   AC AB B7    LDY   $B7AB
+0E84-   D0 05       BNE   $0E8B
+0E86-   8D AA B7    STA   $B7AA
+0E89-   F0 C4       BEQ   $0E4F
+0E8B-   CD AA B7    CMP   $B7AA</code>
+      <p class="comment">This appears to be the only place that branches forward, so I'm going to guess that this is the success condition.</p>
+      <code>0E8E-   D0 0F       BNE   $0E9F
+0E90-   C0 18       CPY   #$18
+0E92-   D0 BB       BNE   $0E4F</code>
+      <p class="comment">The Badlands, from which there is no return. Some more manual inspection confirms that $BFC8 finishes setting the stack to "return" to $BEAF, which copies a small amount of code to $200 and jumps to it in order to wipe all memory and reboot. NO SOUP FOR YOU!</p>
+      <code>0E94-   BA          TSX
+0E95-   A9 BE       LDA   #$BE
+0E97-   9D 02 01    STA   $0102,X
+0E9A-   A9 AE       LDA   #$AE
+0E9C-   4C C8 BF    JMP   $BFC8</code>
+      <p class="comment">This is the success path. It turns off the drive motor and jumps to $A000.</p>
+      <code>0E9F-   BC 88 C0    LDY   $C088,X
+0EA2-   4C 00 A0    JMP   $A000</code>
+    </div>
+    <p>So, if the nibble check succeeds, it ends up at byte $9F, which turns off the disk motor and jumps to $A000 to go do something else. (I'm not sure what that is, and I hope it doesn't matter.)</p>
+    <p>If it fails, it ends up at byte $94, which wipes memory and reboots.</p>
+    <p>Therefore, I need to change the code at byte $31 to jump unconditionally to $A000.</p>
+    <p>Side A,T00,S01,$31 change "A9 00 8D"</p>
+    <p>to "4C 00 A0"</p>
+    <p>Success! Where the game previously rebooted, it now continues on side B to show Conan jumping over the moat and running into the castle. Pressing any key or button starts the game.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<section>
+
+    <div class="terminal_output">
+      <code>        POSTSCRIPT: CHEAT CODES</code>
+    </div>
+    <p>I have *not* enabled the following cheats, but I have verified that they work. You can use one or both.</p>
+    <p>Unlimited lives:</p>
+    <p>Side A,T05,S09,$F5 change "CE" to "AD"</p>
+    <p>Unlimited axes:</p>
+    <p>Side A,T05,S0B,$4E change "CE" to "AD"</p>
+</section>
+
+</body></html>

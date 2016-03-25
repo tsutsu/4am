@@ -1,0 +1,152 @@
+<!doctype html>
+<html><head>
+<title>Algebra 2</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+
+    <p>Algebra 2 is a 1982 educational program distributed by Edu-Ware.</p>
+    <p>Inspection with the Copy ][+ 8.4 nibble editor indicates that the original disk uses standard address (D5 AA 96) and data (D5 AA AD) prologues, but non-standard epilogues. Switching to my trusty Copy ][+ sector editor, I press "P" and select "DOS 3.3 PATCHED" to ignore the non-standard epilogue bytes:</p>
+    <div class="terminal_output">
+      <code>
+SECTOR EDITOR PATCHER           DRIVE 1</code>
+    </div>
+    <p>DOS 3.3 DOS 3.3 PATCHED <-- ignores epilogues DOS 3.2 DOS 3.2 PATCHED CUSTOM --------------------------------------- DOS 3.3 PATCHED</p>
+    <div class="terminal_output">
+      <code>                ADDRESS  DATA</code>
+      <code>        PROLOG: D5 AA 96 D5 AA AD
+ WANTED EPILOG: DE AA    DE AA EB FF FF
+   READ EPILOG= DE AA    -- -- -- -- --
+CHECK CHECKSUM? NO       YES
+  CHECK EPILOG? NO       NO
+   CHECK TRACK? YES
+          DATA ENCODING: 6&2
+          CHECKSUM SEED: 00
+        CHECKSUM RESULT= --</code>
+      <code>USE ARROW KEYS & [RETURN] TO SELECT
+PATCH OPTION, [ESC]-EXIT</code>
+    </div>
+    <p class="seen"></p>
+    <p>Lo and behold, all the data is there and readable. Here's T11,S00, which suggests a standard DOS 3.3 VTOC:</p>
+    <div class="terminal_output">
+      <code>
+SECTOR EDITOR                   DRIVE 1</code>
+    </div>
+    <p>00- A0 11 0F 03 00 00 FE 00 ........</p>
+    <p>^^ ^^ +++++-- catalog starts @ T11,S0F</p>
+    <div class="terminal_output">
+      <code>08- 00 00 00 00 00 00 00 00  ........
+10- 00 00 00 00 00 00 00 00  ........
+18- 00 00 00 00 00 00 00 00  ........
+20- 00 00 00 00 00 00 00 7A  ........
+28- 00 00 00 00 00 00 00 00  ........
+30- 03 FF 00 00 23 10 00 01  ........
+38- 00 00 00 00 00 00 00 00  ........
+40- 00 00 00 00 FF FF 00 00  ........
+48- FF FF 00 00 FF FF 00 00  ........
+50- FF FF 00 00 00 00 00 00  ........
+58- 00 00 00 00 00 00 00 00  ........
+60- 00 00 00 00 00 00 00 00  ........
+68- 00 00 00 00 00 00 00 00  ........
+70- 00 00 00 00 00 00 00 00  ........
+78- 00 00 00 00 00 00 00 00  ........
+80- 00 00 00 00 00 00 00 00  ........</code>
+      <code>TRACK $11  SECTOR $00   DOS 3.3 PATCHED</code>
+    </div>
+    <p class="seen"></p>
+    <p>And here's the start of the VTOC on T11,S0F:</p>
+    <div class="terminal_output">
+      <code>
+SECTOR EDITOR                   DRIVE 1</code>
+      <code>00- FF 11 0E 11 0F 00 00 00  ........
+08- 00 00 00 22 0F 82 C5 C4  ..."..ED
+10- D5 AD D7 C1 D2 C5 A0 A0  U-WARE
+18- A0 A0 A0 A0 A0 A0 A0 A0
+20- A0 A0 A0 A0 A0 A0 A0 A0
+28- A0 A0 A0 A0 0A 00 22 05      ..".
+30- 84 C5 D7 D3 B3 A0 A0 A0  .EWS3
+38- A0 A0 A0 A0 A0 A0 A0 A0
+40- A0 A0 A0 A0 A0 A0 A0 A0
+48- A0 A0 A0 A0 A0 A0 A0 1F         .
+50- 00 20 06 82 C1 CC C7 C5  . ..ALGE
+58- C2 D2 C1 A0 B2 A0 A0 A0  BRA 2
+60- A0 A0 A0 A0 A0 A0 A0 A0
+68- A0 A0 A0 A0 A0 A0 A0 A0
+70- A0 A0 14 00 1F 02 80 C1    .....A
+78- CD B2 AE D0 D2 CF C7 D2  M2.PROGR
+80- C5 D3 D3 A0 A0 A0 A0 A0  ESS</code>
+      <code>TRACK $11  SECTOR $0F   DOS 3.3 PATCHED</code>
+    </div>
+    <p class="seen"></p>
+    <p>This looks like a job for COPYA... with one small patch.</p>
+    <div class="curses_input">
+      <code>[S6D1=DOS 3.3 master disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...
+]CALL -151
+*B942:18
+      ^^
+      ++-- tells DOS 3.3 to ignore read
+           errors caused by nonstandard
+           epilogue bytes (like I just
+           did in the sector editor)</code>
+      <code>*3D0G
+]RUN COPYA</code>
+    </div>
+    <div class="curses_input">
+      <code>[S6D1=original disk]
+[S6D2=blank disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>...READING...INITIALIZING...WRITING...</code>
+    </div>
+    <p>Now, going back to Copy ][+, I can use the handy "Copy DOS" option to put a standard copy of DOS 3.3 (actually</p>
+    <p>Pronto-DOS, for speed) on the copy.</p>
+    <div class="curses_input">
+      <code>[S6D1=copy]
+[S6D2=Pronto-DOS disk]</code>
+    </div>
+    <p>"COPY"</p>
+    <p>--> "DOS" --> "Slot 6 drive 2" to "Slot 6 drive 1"</p>
+    <p>(This just copies tracks 0-2 from one disk to another. Any fast copy program that lets you specify a start and end track would also work.)</p>
+    <div class="line_editing">
+      <code>]PR#6
+...
+FILE NOT FOUND</code>
+    </div>
+    <p>Hmm.</p>
+    <div class="line_editing">
+      <code>]CATALOG</code>
+    </div>
+    <div class="terminal_output">
+      <code>PRONTO-DOS V254   FS=64</code>
+    </div>
+    <div class="line_editing">
+      <code>*A 010 EDU-WARE
+*B 031 EWS3
+*A 020 ALGEBRA 2
+*T 002 AM2.PROGRESS
+*A 052 AM2.1
+*A 053 AM2.1-2
+*A 041 AM2.2
+*A 046 PT2.2
+*A 055 AM2.3
+*A 043 AM2.3-2
+*A 038 AM2.4
+*A 041 AM2.4-2</code>
+    </div>
+    <p>Ah, that's the problem. There's no HELLO program. Well, there is, but it's called EDU-WARE. (I'm guessing, but it seems reasonable. It's the first file in the disk catalog. I'm guessing that "ALGEBRA 2" is the main menu, and the other files are specific lessons.)</p>
+    <div class="line_editing">
+      <code>]UNLOCK EDU-WARE
+]RENAME EDU-WARE,HELLO
+]LOCK HELLO
+]PR#6</code>
+    </div>
+    <p>That's it. There doesn't appear to be any secondary protection.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

@@ -1,0 +1,434 @@
+<!doctype html>
+<html><head>
+<title>Hacker II</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">no errors, but copy hangs on boot (after showing DOS prompt)</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">ditto</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">ditto</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">nothing suspicious</p>
+    <p class="seen">Disk Fixer</p>
+    <p>T00-T02 -> custom bootloader, "The</p>
+    <p>Turbocharger," that loads DOS 3.3</p>
+    <p>T11 -> regular DOS 3.3 disk catalog T01,S0A -> startup program is "HACKER II HELLO" (binary)</p>
+    <p class="seen">Why didn't my copies work?</p>
+    <p class="seen">Probably a nibble check called by the startup program. Activision loves "invisible" nibble checks that don't fail immediately but have a side effect.</p>
+    <p>The disk loads DOS very quickly, using a third-party DOS modification called "The Turbocharger." But my intuition tells me that's not the problem -- the copy protection lies elsewhere. To confirm this, I'll boot from a DOS 3.3 master disk and try to run the program.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S5,D1=DOS 3.3 master disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+]BRUN HACKER II HELLO,S6
+...works...</code>
+    </div>
+    <div class="curses_input">
+      <code>[S6,D1=non-working copy]
+[S5,D1=DOS 3.3 master disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+]BRUN HACKER II HELLO,S6
+...fails identically to booting the
+non-working copy directly...</code>
+    </div>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Trace the startup program</p>
+    <p class="seen">2. Find the nibble check and document any side effects</p>
+    <p class="seen">3. Disable the nibble check while maintaining the side effects</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which It All Starts So Innocently</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...</code>
+    </div>
+    <div class="curses_input">
+      <code>[<Ctrl-Reset> immediately after prompt]</code>
+    </div>
+    <div class="line_editing">
+      <code>]FP
+]CATALOG</code>
+    </div>
+    <div class="terminal_output">
+      <code>DISK VOLUME 254</code>
+      <code> B 007 HACKER II HELLO
+ B 009 DOSPRITES
+ B 030 SPRITE BLOCK
+ B 012 BLOAD/BRUN DOS.D500
+ B 002 HACKER II OPENING
+ B 028 HACKER II PART 1
+ B 020 HACKER II PART 1.DAT1
+ B 003 HACKER II MAIN
+ B 056 HACKER II PART 2
+ B 024 HACKER II PART 2.DAT1
+ B 074 HACKER II PART 2.DAT2
+ B 003 MSG2
+ B 006 MSG3
+ B 008 MSG4
+ B 003 HACKER II COVER
+ B 004 HACKER II PART 3.DAT1
+ B 034 HACKER II PART 3.DAT2
+ B 005 HACKER II PART 3.DAT3
+ B 011 HACKER II PART 3</code>
+    </div>
+    <div class="line_editing">
+      <code>]BLOAD HACKER II HELLO
+]CALL -151
+*AA72.AA73</code>
+    </div>
+    <div class="listing">
+      <code>AA72- 00 60</code>
+    </div>
+    <div class="line_editing">
+      <code>*6000L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">reset stack, use ROM, clear screen</p>
+      <code>6000-   A2 FF       LDX   #$FF
+6002-   9A          TXS
+6003-   2C 82 C0    BIT   $C082
+6006-   20 58 FC    JSR   $FC58</code>
+      <p class="comment">set reset vector</p>
+      <code>6009-   20 04 61    JSR   $6104</code>
+      <p class="comment">more standard initialization</p>
+      <code>600C-   20 84 FE    JSR   $FE84
+600F-   20 2F FB    JSR   $FB2F
+6012-   20 93 FE    JSR   $FE93
+6015-   20 89 FE    JSR   $FE89
+6018-   AD 58 C0    LDA   $C058
+601B-   AD 5A C0    LDA   $C05A
+601E-   AD 5D C0    LDA   $C05D
+6021-   AD 5F C0    LDA   $C05F
+6024-   AD FF CF    LDA   $CFFF
+6027-   AD 10 C0    LDA   $C010
+602A-   A9 00       LDA   #$00
+602C-   85 FD       STA   $FD
+602E-   85 FE       STA   $FE
+6030-   85 FF       STA   $FF</code>
+      <p class="comment">get address of RWTS parameter table</p>
+      <code>6032-   20 E3 03    JSR   $03E3
+6035-   85 05       STA   $05
+6037-   84 04       STY   $04</code>
+      <p class="comment">get boot slot (x16)</p>
+      <code>6039-   A0 01       LDY   #$01
+603B-   B1 04       LDA   ($04),Y
+603D-   8D 9A 61    STA   $619A
+6040-   C8          INY</code>
+      <p class="comment">and boot drive</p>
+      <code>6041-   B1 04       LDA   ($04),Y
+6043-   8D 9B 61    STA   $619B
+6046-   2C 83 C0    BIT   $C083
+6049-   2C 83 C0    BIT   $C083</code>
+      <p class="comment">multi-sector read via RWTS</p>
+      <code>604C-   A9 8C       LDA   #$8C
+604E-   A0 60       LDY   #$60
+6050-   20 92 61    JSR   $6192
+6053-   90 03       BCC   $6058
+6055-   4C 25 61    JMP   $6125</code>
+      <p class="comment">execution continues here (from $6053) if RWTS read succeeded</p>
+      <code>6058-   20 78 63    JSR   $6378</code>
+    </div>
+    <div class="line_editing">
+      <code>*6378L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set reset vector (again)</p>
+      <code>6378-   A9 75       LDA   #$75
+637A-   8D F2 03    STA   $03F2
+637D-   A9 65       LDA   #$65
+637F-   8D F3 03    STA   $03F3
+6382-   49 A5       EOR   #$A5
+6384-   8D F4 03    STA   $03F4</code>
+      <p class="comment">an address? ($FA) -> $6578</p>
+      <code>6387-   A9 78       LDA   #$78
+6389-   85 FA       STA   $FA
+638B-   A9 65       LDA   #$65
+638D-   85 FB       STA   $FB</code>
+      <p class="comment">suspicious</p>
+      <code>638F-   A9 C5       LDA   #$C5
+6391-   48          PHA</code>
+      <p class="comment">memory move</p>
+      <code>6392-   A9 00       LDA   #$00
+6394-   85 FC       STA   $FC
+6396-   A2 03       LDX   #$03
+6398-   BC B5 63    LDY   $63B5,X</code>
+      <p class="comment">ah, it was an address</p>
+      <code>639B-   91 FA       STA   ($FA),Y
+639D-   CA          DEX
+639E-   10 F8       BPL   $6398</code>
+      <p class="comment">suspicious</p>
+      <code>63A0-   8A          TXA
+63A1-   48          PHA</code>
+    </div>
+    <p class="seen">We've now pushed $C5/$FF to the stack, so an RTS right now would jump to $C600 and reboot slot 6. Let's try to avoid that.</p>
+    <div class="listing">
+      <code>63A2-   20 B9 63    JSR   $63B9</code>
+    </div>
+    <div class="line_editing">
+      <code>*63B9L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">call RWTS to position drive head</p>
+      <code>63B9-   A5 FB       LDA   $FB
+63BB-   A4 FA       LDY   $FA
+63BD-   20 56 63    JSR   $6356
+63C0-   A9 00       LDA   #$00
+63C2-   85 48       STA   $48
+63C4-   90 02       BCC   $63C8</code>
+      <p class="comment">on error, pop the real return address and leave $C5/$FF at the top of the stack, then RTS to reboot</p>
+      <code>63C6-   68          PLA
+63C7-   68          PLA
+63C8-   60          RTS</code>
+    </div>
+    <p class="seen">My non-working copy didn't reboot, so I guess it got past this.</p>
+    <p>Continuing from $63A5...</p>
+    <div class="line_editing">
+      <code>*63A5L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">get slot number (x16) into X</p>
+      <code>63A5-   A0 01       LDY   #$01
+63A7-   8C E7 C8    STY   $C8E7
+63AA-   B1 FA       LDA   ($FA),Y
+63AC-   AA          TAX</code>
+      <p class="comment">here we go</p>
+      <code>63AD-   20 C9 63    JSR   $63C9</code>
+    </div>
+    <p class="seen">We're closing in on the copy protection routine. Can you feel it? I swear I can feel it. The random PHA instructions are a good clue. Disk seeks for no apparent reason. The no-second-chances approach to error handling. This is unfriendly territory.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Forge Into Unfriendly Territory</h3>
+
+    <div class="line_editing">
+      <code>*63C9L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">turn on drive motor manually (literally never not suspicious)</p>
+      <code>63C9-   BD 89 C0    LDA   $C089,X</code>
+      <p class="comment">initialize Death Counters</p>
+      <code>63CC-   A9 56       LDA   #$56
+63CE-   85 FD       STA   $FD
+63D0-   A9 08       LDA   #$08
+63D2-   C6 FC       DEC   $FC
+63D4-   D0 04       BNE   $63DA</code>
+      <p class="comment">if Death Counter hits 0, jump forward (more on this in a second)</p>
+      <code>63D6-   C6 FD       DEC   $FD
+63D8-   F0 34       BEQ   $640E</code>
+      <p class="comment">look for a specific nibble ($FB)</p>
+      <code>63DA-   BC 8C C0    LDY   $C08C,X
+63DD-   10 FB       BPL   $63DA
+63DF-   C0 FB       CPY   #$FB
+63E1-   D0 ED       BNE   $63D0
+63E3-   F0 00       BEQ   $63E5</code>
+      <p class="comment">kill a few cycles (not pointless, because the disk spins independently of the CPU, so all of these low-level disk reads are highly time-sensitive)</p>
+      <code>63E5-   EA          NOP
+63E6-   EA          NOP</code>
+      <p class="comment">read data latch (note: no BPL loop here, we're just reading it once)</p>
+      <code>63E7-   BC 8C C0    LDY   $C08C,X</code>
+      <p class="comment">do a compare to set or clear the carry bit (among other things, but it's the carry bit we care about)</p>
+      <code>63EA-   C0 08       CPY   #$08</code>
+      <p class="comment">rotate the carry into the low bit of the accumulator</p>
+      <code>63EC-   2A          ROL</code>
+      <p class="comment">if we just rolled a "1" bit out of the high bit of the accumulator, take this branch</p>
+      <code>63ED-   B0 0B       BCS   $63FA</code>
+      <p class="comment">next nibble needs to be $FF</p>
+      <code>63EF-   BC 8C C0    LDY   $C08C,X
+63F2-   10 FB       BPL   $63EF</code>
+      <p class="comment">...otherwise we start over</p>
+      <code>63F4-   C0 FF       CPY   #$FF
+63F6-   D0 D8       BNE   $63D0</code>
+      <p class="comment">loop back to get next nibble</p>
+      <code>63F8-   F0 EB       BEQ   $63E5</code>
+      <p class="comment">execution continues here (from $63ED) get another nibble</p>
+      <code>63FA-   BC 8C C0    LDY   $C08C,X
+63FD-   10 FB       BPL   $63FA</code>
+      <p class="comment">stash it in zero page</p>
+      <code>63FF-   84 FC       STY   $FC</code>
+      <p class="comment">if the accumulator is anything but %00001010, start over</p>
+      <code>6401-   C9 0A       CMP   #$0A
+6403-   D0 CB       BNE   $63D0</code>
+    </div>
+    <p class="seen">I got lost several times trying to follow this routine. I think the easiest way to explain it is to show the difference between the original disk and my non-working copy.</p>
+    <p class="seen">Here is the original disk, as seen by the Copy II+ nibble editor. Nibbles with extra "0" bits (timing bits) after them are displayed in inverse on an original machine, marked here with a "+" after the nibble.</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK:     START: 1B1E  LENGTH: 17C1</code>
+      <code>1C70: 9F EB E5 FC D7 D7 D7 EE   VIEW
+1C78: FA E6 E6 FF FE F2 ED FD
+1C80: FF EF ED BA BB DD AF E6
+1C88: B7 A7 CB B7 DE AA EB FF
+1C90: FF FF FF FB+FF FF+FF FF+
+1C98: FD FF+FF+FF+FF+FF+FF+FF+
+1CA0: FF+FF+D5 AA 96 AA AB AA
+1CA8: AA AA AB AA AA DE AA EB+
+1CB0: FF+FF+FF+FF+FF+FF D5 AA
+---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">It's easy to understand why a simple sector copy failed. The sequence that this code is looking for starts at offset $1C93, which is between the end of one sector and the beginning of the next. (The data epilogue is at $1C8C; the next address prologue is at $1CA2.)</p>
+    <p class="seen">Sector copiers discard everything between those delimiters and rebuild the track with a default pattern of sync bytes. That pattern doesn't include an $FB nibble, so the nibble check fails.</p>
+    <p class="seen">But the EDD bit copy also failed. Here is the original disk's pattern at offset $1C93:</p>
+    <p class="seen">- $FB + timing bit - $FF - $FF + timing bit - $FF - $FF + timing bit</p>
+    <p class="seen">And here is what the same part of the track looks like on my failed EDD copy:</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK:     START: 1B1E  LENGTH: 17C1</code>
+      <code>1C70: 9F EB E5 FC D7 D7 D7 EE   VIEW
+1C78: FA E6 E6 FF FE F2 ED FD
+1C80: FF EF ED BA BB DD AF E6
+1C88: B7 A7 CB B7 DE AA EB FF
+1C90: FF FF FF FB+FF FF FF+FF+
+1C98: FD FF+FF+FF+FF+FF+FF+FF+
+1CA0: FF+FF+D5 AA 96 AA AB AA
+1CA8: AA AA AB AA AA DE AA EB+
+1CB0: FF+FF+FF+FF+FF+FF D5 AA
+---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">A subtle difference! The sequence at offset $1C93 now looks like this:</p>
+    <p class="seen">- $FB + timing bit - $FF - $FF - $FF + timing bit - $FF + timing bit</p>
+    <p class="seen">This code is looking for $FF bytes with an alternating pattern of timing bit, no timing bit, timing bit, no timing bit. It doesn't find that on the bit copy, so it knows it's not running on an original disk.</p>
+    <p class="seen">Continuing the code listing...</p>
+    <div class="listing">
+      <p class="comment">get a nibble</p>
+      <code>6405-   BD 8C C0    LDA   $C08C,X
+6408-   10 FB       BPL   $6405</code>
+      <p class="comment">more bit twiddling</p>
+      <code>640A-   38          SEC
+640B-   2A          ROL</code>
+      <p class="comment">AND it with the previously stashed nibble</p>
+      <code>640C-   25 FC       AND   $FC</code>
+      <p class="comment">Success path falls through to here, but the failure path is also here (from $63D8, when the Death Counters hit zero). In other words, we will always end up here regardless of whether the nibble check "passed," but the value in the accumulator will be wrong if the nibble check failed.</p>
+      <code>640E-   49 AA       EOR   #$AA</code>
+      <p class="comment">The difference between the original disk and my non-working copy is right here, in the value stored in $6435.</p>
+      <p class="comment">It's not used right away, but I'll bet it will be used soon.</p>
+      <code>6410-   8D 35 64    STA   $6435</code>
+      <p class="comment">"This nibble check will self-destruct in ten seconds..."</p>
+      <code>6413-   A9 00       LDA   #$00
+6415-   A8          TAY
+6416-   99 B9 63    STA   $63B9,Y
+6419-   C8          INY
+641A-   C0 5D       CPY   #$5D
+641C-   D0 F8       BNE   $6416
+641E-   60          RTS</code>
+    </div>
+    <p>And that's it. Whether the nibble check succeeds or fails, this routine returns to the caller. It doesn't even set a flag. The only difference is the value of $6435.</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which We See How It All Fits Together</h3>
+
+    <p>Continuing from $63B0 (the next instruction after calling the nibble check)...</p>
+    <div class="line_editing">
+      <code>*63B0L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">pop $C5/$FF off the stack</p>
+      <code>63B0-   68          PLA
+63B1-   68          PLA</code>
+      <p class="comment">continue elsewhere</p>
+      <code>63B2-   4C 1F 64    JMP   $641F</code>
+    </div>
+    <div class="line_editing">
+      <code>*641FL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">a memory move</p>
+      <code>641F-   A9 87       LDA   #$87
+6421-   85 FA       STA   $FA
+6423-   A9 63       LDA   #$63
+6425-   85 FB       STA   $FB
+6427-   A9 1F       LDA   #$1F
+6429-   85 FC       STA   $FC
+642B-   A9 64       LDA   #$64
+642D-   85 FD       STA   $FD
+642F-   20 5D 65    JSR   $655D</code>
+      <p class="comment">continue elsewhere</p>
+      <code>6432-   4C 44 64    JMP   $6444</code>
+    </div>
+    <div class="line_editing">
+      <code>*6444L</code>
+    </div>
+    <div class="listing">
+      <code>6444-   AD 41 64    LDA   $6441
+6447-   18          CLC
+6448-   6D 35 64    ADC   $6435
+644B-   85 02       STA   $02
+644D-   AD 42 64    LDA   $6442
+6450-   38          SEC
+6451-   ED 35 64    SBC   $6435
+6454-   85 03       STA   $03
+6456-   AD 43 64    LDA   $6443
+6459-   4D 35 64    EOR   $6435
+645C-   85 04       STA   $04</code>
+    </div>
+    <p>There you go: three operations that rely on the correct value in $6435.</p>
+    <p class="seen">Luckily, this code is not obfuscated or even difficult to patch. I can do it right now without rebooting.</p>
+    <div class="line_editing">
+      <p class="comment">switch to ROM and break to monitor</p>
+      <code>*6413:AD 82 C0 4C 59 FF
+*6000G
+<beep></code>
+      <code>*6435</code>
+    </div>
+    <div class="listing">
+      <code>6435- 55</code>
+    </div>
+    <p>The correct value is $55. Now I can hard-code that value on disk.</p>
+    <div class="curses_input">
+      <code>[Disk Fixer]
+  --> "D" for directory mode
+    --> select file "HACKER II HELLO"
+      --> arrows to follow the binary</code>
+    </div>
+    <p>T15,S03,$39 change "00" to "55"</p>
+    <p>I'll skip the nibble check by changing the JSR at $6058 from $6378 (the nibble check) to $641F (the post-check success path):</p>
+    <p>T16,S0C,$5D change "78 63" to "1F 64"</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<section>
+  <h2>Changelog</h2>
+
+    <div class="terminal_output">
+      <code>2015-09-06</code>
+    </div>
+    <p class="seen">- Vastly improved explanation of the</p>
+    <p class="seen">actual protection routine. Thanks to qkumba for pointing out that my original explanation was inaccurate.</p>
+    <div class="terminal_output">
+      <code>2015-08-26</code>
+    </div>
+    <p class="seen">- initial release</p>
+</section>
+
+</body></html>

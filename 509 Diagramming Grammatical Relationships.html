@@ -1,0 +1,263 @@
+<!doctype html>
+<html><head>
+<title>Diagramming Grammatical Relationships</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+
+    <p>I have five disks, simply labeled "Diagramming I" through "V" (in Roman numerals). Each disk is bootable and independent of the others. I'll start with disk 1.</p>
+</section>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">unable to read any track</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">works</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p>T00,S00-S09 have a modified address epilogue (DE FA) T00,S0A - T22,S0F have a modified address epilogue (AA DE) and data prologue (D5 AD AA)</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK: 01  START: 2C36  LENGTH: 189C</code>
+    </div>
+    <div class="curses">
+      <code>33B0: FA A6 9D 9A B3 EB AF F4   VIEW
+33B8: B3 CE BF 9E EE A7 DE AA
+                        ^^^^^
+                    data epilogue</code>
+    </div>
+    <div class="terminal_output">
+      <code>33C0: EB E7 9F E7 F9 FE FF FF
+      ^^</code>
+    </div>
+    <div class="curses">
+      <code>33C8: FF FF FF FF FF FF FF FF
+33D0: FF FF FF FF FF D5 AA 96  <-33D5
+                     ^^^^^^^^
+                 address prologue</code>
+      <code>33D8: FF FE AA AB AA AF FF FA
+      ^^^^^ ^^^^^ ^^^^^ ^^^^^
+      v=255 t=$01 s=$05 chksm</code>
+      <code>33E0: AA DE FF FF FF FB FE FF
+      ^^^^^
+ address epilogue</code>
+      <code>33E8: FF FF FF D5 AD AA BE F7
+               ^^^^^^^^
+            data prologue</code>
+    </div>
+    <div class="terminal_output">
+      <code>33F0: AB A7 9E 9E E9 EF FC BF</code>
+      <code>---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">Disk Fixer</p>
+    <p>["O" -> "Input/Output Control"] set Address Epilogue to "AA DE" set Data Prologue to "D5 AD AA"</p>
+    <p>Success! T01+ readable T11 -> DOS 3.3 disk catalog T01,S09 -> startup program is "HELLO"</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p class="seen">modified prologues/epilogues</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">modified prologues/epilogues</p>
+    <p class="seen">EDD worked. What does that tell us?</p>
+    <p class="seen">no half or quarter tracks almost certainly no nibble check (just structural changes to prologues and epilogues)</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. capture RWTS with AUTOTRACE</p>
+    <p class="seen">2. convert disk to standard format with Advanced Demuffin</p>
+    <p class="seen">3. patch RWTS to read standard format</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Attempt To Use The Original Disk As A Weapon Against Itself</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+      <code>]BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>["5" to switch to slot 5]</code>
+      <code>["R" to load a new RWTS module]
+  --> At $B8, load "RWTS" from drive 1</code>
+      <code>["6" to switch to slot 6]</code>
+      <code>["C" to convert disk]</code>
+      <code>["Y" to change default values]</code>
+    </div>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======================================</code>
+      <code>
+INPUT ALL VALUES IN HEX</code>
+      <code>
+SECTORS PER TRACK? (13/16) 16</code>
+    </div>
+    <div class="curses">
+      <code>START TRACK: $00
+START SECTOR: $0A       <-- change this
+END TRACK: $22
+END SECTOR: $0F</code>
+    </div>
+    <div class="terminal_output">
+      <code>INCREMENT: 1</code>
+      <code>MAX # OF RETRIES: 0</code>
+      <code>COPY FROM DRIVE 1
+TO DRIVE: 2
+=======================================
+16SC $00,$0A-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <p class="seen">And here we go...</p>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:...................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0: ..................................
+SC1: ..................................
+SC2: ..................................
+SC3: ..................................
+SC4: ..................................
+SC5: ..................................
+SC6: ..................................
+SC7: ..................................
+SC8: ..................................
+SC9: ..................................
+SCA:...................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:...................................
+=======================================
+16SC $00,$0A-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+]CATALOG,S6,D2</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+065 FREE</code>
+    </div>
+    <div class="line_editing">
+      <code>*A 002 HELLO-BOOTUP
+*A 004 HELLO
+*B 034 AQUARIUS.PIC
+*A 025 PART 1
+*A 023 PART 2
+*A 015 PART 2 CONT
+*A 024 PART 3
+*A 025 PART 3 CONT
+*A 020 PART 3 CONT 1
+*A 021 PART 4
+*A 018 PART 4 CONT
+*A 019 PART 4 CONT 1
+*B 016 ALPHA.L106
+ A 025 P1
+ A 023 P2
+ A 015 P2C
+ A 019 P3
+ A 025 P3C
+ A 020 P3C1
+ A 021 P4
+ A 018 P4C
+ A 019 P4C1</code>
+      <code>]RUN HELLO
+...works...</code>
+    </div>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which Life Is A Grind And Then You Die</h3>
+
+    <p>Of course, my copy can't boot on its own yet, because it's missing most of track $00. Sectors $00-$09 used a different prologue/epilogue structure, so I couldn't convert them with the captured RWTS because that RWTS can't read them. But I have those sectors on my work disk as "BOOT1", so let's write them out manually. And by "manually," I mean "not manually."</p>
+    <div class="line_editing">
+      <code>]PR#5
+]CALL -151</code>
+    </div>
+    <div class="listing">
+      <p class="comment">straightforward multi-sector write loop, via the RWTS vector at $03D9</p>
+      <code>08C0-   A9 08       LDA   #$08
+08C2-   A0 E8       LDY   #$E8
+08C4-   20 D9 03    JSR   $03D9
+08C7-   AC ED 08    LDY   $08ED
+08CA-   88          DEY
+08CB-   10 05       BPL   $08D2
+08CD-   A0 0F       LDY   #$0F
+08CF-   CE EC 08    DEC   $08EC
+08D2-   8C ED 08    STY   $08ED
+08D5-   CE F1 08    DEC   $08F1
+08D8-   CE E1 08    DEC   $08E1
+08DB-   D0 E3       BNE   $08C0
+08DD-   60          RTS</code>
+    </div>
+    <p class="seen">+-- sector count v</p>
+    <p class="seen">08E0- 00 0A 00 00 00 00 00 00</p>
+    <div class="listing">
+      <code>08E8- 01 60 01 00 00 09 FB 08
+                  ^   ^
+          track --+   +-- sector</code>
+      <code>08F0- 00 2F 00 00 02 00 FE 60
+         ^
+         +-- starting address</code>
+      <code>08F8- 01 00 00 00 01 EF D8 00</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE WRITE BOOT1,A$8C0,L$40
+*BLOAD BOOT1,A$2600
+*8C0G
+...write write write...</code>
+      <code>*C600G
+...grinds and crashes...</code>
+    </div>
+    <p>The disk can't read itself. This is expected. I need to patch the RWTS to look for the standard prologues and epilogues.</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which We Remove All Traces Of Copy Protection Using An Automated Tool That I Wrote For Just Such An Occasion</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+]BRUN PDP</code>
+    </div>
+    <p>T00,S03,$91 change AA to DE T00,S03,$9B change DE to AA T00,S02,$F1 change AD to AA T00,S02,$FC change AA to AD T00,S02,$58 change AD to AA T00,S02,$5D change AA to AD</p>
+    <div class="line_editing">
+      <code>]PR#6
+...works...</code>
+    </div>
+    <p>Disks 2-5 use identical protection.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+</body></html>

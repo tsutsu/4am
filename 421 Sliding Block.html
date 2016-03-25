@@ -1,0 +1,456 @@
+<!doctype html>
+<html><head>
+<title>Sliding Block</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">no errors, but copy loads DOS, clears hi-res graphics screen, then reboots</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">ditto</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">ditto</p>
+    <p class="seen">Disk Fixer</p>
+    <p>T00 -> looks like DOS 3.3 RWTS T00-T02 -> looks like full DOS 3.3 T01,S09 -> startup program is "PPAANNDDAA"</p>
+    <p class="seen">Why didn't any of my copies work?</p>
+    <p class="seen">probably a nibble check in the startup program</p>
+    <p class="seen">A well-timed <Ctrl-Reset> gets me a prompt, but any command reboots again.</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Load up the startup program from my work disk</p>
+    <p class="seen">2. Find and disable the nibble check</p>
+    <p class="seen">3. There is no step 3 (I hope)</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>Hide Your Disk Catalog With This One Weird Trick! Crackers Hate It!</h3>
+
+    <p class="seen">Booting from my work disk, my non- working copy ought to have a catalog, but it has suspiciously vanished.</p>
+    <div class="curses_input">
+      <code>[S6,D1=non-working copy from COPYA]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]CATALOG,S6,D1</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+230 FREE</code>
+    </div>
+    <div class="line_editing">
+      <code>]</code>
+    </div>
+    <p class="seen">Wait, what?</p>
+    <div class="curses_input">
+      <code>[Disk Fixer]
+  --> T11,S00</code>
+    </div>
+    <p class="seen">Looks like a standard DOS 3.3 VTOC. It points to T11,S0F as the first catalog sector.</p>
+    <div class="terminal_output">
+      <code>  --> T11,S0F</code>
+    </div>
+    <p class="seen">Blank. In fact, the entire rest of the track is blank.</p>
+    <p class="seen">--> T10,S0F nope --> T0F,S0F nope --> T0E,S0F nope ... --> T03,S0F</p>
+    <p class="seen">Ah, there it is!</p>
+    <div class="terminal_output">
+      <code>-------------- DISK EDIT --------------
+TRACK $03/SECTOR $0F/VOLUME $FE/BYTE$00
+---------------------------------------
+$00: 00 03 0E 00 00 00 00 00   @CN@@@@@
+$08: 00 00 00 12 0F 80 D0 D0   @@@RO.PP
+$10: C1 C1 CE CE C4 C4 C1 C1   AANNDDAA
+$18: A0 A0 A0 A0 A0 A0 A0 A0
+$20: A0 A0 A0 A0 A0 A0 A0 A0
+$28: A0 A0 A0 A0 05 00 12 0C       E@RL
+$30: 84 D0 C1 CE C4 C1 CD A0   .PANDAM
+$38: A0 A0 A0 A0 A0 A0 A0 A0
+$40: A0 A0 A0 A0 A0 A0 A0 A0
+$48: A0 A0 A0 A0 A0 A0 A0 10          P
+$50: 00 13 0C 84 CC C9 D4 C1   @SL.LITA
+$58: C7 CD A0 A0 A0 A0 A0 A0   GM
+$60: A0 A0 A0 A0 A0 A0 A0 A0
+$68: A0 A0 A0 A0 A0 A0 A0 A0
+$70: A0 A0 15 00 14 07 82 C8     U@TG.H
+$78: C8 C5 CC CC CF A0 A0 A0   HELLO
+---------------------------------------
+BUFFER 0/SLOT 6/DRIVE 1/MASK OFF/NORMAL</code>
+      <code>---------------------------------------
+COMMAND : _</code>
+    </div>
+    <p class="seen">But how does the original disk know where to look? I scoured "Beneath Apple DOS" until I found the answer on p8-28:</p>
+    <div class="curses">
+      <code>B011-B036 Read a directory sector
+; (If CARRY flag is zero on entry, read
+  first directory sector. If CARRY is
+  one, read next)
+; Memorize entry code.
+; Set buffer pointers (B045).
+; First or next?
+; If first, get track/sector of
+  directory sector from VTOC at offset
+  +1,+2.
+; Otherwise, get track/sector from
+  directory sector at offset +1,+2. If
+  track is zero, exit with error code
+  (end of directory).
+; Call RWTS to read sector.
+; Exit with normal return code.</code>
+    </div>
+    <p class="seen">So, to read the first sector of file names and other metadata, this routine is supposed to look at the VTOC sector buffer (read from T11,S00 and stored at $B3BB..$B4BA). The VTOC says "hey, the first sector of files and stuff is in T11,S0F" so this routine is supposed to read T11,S0F.</p>
+    <p class="seen">But the DOS on this disk made one small modification to that routine. (This is on T01,S0F.)</p>
+    <div class="listing">
+      <code>B011-   08          PHP
+B012-   20 45 B0    JSR   $B045
+B015-   28          PLP
+B016-   B0 08       BCS   $B020
+B018-   AC BD B3    LDY   $B3BD
+                                ------
+B01B-   A2 03       LDX   #$03  << hey
+B01D-   EA          NOP         << now
+                                ------
+B01E-   D0 0A       BNE   $B02A
+B020-   AE BC B4    LDX   $B4BC
+B023-   D0 02       BNE   $B027
+B025-   38          SEC
+B026-   60          RTS
+B027-   AC BD B4    LDY   $B4BD
+B02A-   8E 97 B3    STX   $B397
+B02D-   8C 98 B3    STY   $B398
+B030-   A9 01       LDA   #$01
+B032-   20 52 B0    JSR   $B052
+B035-   18          CLC
+B036-   60          RTS</code>
+    </div>
+    <p class="seen">Instead of getting the track number from the VTOC, it hard-codes track $03.</p>
+    <p class="seen">Now that I've identified the problem, the fix is straightforward. If I change the VTOC header (T11,S00) to point to the actual first directory sector (T03,S0F), DOS 3.3 or any other copy utility should be able to read the disk catalog.</p>
+    <p class="seen">T11,S00,$01 change "11" to "03"</p>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]CATALOG,S6,D1</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+230 FREE</code>
+    </div>
+    <div class="line_editing">
+      <code>*T 005 PPAANNDDAA
+*B 016 PANDAM
+*B 021 LITAGM
+*A 005 HHELLO
+*B 002 PRESS
+*B 050 PICHHH
+*A 017 GAMEHHHH
+*B 017 P1
+*B 017 P2
+*B 017 P3
+*B 017 P4
+*B 034 DIR
+*B 032 TITLE
+ B 002 MELLO</code>
+    </div>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Discover That All That Glitters Is Not Suspicious</h3>
+
+    <p>The startup program is PPAANNDDAA, which is a text file. Not something you see every day, but DOS 3.3 supports it.</p>
+    <p>It EXECs the file, treating it as a series of typed commands.</p>
+    <div class="line_editing">
+      <code>]TLIST PPAANNDDAA</code>
+    </div>
+    <div class="terminal_output">
+      <code>NOMONI,O,C
+HGR:POKE49234,0:D$=CHR$(4):HOME:
+CALL-151</code>
+      <code>400:A9 06 8D 31 04 A9 1D 8D 35 04 20 20
+04 EE 31 04 EE 35 04 20 20 04 EE 31 04
+EE 35 04 20 20 04 60 A9 04 A0 2C 20 D9
+03 A9 00 85 48 60 01 60 01 00 02 06 3D
+04 00 1D 00 00 01 00 FE 60 01 00 01 FF
+D8 N 400G
+D43CG
+PRINT D$;"BRUN MELLO";CHR$(13)</code>
+    </div>
+    <div class="line_editing">
+      <code>]</code>
+    </div>
+    <p class="seen">Well, that certainly looks suspicious.</p>
+    <p class="seen">Typing in those bytes at $2400 gives me this short routine:</p>
+    <div class="listing">
+      <code>2400-   A9 06       LDA   #$06
+2402-   8D 31 04    STA   $0431
+2405-   A9 1D       LDA   #$1D
+2407-   8D 35 04    STA   $0435
+240A-   20 20 04    JSR   $0420
+240D-   EE 31 04    INC   $0431
+2410-   EE 35 04    INC   $0435
+2413-   20 20 04    JSR   $0420
+2416-   EE 31 04    INC   $0431
+2419-   EE 35 04    INC   $0435
+241C-   20 20 04    JSR   $0420
+241F-   60          RTS
+2420-   A9 04       LDA   #$04
+2422-   A0 2C       LDY   #$2C
+2424-   20 D9 03    JSR   $03D9
+2427-   A9 00       LDA   #$00
+2429-   85 48       STA   $48
+242B-   60          RTS
+242C-   01 60 01 00 02 06 3D 04
+        00 1D 00 00 01 00 FE 60
+        01 00 01 FF D8</code>
+    </div>
+    <p class="seen">Taking into account that this will execute at $0400, it looks like a standard multi-sector read loop. The data structure at $042C is a standard RWTS parameter table. It doesn't call the code it loads from disk; it just loads it and exits.</p>
+    <p class="seen">Next is a call to $D43C, which is the</p>
+    <p class="seen">Applesoft BASIC "warm start" routine.</p>
+    <p class="seen">Next it BRUNs MELLO.</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which We Stare Into Infinity And Infinity Stares Back And Executes A DOS Command</h3>
+
+    <div class="line_editing">
+      <code>]BLOAD MELLO
+]CALL -151
+*BF55.BF56</code>
+    </div>
+    <div class="listing">
+      <code>BF55- 00 90</code>
+    </div>
+    <p>(Diversi-DOS 64K stores the program start location in $BF55. In stanard DOS</p>
+    <p>3.3, it's at $AA72.)</p>
+    <div class="line_editing">
+      <code>*9000L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">get address of RWTS parameter table</p>
+      <code>9000-   20 E3 03    JSR   $03E3
+9003-   85 FB       STA   $FB
+9005-   84 FA       STY   $FA</code>
+      <p class="comment">hmm</p>
+      <code>9007-   A9 C5       LDA   #$C5
+9009-   48          PHA</code>
+      <p class="comment">copy RWTS parameters</p>
+      <code>900A-   A9 00       LDA   #$00
+900C-   85 FC       STA   $FC
+900E-   A2 03       LDX   #$03
+9010-   BC 49 90    LDY   $9049,X
+9013-   91 FA       STA   ($FA),Y
+9015-   CA          DEX
+9016-   10 F8       BPL   $9010
+9018-   8A          TXA</code>
+      <p class="comment">hmm</p>
+      <code>9019-   48          PHA</code>
+    </div>
+    <p class="seen">The X register will be $FF after the loop, so this means we've pushed $C5FF to the stack. At this point, a bare RTS will "return" to $C5FF+1, i.e. reboot.</p>
+    <div class="listing">
+      <code>901A-   20 3C 90    JSR   $903C</code>
+    </div>
+    <div class="line_editing">
+      <code>*903CL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">call the RWTS (most likely just to move the drive head to the proper position for an impending nibble check)</p>
+      <code>903C-   20 E3 03    JSR   $03E3
+903F-   20 D9 03    JSR   $03D9
+9042-   A9 00       LDA   #$00
+9044-   85 48       STA   $48</code>
+      <p class="comment">if that fails, off to The Badlands</p>
+      <code>9046-   B0 5F       BCS   $90A7
+9048-   60          RTS</code>
+    </div>
+    <p class="seen">Caller was $901A, so resuming at $901D:</p>
+    <div class="line_editing">
+      <code>*901DL</code>
+    </div>
+    <div class="listing">
+      <code>901D-   A0 01       LDY   #$01
+901F-   B1 FA       LDA   ($FA),Y
+9021-   AA          TAX
+9022-   20 5A 90    JSR   $905A</code>
+    </div>
+    <div class="line_editing">
+      <code>*905AL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">turning on the drive motor manually is always suspicious</p>
+      <code>905A-   BD 89 C0    LDA   $C089,X</code>
+      <p class="comment">initialize death counters</p>
+      <code>905D-   A9 56       LDA   #$56
+905F-   85 FD       STA   $FD
+9061-   A9 08       LDA   #$08
+9063-   C6 FC       DEC   $FC
+9065-   D0 04       BNE   $906B
+9067-   C6 FD       DEC   $FD</code>
+      <p class="comment">if death counter hits 0, give up</p>
+      <code>9069-   F0 3C       BEQ   $90A7</code>
+      <p class="comment">look for a specific nibble ($FB)</p>
+      <code>906B-   BC 8C C0    LDY   $C08C,X
+906E-   10 FB       BPL   $906B
+9070-   C0 FB       CPY   #$FB
+9072-   D0 ED       BNE   $9061
+9074-   F0 00       BEQ   $9076</code>
+      <p class="comment">kill a few cycles (not pointless, because the disk spins independently of the CPU, so all of these low-level disk reads are highly time-sensitive)</p>
+      <code>9076-   EA          NOP
+9077-   EA          NOP</code>
+      <p class="comment">read data latch (note: no BPL loop here, we're just reading it once)</p>
+      <code>9078-   BC 8C C0    LDY   $C08C,X</code>
+      <p class="comment">do a compare to set or clear the carry bit (among other things, but it's the carry bit we care about)</p>
+      <code>907B-   C0 08       CPY   #$08</code>
+      <p class="comment">rotate the carry into the low bit of the accumulator</p>
+      <code>907D-   2A          ROL</code>
+      <p class="comment">if we just rolled a "1" bit out of the high bit of the accumulator, take this branch</p>
+      <code>907E-   B0 0B       BCS   $908B</code>
+      <p class="comment">next nibble needs to be $FF</p>
+      <code>9080-   BC 8C C0    LDY   $C08C,X
+9083-   10 FB       BPL   $9080</code>
+      <p class="comment">...otherwise we start over</p>
+      <code>9085-   C0 FF       CPY   #$FF
+9087-   D0 D8       BNE   $9061</code>
+      <p class="comment">loop back to get next nibble</p>
+      <code>9089-   F0 EB       BEQ   $9076</code>
+      <p class="comment">execution continues here (from $907E) get another nibble</p>
+      <code>908B-   BC 8C C0    LDY   $C08C,X
+908E-   10 FB       BPL   $908B</code>
+      <p class="comment">stash it in zero page</p>
+      <code>9090-   84 FC       STY   $FC</code>
+      <p class="comment">if the accumulator is anything but %00001010, start over</p>
+      <code>9092-   C9 0A       CMP   #$0A
+9094-   D0 CB       BNE   $9061</code>
+    </div>
+    <p class="seen">I got lost several times trying to follow this routine. I think the easiest way to explain it is to show the difference between the original disk and my non-working copy.</p>
+    <p class="seen">Here is the original disk, as seen by the Copy II+ nibble editor. Nibbles with extra "0" bits (timing bits) after them are displayed in inverse on an original machine, marked here with a "+" after the nibble.</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK:     START: 1B1E  LENGTH: 17C1</code>
+      <code>1C70: 9F EB E5 FC D7 D7 D7 EE   VIEW
+1C78: FA E6 E6 FF FE F2 ED FD
+1C80: FF EF ED BA BB DD AF E6
+1C88: B7 A7 CB B7 DE AA EB FF
+1C90: FF FF FF FB+FF FF+FF FF+
+1C98: FD FF+FF+FF+FF+FF+FF+FF+
+1CA0: FF+FF+D5 AA 96 AA AB AA
+1CA8: AA AA AB AA AA DE AA EB+
+1CB0: FF+FF+FF+FF+FF+FF D5 AA
+---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">It's easy to understand why a simple sector copy failed. The sequence that this code is looking for starts at offset $1C93, which is between the end of one sector and the beginning of the next. (The data epilogue is at $1C8C; the next address prologue is at $1CA2.)</p>
+    <p class="seen">Sector copiers discard everything between those delimiters and rebuild the track with a default pattern of sync bytes. That pattern doesn't include an $FB nibble, so the nibble check fails.</p>
+    <p class="seen">But the EDD bit copy also failed. Here is the original disk's pattern at offset $1C93:</p>
+    <p class="seen">- $FB + timing bit - $FF - $FF + timing bit - $FF - $FF + timing bit</p>
+    <p class="seen">And here is what the same part of the track looks like on my failed EDD copy:</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK:     START: 1B1E  LENGTH: 17C1</code>
+      <code>1C70: 9F EB E5 FC D7 D7 D7 EE   VIEW
+1C78: FA E6 E6 FF FE F2 ED FD
+1C80: FF EF ED BA BB DD AF E6
+1C88: B7 A7 CB B7 DE AA EB FF
+1C90: FF FF FF FB+FF FF FF+FF+
+1C98: FD FF+FF+FF+FF+FF+FF+FF+
+1CA0: FF+FF+D5 AA 96 AA AB AA
+1CA8: AA AA AB AA AA DE AA EB+
+1CB0: FF+FF+FF+FF+FF+FF D5 AA
+---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">A subtle difference! The sequence at offset $1C93 now looks like this:</p>
+    <p class="seen">- $FB + timing bit - $FF - $FF - $FF + timing bit - $FF + timing bit</p>
+    <p class="seen">This code is looking for $FF bytes with an alternating pattern of timing bit, no timing bit, timing bit, no timing bit. It doesn't find that on the bit copy, so it knows it's not running on an original disk.</p>
+    <p class="seen">Continuing the code listing...</p>
+    <div class="listing">
+      <p class="comment">get a nibble</p>
+      <code>9096-   BD 8C C0    LDA   $C08C,X
+9099-   10 FB       BPL   $9096</code>
+      <p class="comment">more bit twiddling</p>
+      <code>909B-   38          SEC
+909C-   2A          ROL</code>
+      <p class="comment">AND it with the previously stashed nibble</p>
+      <code>909D-   25 FC       AND   $FC
+909F-   49 FF       EOR   #$FF</code>
+      <p class="comment">branch to failure path</p>
+      <code>90A1-   D0 04       BNE   $90A7</code>
+      <p class="comment">success path falls through to here -- turn off the drive motor and return to the caller</p>
+      <code>90A3-   DD 88 C0    CMP   $C088,X
+90A6-   60          RTS</code>
+      <p class="comment">failure path (a.k.a. "The Badlands", from which there is no return)</p>
+      <code>90A7-   A8          TAY
+90A8-   DD 88 C0    CMP   $C088,X</code>
+      <p class="comment">manually pop the return address of the immediate caller (which leaves the manually pushed $C5FF address on the top of the stack to "return" to)</p>
+      <code>90AB-   68          PLA
+90AC-   68          PLA</code>
+      <p class="comment">destroy all trace of this program in memory</p>
+      <code>90AD-   99 00 90    STA   $9000,Y
+90B0-   C8          INY
+90B1-   C0 8B       CPY   #$8B
+90B3-   D0 F8       BNE   $90AD</code>
+      <p class="comment">"return" to $C5FF+1, i.e. reboot</p>
+      <code>90B5-   60          RTS</code>
+    </div>
+    <p class="seen">That explains the behavior that I saw on my non-working copy (endlessly rebooting).</p>
+    <p class="seen">This was called from $9022, so let's continue from $9025.</p>
+    <div class="line_editing">
+      <code>*9025L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">pop the bogus return value ($C5FF) off the stack</p>
+      <code>9025-   68          PLA
+9026-   68          PLA</code>
+      <p class="comment">Route a series of bytes through the DOS output vector at ($36). This is how binary files "execute" DOS 3.3 commands, like PRINT CHR$(4)"..." in</p>
+      <p class="comment">Applesoft BASIC. This is totally legitimate code, cleverly disguised as an infinite loop.</p>
+      <code>9027-   A0 00       LDY   #$00
+9029-   84 FE       STY   $FE
+902B-   B9 4D 90    LDA   $904D,Y
+902E-   09 80       ORA   #$80
+9030-   20 39 90    JSR   $9039
+9033-   A4 FE       LDY   $FE
+9035-   C8          INY
+9036-   4C 29 90    JMP   $9029
+9039-   6C 36 00    JMP   ($0036)</code>
+    </div>
+    <p class="seen">Let's see what it's printing.</p>
+    <div class="line_editing">
+      <code>*FC58G N 400<904D.9059M</code>
+    </div>
+    <p>DRUN HHELLOM@ ^ ^^ control characters</p>
+    <p class="seen">Aha! It's not an infinite loop after all. Well, it is, technically, but it won't actually run forever. It's not easy to show in plain text, but the initial "D" and the final "M@" are in inverse. So that string starts with</p>
+    <p class="seen">Ctrl-D and ends with Ctrl-M and a null byte. Since DOS is already loaded, printing this through the DOS vector will execute that command, as if you typed it from a prompt yourself. Since that program never returns to the caller, it will break out of the seemingly "infinite" loop.</p>
+    <p>Since there are no side effects to the copy protection routine, I can change this file to simply skip the call to $905C and continue on to running the real startup program. Using my trusty</p>
+    <p class="seen">Disk Fixer sector editor, I press "D" for directory mode, select "MELLO", and</p>
+    <p>I find this code on T21,S06.</p>
+    <p>T21,S06,$26 change "20" to "2C"</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<section>
+  <h2>Changelog</h2>
+
+    <div class="terminal_output">
+      <code>2015-09-06</code>
+    </div>
+    <p class="seen">- Vastly improved explanation of the</p>
+    <p class="seen">actual protection routine. Thanks to qkumba for pointing out that my original explanation was inaccurate.</p>
+    <div class="terminal_output">
+      <code>2015-03-29</code>
+    </div>
+    <p class="seen">- initial release</p>
+</section>
+
+</body></html>
