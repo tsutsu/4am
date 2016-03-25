@@ -45,8 +45,9 @@ table {
 
 
 
-body {
+html, body {
   font-family: Verdana;
+  width: 420px;
 }
 
 section {
