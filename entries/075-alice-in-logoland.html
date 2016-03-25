@@ -1,0 +1,166 @@
+<!doctype html>
+<html><head>
+<title>Alice in LogoLand</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/074-xevious.html">Xevious</a></p>
+<section>
+
+    <p>"Alice in Logoland" is a disk of sample</p>
+    <p>Logo programs that was bundled with</p>
+    <p>Krell's Logo, distributed by Krell</p>
+    <p class="seen">Software.</p>
+    <p>The original disk boots to DOS and displays a disk catalog, then exits.</p>
+    <p>The files are meant to be loaded by booting the Krell's Logo program disk, then loading the files through the Logo interactive shell.</p>
+    <p>COPYA barfs immediately on the original disk. Turning to my trusty Copy ][+ sector editor, I press "P" to enter the</p>
+    <p>Sector Editor Patcher, then select "DOS</p>
+    <p>3.3 PATCHED" (which ignores address field checksums and epilogue bytes).</p>
+    <p>Behold! All tracks and sectors are readable.</p>
+    <p class="seen">Given the (relatively) weak structural protection, I used to turn to the DOS</p>
+    <p class="seen">3.3 master disk, patch the RWTS to ignore checksums and epilogue bytes (changing $B942 from "SEC" to "CLC"), and run COPYA. Then, one fine day, and completely by accident, I came across an original disk with a bad sector. I suppose this shouldn't surprise me.</p>
+    <p class="seen">These floppies are decades old by now; it's amazing any of them work at all.</p>
+    <p class="seen">The point is, I shouldn't be using tools that ignore potentially serious read errors. There are other tools, like Super Demuffin, that can convert a disk like this (with non-standard epilogue bytes) into a standard format.</p>
+    <p class="seen">It requires figuring out what the actual epilogue bytes are, but it has the advantage of surfacing a read error if the original disk actually has a read error.</p>
+    <p class="seen">So... no more COPYA+B942:18 patch. From now on, it's Super Demuffin or Advanced</p>
+    <p>Demuffin to convert disks to a standard format. Given that this disk is self- booting, I should be able to use my AUTOTRACE program to extract the RWTS from the original disk, then load that into Advanced Demuffin to convert it to a standard format.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+    </div>
+    <p class="seen">For those of you just tuning in, my work disk uses a custom program that I affectionately call "AUTOTRACE" to automate the process of boot tracing as far as possible. For some disks, this just captures track 0, sector 0 (saved in a file called "BOOT0") and stops.</p>
+    <p class="seen">For other disks that load in the same way that an unprotected DOS 3.3 disk loads, it captures the next stage of the boot process as well (in a file called "BOOT1"). BOOT1 contains sectors 0-9 on track 0, which are loaded into memory at $B600..$BFFF. This generally contains the RWTS routines which the program uses to read the rest of the disk.</p>
+    <p class="seen">If the RWTS is fairly normal as well (and my AUTOTRACE program just spot- checks a few memory locations to guess at its "normalcy"), there's a good chance I'll be able to use a tool called Advanced Demuffin (written in 1983 by The Stack) to convert the disk from whatever weird format it uses to store its sector data into a standard disk readable by unprotected DOS 3.3 disks or any other third-party tools.</p>
+    <p class="seen">In this case, AUTOTRACE extracts the RWTS routines (generally loaded from track 0, sectors 2-9 into $B800..$BFFF) and saves *that* into a third file called "RWTS".</p>
+    <p class="seen">If anything looks fishy or non- standard, AUTOTRACE just stops, and I have to check the files it saved so far to determine why. But in this case, it ran all the way through, automatically capturing BOOT0, BOOT1, and RWTS files.</p>
+    <p class="seen">Now I can use Advanced Demuffin to convert the disk to a standard format. (It uses the disk's own RWTS to read the original, then a standard DOS 3.3- compatible RWTS to write out the data, sector by sector.)</p>
+    <div class="curses_input">
+      <code>[S6,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+]BRUN ADVANCED DEMUFFIN 1.1</code>
+    </div>
+    <p class="seen">--> LOAD NEW RWTS MODULE</p>
+    <p class="seen">At $B8, load "RWTS" from D1</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>--> FORMAT TARGET DISK</code>
+    </div>
+    <p class="seen">...grind grind grind...</p>
+    <div class="terminal_output">
+      <code>--> CONVERT DISK</code>
+    </div>
+    <p class="seen">This disk is 16 sectors, and the default options (copy the entire disk, all tracks, all sectors) don't need to be changed unless something goes horribly wrong.</p>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.1  - COPYRIGHT 1983
+WRITTEN BY THE STACK -CORRUPT COMPUTING
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:...................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:...................................
+SC1:...................................
+SC2:...................................
+SC3:...................................
+SC4:...................................
+SC5:...................................
+SC6:...................................
+SC7:...................................
+SC8:...................................
+SC9:...................................
+SCA:...................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:...................................
+=======================================
+16 SC $00,$00 TO $22,$0F BY $01 TO DRV2</code>
+    </div>
+    <p class="seen">Rebooting my work disk, I can see the disk catalog on the demuffin'd copy.</p>
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+]CATALOG,S6,D1</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+117 FREE</code>
+    </div>
+    <div class="line_editing">
+      <code>*B 016 AIL1.LOGO
+*B 017 AIL10.LOGO
+*B 012 AIL11.LOGO
+*B 014 AIL12.LOGO
+*B 012 AIL13.LOGO
+*B 018 AIL14.LOGO
+*B 015 AIL15.LOGO
+*B 012 AIL16.LOGO
+*B 019 AIL17.LOGO
+*B 017 AIL18.LOGO
+*B 015 AIL19.LOGO
+*B 007 AIL1A.LOGO
+*B 014 AIL2.LOGO
+*B 013 AIL20.LOGO
+*B 018 AIL21.LOGO
+*B 009 AIL2B.LOGO
+*B 014 AIL3.LOGO
+*B 009 AIL3A.LOGO
+*B 017 AIL4.LOGO
+*B 013 AIL5.LOGO
+*B 014 AIL6.LOGO
+*B 016 AIL7.LOGO
+*B 018 AIL8.LOGO
+*B 012 AIL9.LOGO
+*B 003 ALICE.AUX.LOGO
+*B 002 ALICE.SHAPES
+*B 002 CHESHIRE.SHAPES
+*B 002 CROC.SHAPES
+*B 003 CROC1.AUX.LOGO
+*B 002 CROC1.SHAPES
+*B 004 DIS.LOGO
+*B 002 FERRET2.SHAPES
+*A 002 HELLO
+*B 003 INITSHAPES.AUX.LOGO
+*B 002 MUSIC.BIN
+*B 004 MUSIC.SRC.LOGO
+*B 002 QUEEN.SHAPES
+*B 003 RABBIT.AUX.LOGO
+*B 002 RABBIT.SHAPES</code>
+    </div>
+    <p>Now to make the disk be able to read itself (remember, it still has the original RWTS on it)... Not strictly necessary, since the files can only be loaded from within Krell's Logo, but the original disk was self-booting, so my copy should be, too.</p>
+    <p class="seen">Using Copy ][+, I can "copy DOS" from a freshly initialized DOS 3.3 disk onto the demuffin'd copy. This function of</p>
+    <p class="seen">Copy ][+ just sector-copies tracks 0-2 from one disk to another, but it's easier than setting that up manually in some other copy program.</p>
+    <p class="seen">Copy ][+</p>
+    <p class="seen">--> COPY --> DOS --> from slot 6, drive 2 --> to slot 6, drive 1</p>
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]
+[S6,D2=newly formatted DOS 3.3 disk]</code>
+    </div>
+    <p class="seen">...read read read... ...write write write...</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/076-little-computer-people.html">Little Computer People</a></p>
+</body></html>

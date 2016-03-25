@@ -1,0 +1,305 @@
+<!doctype html>
+<html><head>
+<title>Terrapin Logo 1.2</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/163-calendar-skills.html">Calendar Skills</a></p>
+<section>
+
+    <p>Terrapin Logo is an implementation of the Logo programming language. It was written by L. Klotz, P. Sobalvarro, and</p>
+    <p>S. Hain under the supervision of H.</p>
+    <p>Abelson. It was distributed by</p>
+    <p>Terrapin, Inc. This is version 1.2.</p>
+    <p>The program is distributed on two single-sided disks, labeled "program" and "utilities." Disk 2 (utilities) appears unprotected, but COPYA fails miserably and immediately on the program disk. EDD 4 bit copy gives no read errors, but the copy just grinds, unable to read itself.</p>
+    <p class="seen">The original disk appears to boot a modified DOS 3.3. Listening to the disk drive, it quickly moves out to track 2, then back to track 1, then track 0, then swings out to track $11 to read the disk catalog and load the startup program (HELLO or similar). You can hear a lot just by listening.</p>
+    <p>Turning to my trusty Disk Fixer sector editor, I can not read anything beyond T00,S09 (even with CHECKSUM ENABLED = NO). The entire disk is a black box.</p>
+    <p>Time for boot tracing with AUTOTRACE!</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+    </div>
+    <p class="seen">For those of you just tuning in, my work disk uses a custom program that I affectionately call "AUTOTRACE" to automate the process of boot tracing as far as possible. For some disks, this just captures track 0, sector 0 (saved in a file called "BOOT0") and stops.</p>
+    <p class="seen">For other disks that load in the same way that an unprotected DOS 3.3 disk loads, it captures the next stage of the boot process as well (in a file called "BOOT1"). BOOT1 contains sectors 0-9 on track 0, which are loaded into memory at $B600..$BFFF. This generally contains the RWTS routines which the program uses to read the rest of the disk.</p>
+    <p class="seen">If the RWTS is fairly normal as well (and my AUTOTRACE program just spot- checks a few memory locations to guess at its "normalcy"), there's a good chance I'll be able to use a tool called Advanced Demuffin (written in 1983 by The Stack) to convert the disk from whatever weird format it uses to store its sector data into a standard disk readable by unprotected DOS 3.3 disks or any other third-party tools.</p>
+    <p class="seen">In this case, AUTOTRACE extracts the RWTS routines (generally loaded from track 0, sectors 2-9 into $B800..$BFFF) and saves *that* into a third file called "RWTS".</p>
+    <p class="seen">If anything looks fishy or non- standard, AUTOTRACE just stops, and I have to check the files it saved so far to determine why. But in this case, it ran all the way through, automatically capturing BOOT0, BOOT1, and RWTS files.</p>
+    <p class="seen">Now I use plug that RWTS file into</p>
+    <p class="seen">Advanced Demuffin and try to convert the data on this disk to a standard format.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk (side A)]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>[press "5" to switch to slot 5]</code>
+      <code>[press "R" to load a new RWTS module]
+  --> At $B8, load "RWTS" from drive 1</code>
+      <code>[press "6" to switch to slot 6]</code>
+      <code>[press "C" to convert disk]</code>
+    </div>
+    <p class="seen">This disk is 16 sectors, and the default options (copy the entire disk, all tracks, all sectors) don't need to be changed unless something goes horribly wrong.</p>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:R..................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:R..................................
+SC1:R..................................
+SC2:R..................................
+SC3:R..................................
+SC4:R..................................
+SC5:R..................................
+SC6:R..................................
+SC7:R..................................
+SC8:R..................................
+SC9:R..................................
+SCA:...................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:...................................
+=======================================
+16SC $00,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <p>The disk's own RWTS can't read most of track 0, but it gave no read errors on any sector after T00,S09. That's not surprising. Boot0 re-uses the disk controller ROM routine to read up to T00,S09, then the disk's RWTS takes over to read the rest of the disk. On this disk, those two are encoded so differently that they are impenetrable to each other.</p>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]CATALOG,S6,D2</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+364 FREE</code>
+      <code> B 004 STARTLOGO
+ B 128 LOGO</code>
+    </div>
+    <div class="line_editing">
+      <code>]BRUN STARTLOGO</code>
+    </div>
+    <p>Prints "LOADING, PLEASE WAIT..."</p>
+    <p>...and crashes.</p>
+    <p class="seen">Hmm.</p>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]BRUN LOGO,S6,D2</code>
+    </div>
+    <p>Success! The main program loads and runs without complaint. Something in the loader program must be accessing DOS locations directly instead of using the vectors on page 3. (None of the usual DOS locations work because my work disk uses 64K Diversi-DOS.)</p>
+    <p>But this is definitely a good sign. It tells me that the program itself doesn't care about the DOS that loaded it, once it's loaded. Some programs will check for DOS-specific quirks and fail if they detect that they were loaded from anything but the original disk's custom DOS. But I don't see any evidence of that here.</p>
+    <p>Let's write the missing sectors from track 0 to my demuffin'd copy and see if it can boot.</p>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]CALL -151</code>
+    </div>
+    <div class="listing">
+      <p class="comment">just a straightforward multi-sector write loop, via the RWTS vector at $03D9</p>
+      <code>08C0-   A9 08       LDA   #$08
+08C2-   A0 E8       LDY   #$E8
+08C4-   20 D9 03    JSR   $03D9
+08C7-   AC ED 08    LDY   $08ED
+08CA-   88          DEY
+08CB-   10 05       BPL   $08D2
+08CD-   A0 0F       LDY   #$0F
+08CF-   CE EC 08    DEC   $08EC
+08D2-   8C ED 08    STY   $08ED
+08D5-   CE F1 08    DEC   $08F1
+08D8-   CE E1 08    DEC   $08E1
+08DB-   D0 E3       BNE   $08C0
+08DD-   60          RTS</code>
+    </div>
+    <p>+-- sector count v</p>
+    <p>08E0- 00 0A 00 00 00 00 00 00</p>
+    <div class="listing">
+      <code>08E8- 01 60 01 00 00 09 FB 08
+                  ^   ^
+          track --+   +-- sector</code>
+      <code>08F0- 00 2F 00 00 02 00 FE 60
+          ^
+          +-- starting address</code>
+      <code>08F8- 01 00 00 00 01 EF D8 00</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE WRITE BOOT1,A$8C0,L$40</code>
+      <code>*BLOAD BOOT1,A$2600</code>
+      <code>*8C0G</code>
+      <code>*C600G</code>
+    </div>
+    <p>...no dice. The disk grinds, unable to read itself. This is not unusual. A lot of disks need some sort of post- demuffin patching, and I got tired of doing it manually, so I wrote a program to do it for me. It is called, unsurprisingly, Post-Demuffin Patcher.</p>
+    <p class="seen">It prompts you to select a slot and drive, then reads the demuffin'd disk, checks for a modified DOS 3.3-shaped RWTS, and applies the necessary patches so the disk can read itself. (It can also detect and bypass some nibble checks.) I've included a copy of Post-</p>
+    <p class="seen">Demuffin Patcher on my work disk; the full source code is currently available at <https://archive.org/details/ PostDemuffinPatcher4am>.</p>
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]BRUN PDP</code>
+    </div>
+    <p>T00,S03,$91 change BA to DE T00,S03,$35 change BA to DE T00,S02,$9E change BA to DE</p>
+    <p>This is the actual output of the program. Post-Demuffin Patcher prints out the changes it is going to make before it writes them to the disk. In this case, it just changed a few epilogue bytes from "BA" to "DE".</p>
+    <div class="line_editing">
+      <code>]PR#6</code>
+    </div>
+    <p>...no dice. The disk still grinds. My</p>
+    <p>Post-Demuffin Patcher is missing something.</p>
+    <p class="seen">Let's back up.</p>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]BLOAD RWTS,A$2800
+]CALL -151</code>
+      <code>*FE89G FE93G     ; disconnect DOS</code>
+      <code>*B800<2800.2FFFM ; move RWTS into place</code>
+      <code>*B800L
+.
+.
+.
+Everything appears to be in the usual
+place. But there's something odd
+lurking in the RWTS, immediately after
+it searches for the data prologue:</code>
+      <code>*B8DCL</code>
+    </div>
+    <div class="listing">
+      <code>B8DC-   A0 20       LDY   #$20
+B8DE-   88          DEY
+B8DF-   F0 61       BEQ   $B942</code>
+      <p class="comment">normal "D5"</p>
+      <code>B8E1-   BD 8C C0    LDA   $C08C,X
+B8E4-   10 FB       BPL   $B8E1
+B8E6-   49 D5       EOR   #$D5
+B8E8-   D0 F4       BNE   $B8DE
+B8EA-   EA          NOP</code>
+      <p class="comment">normal "AA"</p>
+      <code>B8EB-   BD 8C C0    LDA   $C08C,X
+B8EE-   10 FB       BPL   $B8EB
+B8F0-   C9 AA       CMP   #$AA
+B8F2-   D0 F2       BNE   $B8E6
+B8F4-   EA          NOP</code>
+      <p class="comment">normal "AD"</p>
+      <code>B8F5-   BD 8C C0    LDA   $C08C,X
+B8F8-   10 FB       BPL   $B8F5
+B8FA-   C9 AD       CMP   #$AD
+B8FC-   D0 E8       BNE   $B8E6</code>
+      <p class="comment">wait, what?</p>
+      <code>B8FE-   4C CA BE    JMP   $BECA</code>
+    </div>
+    <p>There is not supposed to be a jump there. That usually continues into the $BFxx page and ends at $B943.</p>
+    <div class="line_editing">
+      <code>*BECAL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">read another nibble</p>
+      <code>BECA-   BD 8C C0    LDA   $C08C,X
+BECD-   10 FB       BPL   $BECA</code>
+      <p class="comment">kill some time to get out of sync with the "proper" start of nibbles)</p>
+      <code>BECF-   BD 8D C0    LDA   $C08D,X
+BED2-   EA          NOP</code>
+      <p class="comment">skip over bits that are set (note the branch instruction -- it's BMI, not the usual BPL)</p>
+      <code>BED3-   BD 8C C0    LDA   $C08C,X
+BED6-   30 FB       BMI   $BED3</code>
+      <p class="comment">read another nibble</p>
+      <code>BED8-   BD 8C C0    LDA   $C08C,X
+BEDB-   10 FB       BPL   $BED8</code>
+      <p class="comment">this is the usual code at $B8FE</p>
+      <code>BEDD-   A9 00       LDA   #$00
+BEDF-   A0 56       LDY   #$56</code>
+      <p class="comment">continue with RWTS</p>
+      <code>BEE1-   4C 01 B9    JMP   $B901</code>
+    </div>
+    <p>This RWTS expects (and ignores) some extra nibbles after the data field prologue. (This explains why my sector editor couldn't read these sectors.)</p>
+    <p>But not just that. There need to be timing bits in the right places between the nibbles, otherwise the loop at $BED3 won't skip over the right number of bits, and the disk will be out of phase when the RWTS goes to try to read the sector data. (This explains why my EDD 4 bit copy just grinded when it tried to read itself.)</p>
+    <p>And, of course, my demuffin'd disk can't make heads of tails of itself, because Advanced Demuffin successfully captured the real sector data from each sector and wrote it out in a standard format.</p>
+    <p>But wait, there's more! If you order right now, you ALSO get... a custom write routine as well! That's right, this RWTS is a true read/write RWTS.</p>
+    <p>In the place where it would normally write out the data field prologue ("D5 AA AD"), I see this instead:</p>
+    <div class="line_editing">
+      <code>*B848L</code>
+    </div>
+    <div class="listing">
+      <code>B848-   A0 03       LDY   #$03
+B84A-   48          PHA
+B84B-   68          PLA
+B84C-   20 B9 B8    JSR   $B8B9
+B84F-   88          DEY
+B850-   D0 F8       BNE   $B84A
+B852-   4C B1 BE    JMP   $BEB1   <-- !
+B855-   EA          NOP
+B856-   EA          NOP
+B857-   A9 AA       LDA   #$AA
+B859-   20 B8 B8    JSR   $B8B8
+B85C-   A9 AD       LDA   #$AD
+B85E-   20 BB B8    JSR   $B8BB</code>
+    </div>
+    <div class="line_editing">
+      <code>*BEB1L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">write a custom sequence of bits that the routine at $BECA can read</p>
+      <code>BEB1-   A0 06       LDY   #$06
+BEB3-   EA          NOP
+BEB4-   EA          NOP
+BEB5-   B9 DF BC    LDA   $BCDF,Y
+BEB8-   9D 8D C0    STA   $C08D,X
+BEBB-   1D 8C C0    ORA   $C08C,X
+BEBE-   EA          NOP
+BEBF-   EA          NOP
+BEC0-   EA          NOP
+BEC1-   EA          NOP
+BEC2-   A9 FC       LDA   #$FC
+BEC4-   88          DEY
+BEC5-   D0 EC       BNE   $BEB3</code>
+      <p class="comment">continue with RWTS</p>
+      <code>BEC7-   4C 5E B8    JMP   $B85E</code>
+    </div>
+    <p>Again, this is completely useless now that Advanced Demuffin has converted the disk to a standard format.</p>
+    <p>By comparing this to a standard DOS 3.3 disk, I came up with this minimal set of patches to remove these JMPs and restore order to this chaos, and I added them to Post-Demuffin Patcher. (The logic is in /PDP/SRC/PATCHERS/JMPBECA.S and /PDP/SRC/PATCHERS/JMPBEB1.S.)</p>
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]BRUN PDP</code>
+    </div>
+    <p>T00,S02,$49 change 03 to 04 T00,S02,$52 change 4CB1BEEAEA to A9D5 20B8B8 T00,S02,$5F change BB to B8 T00,S02,$F4 change EABD8CC010FBC9ADD0E 84CCABE to A056BD8CC010FBC9ADD0E7A900 T00,S03,$91 change BA to DE T00,S03,$35 change BA to DE T00,S02,$9E change BA to DE</p>
+    <p>The first four lines are new in the latest version of Post-Demuffin Patcher (released this morning). They remove the JMP instructions and restore the original code for reading and writing the data field prologue. (The fourth patch is long because several BPL loops were shifted to make room for the JMP $BECA instruction.)</p>
+    <p>The routines at $BECA and $BEB1 are no longer called, but I left them intact since they're not doing any harm.</p>
+    <p>The last three lines are just simple modifications to the epilogue bytes. (The previous version of PDP found these, too.)</p>
+    <p>In the process of testing these new PDP patches, I discovered that several other disks in my collection use an identical protection:</p>
+    <p>- Krell's Logo (crack no. 30) - Starting with Phonics (crack no. 54) - several disks by Focus Media,</p>
+    <p>including their "Who Am I?" series and their "Your Universe" series (cracks 80-86)</p>
+    <p>At the time, I resorted to replacing the entire DOS with a copy of DOS 3.3 to get those disks to work. That got me a working copy, but it didn't teach me exactly how the custom RWTS worked. I also missed the fact that these disks (from four different companies) used identical copy protection.</p>
+    <p>Anyway...</p>
+    <div class="line_editing">
+      <code>]PR#6</code>
+    </div>
+    <p class="seen">Success! The disk boots and runs with no complaint. There doesn't appear to be any further protection. Hooray for automation.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/165-spelling-bee-and-reading-primer.html">Spelling Bee and Reading Primer</a></p>
+</body></html>

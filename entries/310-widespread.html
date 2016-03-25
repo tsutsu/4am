@@ -1,0 +1,146 @@
+<!doctype html>
+<html><head>
+<title>Widespread</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/309-computer-discovery.html">Computer Discovery</a></p>
+<section>
+
+    <p>Side 1 is the program. Side 2 has some documentation in a large text file, and it appears to be unprotected. Let's start with side 1.</p>
+</section>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p>no errors, but copy prints "NOT AN EXECUTABLE DISK" and hangs</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">ditto</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">ditto</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">nothing suspicious</p>
+    <p class="seen">Disk Fixer</p>
+    <p>T00 -> Pascal 1.1 bootloader (only boots from slot 6) T00,S0B -> Pascal disk catalog</p>
+    <p class="seen">Why didn't any of my copies work?</p>
+    <p>probably a nibble check in the SYSTEM.STARTUP program</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Use the tools on an Apple Pascal system disk to verify that this disk really uses Apple Pascal</p>
+    <p class="seen">2. Find the HELLO program (usually SYSTEM.STARTUP) and decompile it</p>
+    <p class="seen">3. Hack the p-code to disable the copy protection</p>
+    <p>But first, let me try a shortcut.</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Try A Shortcut</h3>
+
+    <p>Turning to my trusty sector editor, I do a quick scan for some common byte patterns of nibble checks. First, "LDA $C089,X" -- used by virtually every nibble check I've ever seen. (It turns on the drive motor manually, so you can read raw nibbles or whatever.)</p>
+    <div class="curses_input">
+      <code>[Disk Fixer]
+  ["F"ind]
+    ["H"ex]
+      "BD 89 C0"</code>
+    </div>
+    <p>One hit on track $01, but it doesn't appear to be copy protection-related.</p>
+    <p>Next up: "LDA $C0E9" -- a less common variant, since it only works if you booted from slot 6. But I have seen it on a number of Pascal disks that can only boot from slot 6 anyway.</p>
+    <div class="curses_input">
+      <code>  ["F"ind]
+    ["H"ex]
+      "AD E9 C0"</code>
+    </div>
+    <p>One hit on T20,S08.</p>
+    <div class="terminal_output">
+      <code>T20,S08
+----------- DISASSEMBLY MODE ----------</code>
+      <p class="comment">standard beginning of an external assembly language routine called from a Pascal program</p>
+      <code>0076:68             PLA
+0077:85 00          STA   $00
+0079:68             PLA
+007A:85 01          STA   $01
+007C:68             PLA
+007D:68             PLA
+007E:68             PLA
+007F:68             PLA</code>
+      <p class="comment">turn on slot 6 drive motor manually (always suspicious)</p>
+      <code>0080:AD E9 C0       LDA   $C0E9</code>
+      <p class="comment">initialize Death Counter</p>
+      <code>0083:A9 56          LDA   #$56
+0085:85 03          STA   $03
+0087:A9 08          LDA   #$08
+0089:C6 02          DEC   $02
+008B:D0 04          BNE   $0091
+008D:C6 03          DEC   $03</code>
+      <p class="comment">if Death Counter hits zero, give up</p>
+      <code>008F:F0 3B          BEQ   $00CC</code>
+      <p class="comment">look for $FB</p>
+      <code>0091:AC EC C0       LDY   $C0EC
+0094:10 FB          BPL   $0091
+0096:C0 FB          CPY   #$FB
+0098:D0 ED          BNE   $0087
+009A:F0 00          BEQ   $009C
+009C:EA             NOP
+009D:EA             NOP</code>
+      <p class="comment">followed by a timing bit (note: no BPL loop here, we only read the data latch once before starting over)</p>
+      <code>009E:AC EC C0       LDY   $C0EC
+00A1:C0 08          CPY   #$08</code>
+      <p class="comment">rotate accumulator (initialized at offset $87 above)</p>
+      <code>00A3:2A             ROL</code>
+      <p class="comment">branch based on the comparison of the</p>
+      <p class="comment">Y register (at offset $A1 above)</p>
+      <code>00A4:B0 0B          BCS   $00B1</code>
+      <p class="comment">sync byte?</p>
+      <code>00A6:AC EC C0       LDY   $C0EC
+00A9:10 FB          BPL   $00A6
+00AB:C0 FF          CPY   #$FF</code>
+      <p class="comment">found a non-sync byte, that's bad (decrements Death Counter)</p>
+      <code>00AD:D0 D8          BNE   $0087</code>
+      <p class="comment">found a sync byte, that's OK (branches to look for a timing bit again)</p>
+      <code>00AF:F0 EB          BEQ   $009C</code>
+      <p class="comment">execution continues here after we find a timing bit in the right place get a nibble and store it</p>
+      <code>00B1:AC EC C0       LDY   $C0EC
+00B4:10 FB          BPL   $00B1
+00B6:84 02          STY   $02
+00B8:C9 0A          CMP   #$0A
+00BA:D0 CB          BNE   $0087</code>
+      <p class="comment">get another nibble</p>
+      <code>00BC:AD EC C0       LDA   $C0EC
+00BF:10 FB          BPL   $00BC</code>
+      <p class="comment">bit math</p>
+      <code>00C1:38             SEC
+00C2:2A             ROL
+00C3:25 02          AND   $02
+00C5:49 FF          EOR   #$FF
+00C7:A8             TAY</code>
+      <p class="comment">on success, A = $00</p>
+      <code>00C8:A9 00          LDA   #$00
+00CA:F0 03          BEQ   $00CF</code>
+      <p class="comment">on failure, A = $FF</p>
+      <code>00CC:A0 FF          LDY   #$FF
+00CE:98             TYA</code>
+      <p class="comment">turn off slot 6 drive motor</p>
+      <code>00CF:CD E8 C0       CMP   $C0E8</code>
+      <p class="comment">pass return value (in accumulator) back to Pascal code</p>
+      <code>00D2:48             PHA
+00D3:98             TYA
+00D4:48             PHA
+00D5:A5 01          LDA   $01
+00D7:48             PHA
+00D8:A5 00          LDA   $00
+00DA:48             PHA
+00DB:60             RTS</code>
+    </div>
+    <p>Changing the return value at offset $CC from $FF to $00 should be sufficient to trick the caller into thinking that the nibble check passed.</p>
+    <p>T20,S08,$CD change "FF" to "00"</p>
+    <div class="line_editing">
+      <code>]PR#6
+...works...</code>
+    </div>
+    <p>So, yeah, we don't need to do anything crazy like decompiling or p-code hacking... this time.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/311-cross-country-california.html">Cross Country California</a></p>
+</body></html>

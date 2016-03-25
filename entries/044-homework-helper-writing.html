@@ -1,0 +1,506 @@
+<!doctype html>
+<html><head>
+<title>Homework Helper Writing</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/043-race-car-rithmetic.html">Race Car 'Rithmetic</a></p>
+<section>
+
+    <p>"Homework Helper Writing" is a 1985 educational program distributed by</p>
+    <p>Spinnaker Software Corp. The program is distributed on three double-sided disks labeled "Side A" through "Side F", and it refers to the sides by letter when prompting the user to swap disks.</p>
+    <p>Sides A, E, and F are bootable. If you boot side A and choose "Word Processor" from the main menu, it prompts you to insert side E and press the space bar, then it reboots to "launch" the word processor. Similarly, if you choose "Spell Checker" from the main menu, it prompts you to insert side F, then reboots to "launch" the spellchecker.</p>
+    <p>The other features on sides B, C, and D don't require a reboot; it will prompt for the correct side, then load it directly.</p>
+    <p>COPYA gives no read errors on sides A,</p>
+    <p>B, C, and D, but the copy does not work. COPYA reads about half of side E before failing with a disk read error.</p>
+    <p>It fails on side F on the first pass.</p>
+    <p>Oh, and even on side A, the copy does not work. Booting the COPYA copy of side A sounds like it's loading a DOS from tracks 2, 1, and 0, then it swings the disk as if it's reading the catalog track to autorun a HELLO program, then it fills screen with null bytes and hangs.</p>
+    <p>Retrying with EDD 4 bit copy, sides A,</p>
+    <p>B, C, and D copy with no errors, but again, the copy does not work. (It displays the same behavior as the COPYA copy.) Side E gives read errors on tracks $13-$19. Side F gives read errors on tracks $04-$0F and $1F-$22.</p>
+    <p>Inspecting sides E and F with the Copy ][+ nibble editor, it appears these problematic tracks are simply unformatted. There is no evidence of data stored on half tracks or other chicanery.</p>
+    <p>I decide to zero out those tracks on my non-working copies and move on.</p>
+    <p>Given these three facts:</p>
+    <p>1. COPYA can read all the data from</p>
+    <p>sides A, B, C, and D</p>
+    <p>2. The original side A boot sounds</p>
+    <p>similar to a DOS 3.3 boot (reading from tracks 2, 1, and 0)</p>
+    <p>3. The original side A displays the</p>
+    <p>BASIC prompt during boot</p>
+    <p>I'm guessing that these disks use a standard DOS 3.3 catalog and are based on files and DOS operations instead of direct sector reads.</p>
+    <div class="curses_input">
+      <code>[S6D1=DOS 3.3 master disk]
+[S6D2=non-working copy, side A]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...</code>
+      <code>]CATALOG,D2</code>
+    </div>
+    <div class="terminal_output">
+      <code>DISK VOLUME 254</code>
+      <code> B 012 STARTUP
+ B 023 IO
+ B 003 PARAM
+ B 024 CDATA
+ B 002 HHW_OPEN
+ B 004 HHW_MAP
+ B 011 HHW_MENU
+ B 004 HHW.DAP
+ B 006 HHW.TOK
+ B 005 HHW
+ B 003 T_IN
+ B 004 HHWOPEN
+ B 003 T_BR_ID
+ B 003 T_HW
+ B 010 INTRO
+ B 003 ICONS
+ B 010 BR_MENUS
+ B 002 VOLT
+ B 002 VOLT
+ B 014 TITLE
+ B 002 UPDWCW
+ B 021 HHWXFER.CBO
+ B 002 HHWMUSIC.CBO
+ B 021 HHWFILES.CBO
+ B 024 HHWSCRNS.CBO
+ B 120 TRILL
+ B 002 DISK.ID
+ A 002 V</code>
+    </div>
+    <p>No file named "HELLO". Only one BASIC program. Is that the autorun program?</p>
+    <div class="line_editing">
+      <code>]LOAD V</code>
+      <code>]LIST</code>
+    </div>
+    <div class="terminal_output">
+      <code> 10  REM  022186 61S1</code>
+    </div>
+    <p>Nope. Looks like a timestamp (February 21, 1986, a Friday) and maybe a build number.</p>
+    <p>(Rebooting quickly into Copy ][+ and looking at T01,S07 shows that "STARTUP" is the autorun program. DOS 3.3 stores the name of the autorun program on T01,S09, but this disk appears to use</p>
+    <p>Pronto-DOS, which stores it on T01,S07.</p>
+    <p>Anyway, back to DOS.)</p>
+    <div class="line_editing">
+      <code>]BLOAD STARTUP</code>
+      <code>]CALL -151</code>
+      <code>*AA72.AA73</code>
+    </div>
+    <div class="listing">
+      <code>AA72- 00 60</code>
+    </div>
+    <div class="line_editing">
+      <code>*6000L</code>
+    </div>
+    <div class="listing">
+      <code>6000-   4C 48 60    JMP   $6048</code>
+    </div>
+    <div class="line_editing">
+      <code>*6048L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">read/write RAM bank 1</p>
+      <code>6048-   AD 8B C0    LDA   $C08B
+604B-   AD 8B C0    LDA   $C08B</code>
+      <p class="comment">set up a reset vector in both the standard page 3 address and the lesser known address at ($FFFC)</p>
+      <code>604E-   A9 36       LDA   #$36
+6050-   8D F2 03    STA   $03F2
+6053-   8D FC FF    STA   $FFFC
+6056-   A9 60       LDA   #$60
+6058-   8D F3 03    STA   $03F3
+605B-   8D FD FF    STA   $FFFD
+605E-   49 A5       EOR   #$A5
+6060-   8D F4 03    STA   $03F4
+6063-   AD 82 C0    LDA   $C082</code>
+      <p class="comment">loop to print stuff through DOS -- this is the standard way for a binary file to load another file using DOS</p>
+      <p class="comment">3.3 commands</p>
+      <code>6066-   A0 00       LDY   #$00
+6068-   B9 6D 61    LDA   $616D,Y
+606B-   F0 09       BEQ   $6076
+606D-   09 80       ORA   #$80
+606F-   20 ED FD    JSR   $FDED
+6072-   C8          INY
+6073-   4C 68 60    JMP   $6068</code>
+    </div>
+    <div class="line_editing">
+      <code>*FC58G N 400<616D.61FFM</code>
+    </div>
+    <div class="terminal_output">
+      <code>MDBLOAD CDATA,A$A00M@</code>
+    </div>
+    <p>(Those "M" and "D" characters are printed in inverse because they're really Ctrl-M and Ctrl-D. The "@" sign at the end is really a zero byte.)</p>
+    <div class="line_editing">
+      <code>*6076L</code>
+    </div>
+    <div class="listing">
+      <code>6076-   A9 00       LDA   #$00
+6078-   85 06       STA   $06
+607A-   85 08       STA   $08
+607C-   8D 4A 61    STA   $614A
+607F-   A9 D0       LDA   #$D0
+6081-   85 07       STA   $07
+6083-   A9 0A       LDA   #$0A
+6085-   85 09       STA   $09
+6087-   A9 28       LDA   #$28
+6089-   8D 4B 61    STA   $614B</code>
+      <p class="comment">read/write RAM bank 2</p>
+      <code>608C-   AD 83 C0    LDA   $C083
+608F-   AD 83 C0    LDA   $C083</code>
+      <p class="comment">this subroutine does a memory move from ($08) to ($06) -- in this case, that will move the data just loaded ("CDATA") to $D000 in RAM bank 2</p>
+      <code>6092-   20 14 61    JSR   $6114</code>
+    </div>
+    <p>This code goes on like this for a while. Load a file, move it the aux memory. Pretty straightforward.</p>
+    <p>Finally, it comes to this:</p>
+    <div class="listing">
+      <code>6111-   4C 00 0A    JMP   $0A00</code>
+    </div>
+    <p>It looks like the last command printed was at $6161. (Its print loop starts at $60D6.)</p>
+    <div class="line_editing">
+      <code>*FC58G N 400<6161.61FFM</code>
+    </div>
+    <div class="terminal_output">
+      <code>MDBLOAD IOM@</code>
+    </div>
+    <p>So the last file loaded was "IO".</p>
+    <div class="line_editing">
+      <code>*BLOAD IO
+*AA72.AA73</code>
+    </div>
+    <div class="listing">
+      <code>AA72- 00 0A</code>
+    </div>
+    <p>Yes, that's definitely the code we're jumping to.</p>
+    <div class="line_editing">
+      <code>*6111:4C 59 FF</code>
+      <code>*6000G
+...loads files and prints several
+carriage returns (this matches the
+behavior of the original disk)...
+<beep></code>
+    </div>
+    <p>Confirmed: the STARTUP program runs its course, even on my non-working copy.</p>
+    <p>Wherever the copy protection is, I haven't found it yet. It's time to trace the "IO" file.</p>
+    <div class="line_editing">
+      <code>*A00L</code>
+    </div>
+    <div class="listing">
+      <code>0A00-   4C FB 1D    JMP   $1DFB</code>
+    </div>
+    <div class="line_editing">
+      <code>*1DFBL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">read/write from main ROM</p>
+      <code>1DFB-   AD 82 C0    LDA   $C082</code>
+      <p class="comment">standard initialization routines</p>
+      <code>1DFE-   20 89 FE    JSR   $FE89
+1E01-   20 93 FE    JSR   $FE93</code>
+      <p class="comment">read/write from RAM bank 1 again</p>
+      <code>1E04-   AD 8B C0    LDA   $C08B
+1E07-   AD 8B C0    LDA   $C08B</code>
+      <p class="comment">set reset vector (again)</p>
+      <code>1E0A-   A9 C0       LDA   #$C0
+1E0C-   8D F2 03    STA   $03F2
+1E0F-   8D FC FF    STA   $FFFC
+1E12-   A9 1E       LDA   #$1E
+1E14-   8D F3 03    STA   $03F3
+1E17-   8D FD FF    STA   $FFFD
+1E1A-   49 A5       EOR   #$A5
+1E1C-   8D F4 03    STA   $03F4
+1E1F-   A2 59       LDX   #$59
+1E21-   A0 1A       LDY   #$1A
+1E23-   A9 00       LDA   #$00</code>
+      <p class="comment">don't know what this does yet</p>
+      <code>1E25-   20 2D FD    JSR   $FD2D
+1E28-   C9 00       CMP   #$00
+1E2A-   F0 03       BEQ   $1E2F
+1E2C-   4C 04 60    JMP   $6004</code>
+    </div>
+    <p>I can't directly list the subroutine at $FD2D, because it's in RAM bank 1. Even something like this won't work...</p>
+    <div class="line_editing">
+      <code>*C08B C08B N FD2DL</code>
+    </div>
+    <p>...because the monitor listing routine is in main ROM and is therefore unavailable as soon as I use the double C08B read to switch to RAM bank 1!</p>
+    <p>So I'll need a short program to copy the contents of RAM bank 1 back to main memory.</p>
+    <div class="line_editing">
+      <code>*300L</code>
+    </div>
+    <div class="listing">
+      <code>0300-   AD 8B C0    LDA   $C08B
+0303-   AD 8B C0    LDA   $C08B
+0306-   A2 30       LDX   #$30
+0308-   A0 00       LDY   #$00
+030A-   B9 00 D0    LDA   $D000,Y
+030D-   99 00 20    STA   $2000,Y
+0310-   C8          INY
+0311-   D0 F7       BNE   $030A
+0313-   EE 0C 03    INC   $030C
+0316-   EE 0F 03    INC   $030F
+0319-   CA          DEX
+031A-   D0 EE       BNE   $030A
+031C-   AD 82 C0    LDA   $C082
+031F-   60          RTS</code>
+    </div>
+    <div class="line_editing">
+      <code>*300G</code>
+    </div>
+    <p>Now the contents of $D000 (from RAM bank 1) are at $2000, $E000 is at $3000, $F000 is at $4000, so $FD2D is at $4D2D.</p>
+    <div class="line_editing">
+      <code>*4D2DL</code>
+    </div>
+    <div class="listing">
+      <code>4D2D-   8E 7B FD    STX   $FD7B
+4D30-   8C 7C FD    STY   $FD7C</code>
+      <p class="comment">Hmm, pushing an address onto the stack is a little suspicious.</p>
+      <code>4D33-   A9 FC       LDA   #$FC
+4D35-   48          PHA
+4D36-   A9 EE       LDA   #$EE
+4D38-   48          PHA
+4D39-   A5 08       LDA   $08
+4D3B-   8D 79 FD    STA   $FD79
+4D3E-   A5 09       LDA   $09
+4D40-   8D 7A FD    STA   $FD7A</code>
+      <p class="comment">Looks like it's decrypting everything between $FC00..$FD60. So yeah, I'm upgrading this to "highly suspicious"</p>
+      <code>4D43-   A9 00       LDA   #$00
+4D45-   85 08       STA   $08
+4D47-   A9 FC       LDA   #$FC
+4D49-   85 09       STA   $09
+4D4B-   A9 96       LDA   #$96
+4D4D-   48          PHA
+4D4E-   A0 00       LDY   #$00
+4D50-   68          PLA
+4D51-   51 08       EOR   ($08),Y
+4D53-   91 08       STA   ($08),Y
+4D55-   48          PHA
+4D56-   88          DEY
+4D57-   D0 F7       BNE   $4D50
+4D59-   E6 09       INC   $09
+4D5B-   A5 09       LDA   $09
+4D5D-   C9 FD       CMP   #$FD
+4D5F-   D0 EF       BNE   $4D50
+4D61-   68          PLA
+4D62-   51 08       EOR   ($08),Y
+4D64-   91 08       STA   ($08),Y
+4D66-   48          PHA
+4D67-   C8          INY
+4D68-   98          TYA
+4D69-   C9 61       CMP   #$61
+4D6B-   D0 F4       BNE   $4D61
+4D6D-   68          PLA
+4D6E-   AD 79 FD    LDA   $FD79
+4D71-   85 08       STA   $08
+4D73-   AD 7A FD    LDA   $FD7A
+4D76-   85 09       STA   $09</code>
+      <p class="comment">And now it "returns" to the address it pushed onto the stack earlier. "Insanely suspicious"</p>
+      <code>4D78-   60          RTS</code>
+    </div>
+    <p>This code assumes it's at $FD2D, so</p>
+    <p>I'll need to change a few of the addresses to decrypt the copy in main memory instead.</p>
+    <div class="line_editing">
+      <code>*4D48:4C  ; was "FC"</code>
+      <code>*4D5E:4D  ; was "FD"</code>
+      <code>*4D43G    ; just the decryption, minus
+          ; the stack twiddling</code>
+      <code>*4CEFL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">this reads a sector from disk using a standard RWTS -- presumably to position the drive to read the magic nibble sequence next</p>
+      <code>4CEF-   20 22 FC    JSR   $FC22</code>
+      <p class="comment">turn on the drive motor (red flag)</p>
+      <code>4CF2-   AD EA C0    LDA   $C0EA
+4CF5-   AD E9 C0    LDA   $C0E9</code>
+      <p class="comment">set some parameters(?)</p>
+      <code>4CF8-   A9 AB       LDA   #$AB
+4CFA-   8D 0C FC    STA   $FC0C
+4CFD-   A9 AF       LDA   #$AF
+4CFF-   8D 0B FC    STA   $FC0B
+4D02-   20 53 FC    JSR   $FC53</code>
+    </div>
+    <div class="line_editing">
+      <code>*4C53L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">helloooooooo, nibble check</p>
+      <code>4C53-   AD EE C0    LDA   $C0EE
+4C56-   AD EC C0    LDA   $C0EC
+4C59-   10 FB       BPL   $4C56
+4C5B-   C9 FF       CMP   #$FF
+4C5D-   D0 F7       BNE   $4C56
+4C5F-   AD EC C0    LDA   $C0EC
+4C62-   10 FB       BPL   $4C5F
+4C64-   C9 FF       CMP   #$FF
+4C66-   D0 EE       BNE   $4C56
+4C68-   AD EC C0    LDA   $C0EC
+4C6B-   10 FB       BPL   $4C68
+4C6D-   C9 FF       CMP   #$FF
+4C6F-   F0 F7       BEQ   $4C68
+4C71-   A2 07       LDX   #$07
+4C73-   10 05       BPL   $4C7A
+4C75-   AD EC C0    LDA   $C0EC
+4C78-   10 FB       BPL   $4C75</code>
+      <p class="comment">compare raw nibbles to the values set up by the caller (at $4CF8 in previous listing, a.k.a. $FCF8 in real life)</p>
+      <code>4C7A-   DD 0C FC    CMP   $FC0C,X
+4C7D-   D0 D7       BNE   $4C56
+4C7F-   CA          DEX
+4C80-   D0 F3       BNE   $4C75
+4C82-   A2 02       LDX   #$02
+4C84-   AD EC C0    LDA   $C0EC
+4C87-   10 FB       BPL   $4C84
+4C89-   DD 0A FC    CMP   $FC0A,X
+4C8C-   D0 C8       BNE   $4C56
+4C8E-   CA          DEX
+4C8F-   D0 F3       BNE   $4C84
+4C91-   60          RTS</code>
+    </div>
+    <p>Returning to the caller and continuing, it looks like it's preparing to do a second nibble check.</p>
+    <div class="listing">
+      <code>4D05-   A9 01       LDA   #$01
+4D07-   8D 06 FC    STA   $FC06
+4D0A-   20 22 FC    JSR   $FC22
+4D0D-   AD E9 C0    LDA   $C0E9</code>
+      <p class="comment">oh, this is sneaky</p>
+      <code>4D10-   A9 04       LDA   #$04
+4D12-   8D 8D FC    STA   $FC8D</code>
+    </div>
+    <p>That looks like initialization of some sort of counter or something, but it's really self-modifying code. The address $FC8D is part of this loop at the end of the subroutine at $FC53:</p>
+    <div class="listing">
+      <code>4C82-   A2 02       LDX   #$02
+4C84-   AD EC C0    LDA   $C0EC
+4C87-   10 FB       BPL   $4C84
+4C89-   DD 0A FC    CMP   $FC0A,X
+4C8C-   D0 C8       BNE   $4C56
+           ^^
+           ++---- this is $FC8D</code>
+      <code>4C8E-   CA          DEX
+4C8F-   D0 F3       BNE   $4C84
+4C91-   60          RTS</code>
+    </div>
+    <p>That means that, the second time $FC53 is called, the penalty for failing the comparison loop is that you get booted out to $FC92. What's at $FC92? I'm guessing the answer is "bad things."</p>
+    <div class="line_editing">
+      <code>*4C92L</code>
+    </div>
+    <div class="listing">
+      <code>4C92-   68          PLA
+4C93-   68          PLA
+4C94-   AD E8 C0    LDA   $C0E8
+4C97-   78          SEI
+4C98-   A9 00       LDA   #$00
+4C9A-   AA          TAX
+4C9B-   9D A7 FC    STA   $FCA7,X
+4C9E-   E8          INX
+4C9F-   D0 FA       BNE   $4C9B
+4CA1-   EE 9D FC    INC   $FC9D
+4CA4-   4C 9B FC    JMP   $FC9B</code>
+    </div>
+    <p>That would be an infinite loop that wipes memory and hangs. "Bad things," indeed.</p>
+    <p>Continuing with the code right after the self-modifying code, it does indeed call the nibble check subroutine a second time.</p>
+    <div class="listing">
+      <p class="comment">parameters</p>
+      <code>4D15-   A9 AB       LDA   #$AB
+4D17-   8D 0D FC    STA   $FC0D
+4D1A-   A9 AB       LDA   #$AB
+4D1C-   8D 0C FC    STA   $FC0C
+4D1F-   A9 AB       LDA   #$AB
+4D21-   8D 0B FC    STA   $FC0B</code>
+      <p class="comment">nibble check</p>
+      <code>4D24-   20 53 FC    JSR   $FC53</code>
+      <p class="comment">turn off drive motor and exit</p>
+      <code>4D27-   AD E8 C0    LDA   $C0E8
+4D2A-   A9 00       LDA   #$00
+4D2C-   60          RTS</code>
+    </div>
+    <p>If all goes well, that will return to the caller at $1E25, which, in case you've lost track, looked like this:</p>
+    <div class="listing">
+      <code>1E23-   A9 00       LDA   #$00
+1E25-   20 2D FD    JSR   $FD2D
+1E28-   C9 00       CMP   #$00
+1E2A-   F0 03       BEQ   $1E2F
+1E2C-   4C 04 60    JMP   $6004</code>
+    </div>
+    <p>(The routine at $6004 is its own form of nasty. It sets the reset vector to itself and jumps to it, which causes the machine to beep endlessly until you power down or forcibly reboot. Lovely.)</p>
+    <p>It seems that the only side effect of calling $FD2D is that the accumulator is set to zero on the way out. Which, incidentally, is exactly the value it had on the way in. In other words, I can just change that JSR $FD2D to a BIT or a NOP or some other instruction that does nothing, and bypass the copy protection altogether.</p>
+    <p>Side A,T02,S0A,$29 change "20" to "2C"</p>
+    <p>Success! Side A boots and runs. All the features that are on sides A, B, C, and</p>
+    <p>D now work without complaint. However, if I choose "Word Processor", it asks me to insert side E so it can reboot to "launch" the word processor. And when it reboots, it exhibits the same behavior as side A -- DOS load, BASIC prompt, screen of null bytes, dead.</p>
+    <div class="curses_input">
+      <code>[S6D1=DOS 3.3 master disk]
+[S6D2=non-working copy, side E]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...</code>
+      <code>]CATALOG,D2</code>
+    </div>
+    <div class="terminal_output">
+      <code>DISK VOLUME 254</code>
+      <code> B 012 STARTUP
+ B 023 IO
+ B 003 PARAM
+ B 002 CDATA
+ B 002 VOLT
+ B 081 TRILL
+ B 004 STARTUP.CBO
+ B 049 EDITOR.CBO
+ B 014 DISK.CBO
+ B 019 PRINTER.CBO
+ B 013 VIEWER.CBO
+ B 011 FUNC.CBO
+ B 002 MAIN1
+ B 002 WORD1
+ B 002 UPDW
+ B 003 KEYHELP.HLP
+ B 004 DISK.HLP
+ B 004 WPHELP.HLP
+ B 009 MAINMENU.HLP
+ B 003 LAYOUT.HLP
+ B 010 PEOL.HLP
+ B 016 EEOL.HLP
+ B 009 NEOL.HLP
+ B 010 DEOL.HLP
+ B 004 PERW.HLP
+ B 004 NERW.HLP
+ B 004 DERW.HLP
+ B 003 EERW.HLP
+ B 003 BRGE3.HLP
+ B 004 BRRW.HLP
+ B 003 BRGE1.HLP
+ B 003 RWINTRO.HLP
+ B 012 BROL.HLP
+ B 002 EXIT.HLP
+ A 002 V</code>
+    </div>
+    <p>Those first few files look... familiar.</p>
+    <div class="line_editing">
+      <code>]BLOAD IO</code>
+      <code>]CALL -151</code>
+      <code>*AA72.AA73</code>
+    </div>
+    <div class="listing">
+      <code>AA72- 00 0A</code>
+    </div>
+    <div class="line_editing">
+      <code>*A00L</code>
+    </div>
+    <div class="listing">
+      <code>0A00-   4C FB 1D    JMP   $1DFB</code>
+    </div>
+    <div class="line_editing">
+      <code>*1E23L</code>
+    </div>
+    <div class="listing">
+      <code>1E23-   A9 00       LDA   #$00
+1E25-   20 2D FD    JSR   $FD2D
+1E28-   C9 00       CMP   #$00
+1E2A-   F0 03       BEQ   $1E2F
+1E2C-   4C 04 60    JMP   $6004</code>
+    </div>
+    <p>Confirmed: side E boots with exactly the same files and relies on exactly the same protection as side A.</p>
+    <p>Side E,T1D,S0E,$29 change "20" to "2C"</p>
+    <p>Now the word processor boots and runs.</p>
+    <p>The spellchecker is on side F. Same deal -- if you boot side A and choose "Spell Checker" from the main menu, the program asks you to insert side F and reboots. Upon reboot, it loads DOS, displays the BASIC prompt, then fills the screen with null bytes and hangs.</p>
+    <p>A quick disk catalog shows the same files (STARTUP, IO, PARAM, CDATA) and the same protection within the "IO" file.</p>
+    <p>Side F,T13,S0D,$29 change "20" to "2C"</p>
+    <p>Now the spellchecker boots and runs.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/045-deathsword.html">Deathsword</a></p>
+</body></html>

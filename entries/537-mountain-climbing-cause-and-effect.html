@@ -1,0 +1,148 @@
+<!doctype html>
+<html><head>
+<title>Mountain Climbing - Cause and Effect</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/536-find-the-rhyme.html">Find the Rhyme</a></p>
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">unable to read any track</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">works</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">modified data epilogue ("BF AA EB" instead of "DE AA EB")</p>
+    <p class="seen">Disk Fixer</p>
+    <p>["O" -> "Input/Output Control"] set Data Epilogue to "BF AA EB" all tracks readable T00 -> looks like a DOS 3.3 RWTS T11 -> DOS 3.3 disk catalog T01,S09 -> startup program is "START"</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">EDD worked. What does that tell us?</p>
+    <p class="seen">no half or quarter tracks almost certainly no nibble check (just structural changes to epilogue)</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. capture RWTS with AUTOTRACE</p>
+    <p class="seen">2. convert disk to standard format with Advanced Demuffin</p>
+    <p class="seen">3. patch RWTS to read standard format</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Attempt To Use The Original Disk As A Weapon Against Itself</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS
+SAVING IOB</code>
+      <code>]BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>["5" to switch to slot 5]</code>
+      <code>["R" to load a new RWTS module]
+  --> At $B8, load "RWTS" from drive 1</code>
+      <code>[press "I" to load a new IOB module]
+  --> load "IOB" from drive 1</code>
+      <code>["6" to switch to slot 6]</code>
+      <code>["C" to convert disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:...................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:...................................
+SC1:...................................
+SC2:...................................
+SC3:...................................
+SC4:...................................
+SC5:...................................
+SC6:...................................
+SC7:...................................
+SC8:...................................
+SC9:...................................
+SCA:...................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:...................................
+=======================================
+16SC $00,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+]CATALOG,S6,D2</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+168 FREE</code>
+      <code> B 050 B12.OBJ
+ B 022 BBEGIN.OBJ
+*B 010 PU.PK
+ T 009 CE1
+ T 163 CE2
+ B 003 CRC
+ T 002 DM
+*B 027 TX
+*B 010 PD.PK
+ T 002 M2
+ B 006 SHAPE
+ B 002 SONC
+ T 002 START
+ B 026 TRUNTIME
+*B 002 UNP
+*B 005 IX</code>
+    </div>
+    <div class="line_editing">
+      <code>]RUN HELLO
+...works...</code>
+    </div>
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...grinds...</code>
+    </div>
+    <p class="seen">My copy can't read itself yet. This is not unusual.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Remove All Traces Of Copy Protection Using An Automated Tool That I Wrote For Just Such An Occasion</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+]BRUN PDP</code>
+    </div>
+    <p class="seen">T00,S03,$35 change BF to DE T00,S02,$9E change BF to DE</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/538-survey-taker.html">Survey Taker</a></p>
+</body></html>

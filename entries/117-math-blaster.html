@@ -1,0 +1,1827 @@
+<!doctype html>
+<html><head>
+<title>Math Blaster</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/116-easy-as-abc.html">Easy as ABC</a></p>
+<section>
+
+    <p>"Math Blaster" is a 1983 educational game programmed by Richard Eckert and</p>
+    <p>Janice Davidson, Ph.D. and distributed by Davidson & Associates. It comes on one double-sided disk and uses both sides.</p>
+    <p>COPYA fails miserably and immediately on side A. EDD 4 bit copy gives no errors, but the copy just hangs early in the boot process.</p>
+    <p>Side B appears unprotected. COPYA gives no read errors, and the copy boots an entire DOS and runs a startup program which says "THIS IS THE MATH BLASTER DATA DISK. PLEASE BOOT YOUR PROGRAM DISK." Issuing a CATALOG command at this point shows a standard DOS 3.3 disk catalog with several text files.</p>
+    <p>Back to side A. Turning to my trusty</p>
+    <p>Copy ][+ sector editor, I press "P" to get to the Sector Editor Patcher, and select "DOS 3.3 PATCHED". This option ignores checksum bytes and epilogue sequences -- as long as the address and data prologue are standard ("D5 AA 96" and "D5 AA AD", respectively), this will allow me to read each sector. And lo and behold, it works! I can read the data from every sector on track 0. But everything beyond that is still a mystery.</p>
+    <p class="seen">Time for boot tracing with AUTOTRACE.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk, side A]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0</code>
+    </div>
+    <p class="seen">For those of you just tuning in, my work disk uses a custom program that I affectionately call "AUTOTRACE" to automate the process of boot tracing as far as possible. For some disks (like this one, apparently), it just captures track 0, sector 0 (saved in a file called "BOOT0") and stops. For other disks that load in the same way that an unprotected DOS 3.3 disk loads, it captures the next stage of the boot process as well (in a file called "BOOT1"). BOOT1 contains sectors 0-9 on track 0, which are loaded into memory at $B600..$BFFF. This generally contains the RWTS routines which the program uses to read the rest of the disk.</p>
+    <p class="seen">If the RWTS is fairly normal as well (and my AUTOTRACE program just spot- checks a few memory locations to guess at its "normalcy"), AUTOTRACE extracts the RWTS routines (generally loaded from track 0, sectors 2-9 into $B800.. $BFFF) and saves *that* into a third file called "RWTS". There's a good chance I'll be able to load that "RWTS" file into a tool called Advanced</p>
+    <p class="seen">Demuffin (written in 1983 by The Stack) to convert the disk into a standard disk readable by unprotected DOS 3.3 disks or any other third-party tools.</p>
+    <p class="seen">If anything looks fishy or non- standard, AUTOTRACE just stops, and I have to check the files it saved so far to determine why. In this case, it stopped after capturing T00,S00. So I need to look at that sector and figure out why.</p>
+    <div class="line_editing">
+      <code>]CALL -151</code>
+      <code>*800<2800.28FFM</code>
+      <code>*801L
+.
+. all normal, until...
+.
+084A-   4C C0 B6    JMP   $B6F0</code>
+    </div>
+    <p class="seen">A little something extra before the boot1 code. I don't like extra. Extra is bad.</p>
+    <p>In a normal DOS 3.3 disk, the code on T00,S00 is actually loaded twice: once at $0800 and then again at $B600, where it remains in memory until you reboot or do something to intentionally wipe it out. So I can see what's going to be at $B6F0 by looking at $08F0.</p>
+    <div class="line_editing">
+      <code>*8F0L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">odd</p>
+      <code>08F0-   A9 AA       LDA   #$AA
+08F2-   85 31       STA   $31</code>
+      <p class="comment">odd x2</p>
+      <code>08F4-   A9 AD       LDA   #$AD
+08F6-   85 4E       STA   $4E</code>
+    </div>
+    <p>; suspicious (since this code is loaded</p>
+    <p>at $B600, this will overwrite the $AA byte in the LDA instruction above) 08F8- 8D F1 B6 STA $B6F1</p>
+    <div class="listing">
+      <p class="comment">continue with boot1</p>
+      <code>08FB-   4C 00 B7    JMP   $B700</code>
+    </div>
+    <p class="seen">This code is important, but it's not obvious why unless you've seen the technique before. Which I think I have. Let me see if I'm right. First,</p>
+    <p class="seen">I'll need to let my AUTOTRACE program capture the rest of boot1.</p>
+    <div class="line_editing">
+      <code>]BRUN AUTOTRACE1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1</code>
+      <code>]BLOAD BOOT1,A$2600
+]CALL -151</code>
+      <code>*FE89G FE93G     ; disconnect DOS</code>
+      <code>*B600<2600.2FFFM ; move RWTS into place</code>
+      <code>*B92FL</code>
+    </div>
+    <div class="listing">
+      <code>B92F-   6C 6C 6C    JMP   ($6C6C)
+B932-   6C 6C 6C    JMP   ($6C6C)
+B935-   6C 6C 6C    JMP   ($6C6C)
+B938-   6C 6C 6C    JMP   ($6C6C)
+B93B-   6C 6C 6C    JMP   ($6C6C)
+B93E-   6C 6C 6C    JMP   ($6C6C)</code>
+    </div>
+    <p>Umm, that was not what I was expecting.</p>
+    <p>At all. That's supposed to be the part of the RWTS code that checks for the address epilogue bytes ("DE AA"). But that's not even real code.</p>
+    <p>(For the record, I was trying to show that the RWTS uses those magic zero page values that are initialized at $B6F0. It probably does still do that, but I can't show it yet because this RWTS is... special.)</p>
+    <p>Let's back up. Boot1 starts at $B700.</p>
+    <p>What's at $B700?</p>
+    <div class="line_editing">
+      <code>*B700L</code>
+    </div>
+    <div class="listing">
+      <code>B700-   A0 1A       LDY   #$1A
+B702-   B9 00 B7    LDA   $B700,Y
+B705-   49 6C       EOR   #$6C
+B707-   99 00 B7    STA   $B700,Y
+B70A-   C8          INY
+B70B-   D0 F5       BNE   $B702
+B70D-   EE 04 B7    INC   $B704
+B710-   EE 09 B7    INC   $B709
+B713-   AD 09 B7    LDA   $B709
+B716-   C9 C0       CMP   #$C0
+B718-   D0 E8       BNE   $B702</code>
+    </div>
+    <p>Well, that explains it. The first thing boot1 does is decrypt itself (well, everything after the first $1A bytes, which is how long the decryption loop is). Unfortunately, there's no room to insert a break after the decryption loop. Fortunately, I don't have to, because the decryption is simple enough that I can replicate it outside of the original boot process.</p>
+    <div class="line_editing">
+      <code>*C500G    ; because I overwrote DOS
+...</code>
+      <code>]RENAME BOOT1,BOOT1 ENCRYPTED
+]BLOAD BOOT1 ENCRYPTED,A$2600
+]CALL -151</code>
+    </div>
+    <div class="listing">
+      <code>0300-   A0 1A       LDY   #$1A
+0302-   B9 00 27    LDA   $2700,Y
+0305-   49 6C       EOR   #$6C
+0307-   99 00 27    STA   $2700,Y
+030A-   C8          INY
+030B-   D0 F5       BNE   $0302
+030D-   EE 04 03    INC   $0304
+0310-   EE 09 03    INC   $0309
+0313-   AD 09 03    LDA   $0309
+0316-   C9 30       CMP   #$30
+0318-   D0 E8       BNE   $0302
+031A-   60          RTS</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE DECRYPT BOOT1,A$300,L$1B</code>
+      <code>*300G</code>
+      <code>*BSAVE BOOT1 DECRYPTED,A$2600,L$A00</code>
+      <code>*FE89G FE93G     ; disconnect DOS</code>
+      <code>*B600<2600.2FFFM ; move RWTS into place</code>
+      <code>*B92FL</code>
+    </div>
+    <div class="listing">
+      <code>B92F-   00          BRK
+B930-   00          BRK
+B931-   00          BRK
+B932-   00          BRK
+B933-   00          BRK
+B934-   00          BRK
+B935-   00          BRK</code>
+    </div>
+    <p>This is not going well.</p>
+    <p>Let's back up again. The decrypted code starts at $B71A. What's at $B71A?</p>
+    <div class="line_editing">
+      <code>*B71AL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">RWTS parameter table setup (normal)</p>
+      <code>B71A-   8E E9 B7    STX   $B7E9
+B71D-   8E F7 B7    STX   $B7F7</code>
+      <p class="comment">unfriendly reset vector</p>
+      <code>B720-   A9 6B       LDA   #$6B
+B722-   8D F2 03    STA   $03F2
+B725-   A9 B7       LDA   #$B7
+B727-   8D F3 03    STA   $03F3
+B72A-   49 A5       EOR   #$A5
+B72C-   8D F4 03    STA   $03F4
+B72F-   EA          NOP</code>
+      <p class="comment">more RWTS parameters (normal)</p>
+      <code>B730-   A9 01       LDA   #$01
+B732-   8D F8 B7    STA   $B7F8
+B735-   8D EA B7    STA   $B7EA
+B738-   AD E0 B7    LDA   $B7E0
+B73B-   8D E1 B7    STA   $B7E1
+B73E-   A9 02       LDA   #$02
+B740-   8D EC B7    STA   $B7EC
+B743-   A9 04       LDA   #$04
+B745-   8D ED B7    STA   $B7ED
+B748-   AC E7 B7    LDY   $B7E7
+B74B-   88          DEY
+B74C-   8C F1 B7    STY   $B7F1
+B74F-   A9 01       LDA   #$01
+B751-   8D F4 B7    STA   $B7F4
+B754-   8A          TXA
+B755-   4A          LSR
+B756-   4A          LSR
+B757-   4A          LSR
+B758-   4A          LSR
+B759-   AA          TAX
+B75A-   A9 00       LDA   #$00
+B75C-   9D F8 04    STA   $04F8,X
+B75F-   9D 78 04    STA   $0478,X</code>
+      <p class="comment">multi-sector read routine (normal)</p>
+      <code>B762-   20 93 B7    JSR   $B793</code>
+      <p class="comment">reset stack (normal)</p>
+      <code>B765-   A2 FF       LDX   #$FF
+B767-   9A          TXS</code>
+      <p class="comment">slightly odd (usually $9D84 is the boot2 entry point, but OK)</p>
+      <code>B768-   4C 82 9D    JMP   $9D82</code>
+    </div>
+    <p>That all looks OK, and it proves that my manual decryption loop worked. But I still don't know why I'm not seeing the RWTS code I expected in the location I expected.</p>
+    <p>Let's follow the white rabbit, starting at $B793, the entry point for the multi-sector read routine.</p>
+    <div class="line_editing">
+      <code>*B793L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">this is not normal</p>
+      <code>B793-   4C 00 B8    JMP   $B800</code>
+      <p class="comment">but the rest of the loop looks entirely normal</p>
+      <code>B796-   AD E4 B7    LDA   $B7E4
+B799-   20 B5 B7    JSR   $B7B5
+B79C-   AC ED B7    LDY   $B7ED
+B79F-   88          DEY
+B7A0-   10 07       BPL   $B7A9
+B7A2-   A0 0F       LDY   #$0F
+B7A4-   EA          NOP
+B7A5-   EA          NOP
+B7A6-   CE EC B7    DEC   $B7EC
+B7A9-   8C ED B7    STY   $B7ED
+B7AC-   CE F1 B7    DEC   $B7F1
+B7AF-   CE E1 B7    DEC   $B7E1
+B7B2-   D0 DF       BNE   $B793
+B7B4-   60          RTS</code>
+    </div>
+    <p>Down the rabbit hole we go...</p>
+    <div class="line_editing">
+      <code>*B800L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">Hmm, the first thing this routine does is restore the code that should have been at $B793 (but wasn't, because it jumped here instead).</p>
+      <p class="comment">Which tells me that this is designed to be run exactly once, during boot, the first time anything uses the multi-sector read routine at $B793.</p>
+      <code>B800-   A9 AC       LDA   #$AC
+B802-   8D 93 B7    STA   $B793
+B805-   A9 E5       LDA   #$E5
+B807-   8D 94 B7    STA   $B794
+B80A-   A9 B7       LDA   #$B7
+B80C-   8D 95 B7    STA   $B795
+B80F-   A9 07       LDA   #$07
+B811-   85 4F       STA   $4F</code>
+      <p class="comment">oh look, we're turning on the drive motor manually</p>
+      <code>B813-   AE E9 B7    LDX   $B7E9
+B816-   BD 8D C0    LDA   $C08D,X
+B819-   BD 8E C0    LDA   $C08E,X
+B81C-   10 12       BPL   $B830</code>
+      <p class="comment">do something (below)</p>
+      <code>B81E-   20 3E B8    JSR   $B83E
+B821-   8D 00 02    STA   $0200</code>
+      <p class="comment">do it again</p>
+      <code>B824-   20 3E B8    JSR   $B83E</code>
+      <p class="comment">got the same result?</p>
+      <code>B827-   CD 00 02    CMP   $0200</code>
+      <p class="comment">apparently "no" is the correct answer</p>
+      <code>B82A-   D0 0F       BNE   $B83B</code>
+      <p class="comment">try again</p>
+      <code>B82C-   C6 4F       DEC   $4F
+B82E-   D0 F4       BNE   $B824</code>
+      <p class="comment">give up</p>
+      <code>B830-   A9 08       LDA   #$08
+B832-   8D 7A B7    STA   $B77A
+B835-   8D F4 03    STA   $03F4</code>
+      <p class="comment">jump to The Badlands</p>
+      <code>B838-   4C 6B B7    JMP   $B76B</code>
+      <p class="comment">success path ($B82A branches here) -- continue to real multi-sector read routine</p>
+      <code>B83B-   4C 93 B7    JMP   $B793</code>
+      <p class="comment">main subroutine starts here -- looks for the standard address prologue</p>
+      <code>B83E-   AE E9 B7    LDX   $B7E9
+B841-   BD 8C C0    LDA   $C08C,X
+B844-   10 FB       BPL   $B841
+B846-   C9 D5       CMP   #$D5
+B848-   D0 F7       BNE   $B841
+B84A-   EA          NOP
+B84B-   EA          NOP
+B84C-   BD 8C C0    LDA   $C08C,X
+B84F-   10 FB       BPL   $B84C
+B851-   C9 AA       CMP   #$AA
+B853-   D0 F1       BNE   $B846
+B855-   EA          NOP
+B856-   EA          NOP
+B857-   BD 8C C0    LDA   $C08C,X
+B85A-   10 FB       BPL   $B857
+B85C-   C9 96       CMP   #$96
+B85E-   D0 E1       BNE   $B841
+B860-   48          PHA
+B861-   68          PLA</code>
+      <p class="comment">skips over the first half of the address field</p>
+      <code>B862-   A0 04       LDY   #$04
+B864-   BD 8C C0    LDA   $C08C,X
+B867-   10 FB       BPL   $B864
+B869-   48          PHA
+B86A-   68          PLA
+B86B-   88          DEY
+B86C-   D0 F6       BNE   $B864</code>
+      <p class="comment">look for track number 0</p>
+      <code>B86E-   BD 8C C0    LDA   $C08C,X
+B871-   10 FB       BPL   $B86E
+B873-   C9 AA       CMP   #$AA
+B875-   D0 CA       BNE   $B841
+B877-   48          PHA
+B878-   68          PLA</code>
+      <p class="comment">look for sector number 0</p>
+      <code>B879-   BD 8C C0    LDA   $C08C,X
+B87C-   10 FB       BPL   $B879
+B87E-   C9 AA       CMP   #$AA
+B880-   D0 BF       BNE   $B841</code>
+      <p class="comment">skip the rest of the address field, then get the value of the raw nibble that follows</p>
+      <code>B882-   A0 05       LDY   #$05
+B884-   BD 8C C0    LDA   $C08C,X
+B887-   10 FB       BPL   $B884
+B889-   48          PHA
+B88A-   68          PLA
+B88B-   88          DEY
+B88C-   D0 F6       BNE   $B884
+B88E-   60          RTS</code>
+    </div>
+    <p>The original disk has two address fields for T00,S00. One of them is the start of the actual sector data. The other one is a decoy that has an address field but no data field. The raw nibbles immediately following the two address prologues are different, and this routine checks to ensure that they are different.</p>
+    <p>The routine in the disk controller ROM (usually at $C65C) that looks for track 0 sector 0 will ignore the decoy if it happens to find it before the real one. (Technically, it will look for the data field, not find it in a reasonable time frame, and start over, and eventually it will find the real address field as the disk continues to spin.) This decoy is apparently enough to fool bit copy programs.</p>
+    <p class="seen">Never a dull moment in the land of</p>
+    <p class="seen">Apple II copy protection.</p>
+    <p>This is all very interesting -- and it explains why my bit copy would just hang during boot -- but it doesn't get me any closer to understanding this disk's custom RWTS.</p>
+    <p class="seen">Let's back up.</p>
+    <div class="line_editing">
+      <code>*B793L</code>
+    </div>
+    <div class="listing">
+      <code>B793-   4C 00 B8    JMP   $B800
+B796-   AD E4 B7    LDA   $B7E4
+B799-   20 B5 B7    JSR   $B7B5</code>
+    </div>
+    <p>Ignoring the JMP for the moment, the multi-sector read routine calls the standard $B7B5 entry point to actually read a single sector.</p>
+    <div class="line_editing">
+      <code>*B7B5L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">this is normal</p>
+      <code>B7B5-   08          PHP
+B7B6-   78          SEI</code>
+      <p class="comment">definitely not normal (usually $BD00)</p>
+      <code>B7B7-   20 00 BA    JSR   $BA00</code>
+      <p class="comment">the rest is all normal</p>
+      <code>B7BA-   B0 03       BCS   $B7BF
+B7BC-   28          PLP
+B7BD-   18          CLC
+B7BE-   60          RTS
+B7BF-   28          PLP
+B7C0-   38          SEC
+B7C1-   60          RTS</code>
+    </div>
+    <p>That explains why I couldn't find the RWTS code I expected in the location I expected. This RWTS is laid out completely differently in memory than the standard DOS 3.3 RWTS. Even the entry point is different ($BA00 instead of $BD00).</p>
+    <div class="line_editing">
+      <code>*BA00L</code>
+    </div>
+    <div class="listing">
+      <code>BA00-   85 48       STA   $48
+BA02-   84 49       STY   $49
+BA04-   A0 02       LDY   #$02
+BA06-   8C F8 06    STY   $06F8
+BA09-   A0 04       LDY   #$04
+BA0B-   8C F8 04    STY   $04F8
+BA0E-   A0 01       LDY   #$01
+BA10-   B1 48       LDA   ($48),Y
+BA12-   AA          TAX
+BA13-   A0 0F       LDY   #$0F
+BA15-   D1 48       CMP   ($48),Y
+BA17-   F0 1B       BEQ   $BA34</code>
+    </div>
+    <p>Yup, that looks like an RWTS entry point.</p>
+    <p>After seconds of furious investigation,</p>
+    <p>I found the RWTS code that looks for the data prologue:</p>
+    <div class="line_editing">
+      <code>*BDE1L</code>
+    </div>
+    <div class="listing">
+      <code>BDE1-   BD 8C C0    LDA   $C08C,X
+BDE4-   10 FB       BPL   $BDE1
+BDE6-   49 D5       EOR   #$D5
+BDE8-   D0 F4       BNE   $BDDE
+BDEA-   BD 8C C0    LDA   $C08C,X
+BDED-   10 FB       BPL   $BDEA
+BDEF-   C5 31       CMP   $31     <-- !
+BDF1-   D0 F3       BNE   $BDE6
+BDF3-   A0 56       LDY   #$56
+BDF5-   BD 8C C0    LDA   $C08C,X
+BDF8-   10 FB       BPL   $BDF5
+BDFA-   C5 4E       CMP   $4E     <-- !
+BDFC-   D0 E8       BNE   $BDE6</code>
+    </div>
+    <p>And there it is, in living color: this RWTS uses two magic zero page values to find the data prologue while it's reading a sector from disk.</p>
+    <p class="seen">Why? Because f--- you, that's why.</p>
+    <p class="seen">Because it makes the extracted RWTS useless without initializing the magic zero page location with the right magic number. Automated RWTS extraction programs wouldn't find this. If I load this RWTS into Advanced Demuffin, it will not be able to read the original disk, because the RWTS itself is not what initializes the magic zero page location.</p>
+    <p class="seen">This calls for an IOB module.</p>
+    <p>What's an IOB module? Well, the author of Advanced Demuffin anticipated that he couldn't anticipate everything, so he made the program extensible. Quoting from the Advanced Demuffin softdocs:</p>
+    <div class="curses">
+      <code>An IOB module is an interface for the
+source RWTS. Advanced Demuffin uses the
+IOB module to set up the IOB table and
+jump to RWTS.  The IOB module is stored
+from $1400-$14FB. When Advanced
+Demuffin loads in a IOB module, it
+reads the first sector of the file off
+the track-sector list and stores it at
+$13FC-$14FB. When Advanced Demuffin
+wants to read a sector it JSRs to the
+IOB module with the phase number,
+sector number, and the page number
+stored in the A, Y and X registers
+respectively. Since the source drive
+always has to be drive one, Advanced
+Demuffin can make the IOB module very
+compact. After it gets the page,track
+and sector Advanced Demuffin sets up
+the IOB for RWTS using this infor-
+mation, and JMPs to RWTS. (It jumps
+instead of JSRing, because it lets the
+RWTS do the RTS.) Here is a list of the
+IOB module that is built in to Advanced
+Demuffin:</code>
+    </div>
+    <div class="listing">
+      <p class="comment">Convert phase # to track #</p>
+      <code>1400-   4A          LSR</code>
+      <p class="comment">Store track number</p>
+      <code>1401-   8D 22 0F    STA   $0F22</code>
+      <p class="comment">Store sector number</p>
+      <code>1404-   8C 23 0F    STY   $0F23</code>
+      <p class="comment">Store page number [note: original docs have incorrect hex opcode on this line]</p>
+      <code>1407-   8E 27 0F    STX   $0F27</code>
+      <code>140A-   A9 01       LDA   #$01</code>
+      <p class="comment">Store the drive number</p>
+      <code>140C-   8D 20 0F    STA   $0F20</code>
+      <p class="comment">Store the read code</p>
+      <code>140F-   8D 2A 0F    STA   $0F2A</code>
+      <p class="comment">With high byte of IOB</p>
+      <code>1412-   A9 0F       LDA   #$0F</code>
+      <p class="comment">With low byte of IOB</p>
+      <code>1414-   A0 1E       LDY   #$1E</code>
+      <p class="comment">Goto RWTS</p>
+      <code>1416-   4C 00 BD    JMP   $BD00</code>
+    </div>
+    <p class="seen">Basically, Advanced Demuffin only knows how to call a custom RWTS if it</p>
+    <p class="seen">1. is loaded at $B800..$BFFF</p>
+    <p class="seen">2. uses a standard RWTS parameter table</p>
+    <p class="seen">3. has an entry point at $BD00 that</p>
+    <p class="seen">takes the address of the parameter tables in A and Y</p>
+    <p class="seen">4. doesn't require initialization</p>
+    <p>As it turns out, that covers a *lot* of copy protected disks, but it doesn't cover this one. This disk fails assumption #3 (the entry point is at $BA00, not $BD00) and #4 (the RWTS relies on the values of zero page $31 and $4E, which are initialized outside the RWTS).</p>
+    <p class="seen">So, let's make an IOB module.</p>
+    <div class="line_editing">
+      <code>*C500G    ; because I overwrote DOS
+...</code>
+      <code>]CALL -151</code>
+    </div>
+    <div class="listing">
+      <p class="comment">Most of this is identical to the standard IOB module that comes with</p>
+      <p class="comment">Advanced Demuffin (explained above).</p>
+      <code>1400-   4A          LSR
+1401-   8D 22 0F    STA   $0F22
+1404-   8C 23 0F    STY   $0F23
+1407-   8E 27 0F    STX   $0F27
+140A-   A9 01       LDA   #$01
+140C-   8D 20 0F    STA   $0F20
+140F-   8D 2A 0F    STA   $0F2A</code>
+      <p class="comment">initialize the magic zero page values</p>
+      <code>1412-   A9 AA       LDA   #$AA
+1414-   85 31       STA   $31
+1416-   A9 AD       LDA   #$AD
+1418-   85 4E       STA   $4E</code>
+      <p class="comment">get the address of the RWTS parameter table at $0F1E and call the RWTS at its non-standard entry point, $BA00</p>
+      <code>141A-   A9 0F       LDA   #$0F
+141C-   A0 1E       LDY   #$1E
+141E-   4C 00 BA    JMP   $BA00</code>
+    </div>
+    <p class="seen">Now let's tell Advanced Demuffin to use this custom IOB as well as the RWTS we captured from the original disk.</p>
+    <p class="seen">For the longest time, I thought that</p>
+    <p>Advanced Demuffin would only load RWTS files from slot 6, drive 1. That's where the original disk was during boot tracing, and that's where it needs to be during demuffining (which is a real word that I totally just made up), and that means I ended up swapping floppy disks like some kind of 24th century time traveling retronaut.</p>
+    <p class="seen">Then I re-read the Advanced Demuffin tech notes (which I have included on almost every work disk I've ever produced, but apparently never read in their entirety). And I discovered that it's trivial to tell Advanced Demuffin to load RWTS files from slot 5. Note to self: read the fine manual.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk, side A]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+]BRUN ADVANCED DEMUFFIN 1.1</code>
+    </div>
+    <div class="terminal_output">
+      <code>--> EXIT TO MONITOR</code>
+    </div>
+    <div class="line_editing">
+      <code>*F1F:50      ; use slot 5
+*800G        ; resume</code>
+    </div>
+    <p class="seen">--> LOAD NEW RWTS MODULE</p>
+    <p class="seen">At $B8, load "RWTS" from drive 1</p>
+    <p class="seen">--> LOAD NEW IOB MODULE</p>
+    <p>"IOB" from drive 1</p>
+    <div class="terminal_output">
+      <code>--> EXIT TO MONITOR</code>
+    </div>
+    <div class="line_editing">
+      <code>*F1F:60      ; use slot 6
+*800G        ; resume</code>
+    </div>
+    <div class="terminal_output">
+      <code>--> FORMAT TARGET DISK</code>
+    </div>
+    <p class="seen">...grind grind grind...</p>
+    <div class="terminal_output">
+      <code>--> CONVERT DISK</code>
+    </div>
+    <p class="seen">This disk is 16 sectors, and the default options (copy the entire disk, all tracks, all sectors) don't need to be changed unless something goes horribly wrong.</p>
+    <p>I press RETURN to start the conversion process, and... Advanced Demuffin crashes.</p>
+    <p class="seen">Wait, what?</p>
+    <p>Specifically, it crashes the very first time it tries to read a sector from the original disk. That probably means that</p>
+    <p>(a) the RWTS code I extracted from the</p>
+    <p>original disk (and decrypted) is somehow corrupted or incomplete, or</p>
+    <p>(b) my IOB module is calling that RWTS</p>
+    <p>incorrectly</p>
+    <p>Since decryption of executable code is generally an all-or-nothing affair, and</p>
+    <p>I've already listed through much of it and confirmed that it contains real 6502 assembly language code (for example, to find the data prologue),</p>
+    <p>I'm going to go with (b) my IOB module is incorrect.</p>
+    <p>But how? What did I miss? I don't know.</p>
+    <p>I sat on this for several days, stuck right here. Then I took another look at the boot1 code from the original disk.</p>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]BLOAD BOOT1 DECRYPTED,A$2600
+]CALL -151</code>
+      <code>*FE89G FE93G     ; disconnect DOS</code>
+      <code>*B600<2600.2FFFM ; move RWTS into place</code>
+      <code>*B793L</code>
+    </div>
+    <div class="listing">
+      <code>B793-   4C 00 B8    JMP   $B800
+B796-   AD E4 B7    LDA   $B7E4
+B799-   20 B5 B7    JSR   $B7B5</code>
+    </div>
+    <p>That "JMP $B800" instruction gets replaced immediately at $B800.</p>
+    <div class="listing">
+      <code>B800-   A9 AC       LDA   #$AC
+B802-   8D 93 B7    STA   $B793
+B805-   A9 E5       LDA   #$E5
+B807-   8D 94 B7    STA   $B794
+B80A-   A9 B7       LDA   #$B7
+B80C-   8D 95 B7    STA   $B795</code>
+    </div>
+    <p>So, the routine at $B793 ends up looking like this:</p>
+    <div class="listing">
+      <code>B793-   AC E5 B7    LDY   $B7E5
+B796-   AD E4 B7    LDA   $B7E4
+B799-   20 B5 B7    JSR   $B7B5</code>
+    </div>
+    <p>Perfectly ordinary, no? Actually, no.</p>
+    <p>Here's what it looks like on an ordinary (unprotected) DOS 3.3 disk.</p>
+    <div class="listing">
+      <code>B793-   AD E5 B7    LDA   $B7E5
+B796-   AC E4 B7    LDY   $B7E4
+B799-   20 B5 B7    JSR   $B7B5</code>
+    </div>
+    <p>Spot the difference. Go ahead, I'll wait.</p>
+    <p>A and Y get passed through to the RWTS entry point, which is usually at $BD00 but on this disk is at $BA00.</p>
+    <p>DOS 3.3 disk:</p>
+    <div class="line_editing">
+      <code>*BD00L</code>
+    </div>
+    <div class="listing">
+      <code>BD00-   84 48       STY   $48
+BD02-   85 49       STA   $49</code>
+    </div>
+    <p>This disk:</p>
+    <div class="line_editing">
+      <code>*BA00L</code>
+    </div>
+    <div class="listing">
+      <code>BA00-   85 48       STA   $48
+BA02-   84 49       STY   $49</code>
+    </div>
+    <p>Now do you see it? On a normal disk, the Y register holds the low byte of the RWTS parameter table address, and the accumulator holds the high byte.</p>
+    <p>But on this disk, those are reversed; the accumulator holds the low byte, and the Y register holds the high byte.</p>
+    <p class="seen">Why? Because f--- you, that's why.</p>
+    <p>Of course, the IOB module I created to interface with this RWTS was still putting the low byte in Y and the high byte in A, so the RWTS was reading a completely bogus parameter table and</p>
+    <p>God only knows what happened next. (Thank goodness the original disk was write-protected.)</p>
+    <p>I need a new IOB module.</p>
+    <div class="line_editing">
+      <code>*C500G
+...</code>
+      <code>]BLOAD IOB,A$1400
+]CALL -151</code>
+      <code>*141A:A0
+*141C:A9
+*1400L</code>
+    </div>
+    <div class="listing">
+      <code>1400-   4A          LSR
+1401-   8D 22 0F    STA   $0F22
+1404-   8C 23 0F    STY   $0F23
+1407-   8E 27 0F    STX   $0F27
+140A-   A9 01       LDA   #$01
+140C-   8D 20 0F    STA   $0F20
+140F-   8D 2A 0F    STA   $0F2A
+1412-   A9 AA       LDA   #$AA
+1414-   85 31       STA   $31
+1416-   A9 AD       LDA   #$AD
+1418-   85 4E       STA   $4E
+141A-   A0 0F       LDY   #$0F ; Y=high
+141C-   A9 1E       LDA   #$1E ; A=low
+141E-   4C 00 BA    JMP   $BA00</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE IOB SWAPPED,A$1400,L$FB</code>
+    </div>
+    <p>And here we go again.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk, side A]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>*C500G
+...</code>
+      <code>]BRUN ADVANCED DEMUFFIN 1.1</code>
+    </div>
+    <div class="terminal_output">
+      <code>--> EXIT TO MONITOR</code>
+    </div>
+    <div class="line_editing">
+      <code>*F1F:50      ; use slot 5
+*800G        ; resume</code>
+    </div>
+    <p class="seen">--> LOAD NEW RWTS MODULE</p>
+    <p class="seen">At $B8, load "RWTS" from drive 1</p>
+    <p class="seen">--> LOAD NEW IOB MODULE</p>
+    <p>"IOB SWAPPED" from drive 1</p>
+    <div class="terminal_output">
+      <code>--> EXIT TO MONITOR</code>
+    </div>
+    <div class="line_editing">
+      <code>*F1F:60      ; use slot 6
+*800G        ; resume</code>
+    </div>
+    <div class="terminal_output">
+      <code>--> CONVERT DISK</code>
+      <code>ADVANCED DEMUFFIN 1.1  - COPYRIGHT 1983
+WRITTEN BY THE STACK -CORRUPT COMPUTING
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC1:RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC2:RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC3:RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC4:RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC5:RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC6:RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC7:RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC8:RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC9:RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCA:RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCB:RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCC:RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCD:RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCE:RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCF:RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+=======================================
+16 SC $00,$00 TO $22,$0F BY $01 TO DRV2</code>
+    </div>
+    <p>Well, technically it didn't crash. But it didn't actually work either. Those "R" flags? Read errors. Every track, every sector. Remember when I said the default options don't need to be changed unless something goes horribly wrong? (Seriously, I just said that, like, a minute ago.) This is what "horribly wrong" looks like. The RWTS on this disk can't read... the disk.</p>
+    <p class="seen">Seriously, RWTS, you had one job...</p>
+    <p class="seen">Let's back up.</p>
+    <p>But to where? Either my IOB is still incorrect (in a new and exciting way that I haven't figured out yet), or my extracted RWTS is incorrect. But they both look fine.</p>
+    <p>I... I am at a loss.</p>
+</section>
+
+<section>
+
+    <div class="curses_input">
+      <code>[...time passes...]</code>
+      <code>[...time passes...]</code>
+      <code>[...it is pitch black...you are likely
+to be eaten by a grue...]</code>
+    </div>
+    <div class="terminal_output">
+      <code>           T
+            H
+             R
+              E
+               E</code>
+      <code>                 M
+                  O
+                   N
+                    T
+                     H
+                      S</code>
+      <code>                        P
+                         A
+                          S
+                           S</code>
+    </div>
+    <p>...and I am no closer to a solution...</p>
+</section>
+
+<section>
+
+    <p>OK, I picked this up again. This is now the equivalent of a "cold case" for a detective -- an old, half-finished crack that has gone nowhere. On a lark, and perhaps out of sheer frustration, I searched the internet for "Advanced</p>
+    <p>Demuffin bug". Wherein I came upon this discussion thread on comp.sys.apple2 from none other than Hot Rod (yes, *the* Hot Rod, from the 1980s):</p>
+    <div class="line_editing">
+      <code>https://groups.google.com/forum/#!msg/c
+omp.sys.apple2/ZhoZd7edtOY/1cZMYIGjjFMJ</code>
+    </div>
+    <p>Quoting the opening message in full:</p>
+    <div class="curses">
+      <code>Greetings, </code>
+      <code>I don't know if anyone still has cause
+to use Advanced Demuffin much anymore,
+but back in the day, it was a main tool
+used to normalize disks (aka 'crack').
+Back in 1986, I happened across a bug
+in it, wrote it down, and never opted
+to fix it.</code>
+      <code>I had reason to dust it off and use it
+again this week, and wouldn't you know
+it - I hit that same darn bug again
+(which of course I'd forgotten all
+about).</code>
+      <code>The gist of it is that Advanced
+Demuffin loads IOBs and RWTS files by
+reading the first sector of the file
+into memory at a page offset of #$FC
+(e.g. $13FC for an IOB, or $B5FC for an
+RWTS or wherever the page is set to).
+So if you set the page to load an RWTS
+as B6, it would read the first sector
+starting at $B5FC, not actually $B600.</code>
+      <code>It does this because the first four
+bytes of the first sector of a file
+contain the address and length of the
+file, and so then the first bytes of
+the actual file will then start on the
+next page boundary (e.g. $1400, $B600).</code>
+      <code>This wouldn't be so bad (although you
+could clobber four bytes you weren't
+expecting on the page preceeding what
+you thought was the start), except that
+in doing this, it fails to read the
+LAST four bytes of the file.</code>
+      <code>The routine that transfers the sector
+data into the target page is at $15C2.
+It stores data using the Y-reg as
+offset, starting at Y=0 and
+incrementing to 0 again. The problem is
+that the base address is always the
+$xxFC address (obtained indirectly via
+$3E.$3F as lo-byte/hi-byte). So when Y
+= 0 again, the last address stored to
+is only $xxFB, and $xxFC.$xxFF (the
+last four bytes) never get stored.</code>
+      <code>So if the RWTS you're loading has
+critical data in those last four bytes
+(like say, the read translate table),
+it will create all sorts of problems
+trying to convert a disk. This is
+exactly the issue I hit in 1986, and
+then again this week.</code>
+      <code>Fixing it would be possible, but
+cumbersome, as there's no really good
+patch space inline. One approach would
+be to relocate the routine that's at
+$15C2 (e.g. move it out to $1D00) and
+patch it with an extra loop that just
+gets those last four bytes. Might make
+a good 1.2 version.</code>
+      <code>Anyway, I wanted to mention it so at
+least a reference to the info existed.</code>
+      <code>Anyone end up with a copy of The
+Stack's source code?</code>
+    </div>
+    <div class="line_editing">
+      <code>]HR</code>
+    </div>
+    <p>Hot Rod claims that Advanced Demuffin has a bug: it always fails to load the last 4 bytes of an RWTS file. (Later in the thread, some replies question whether this is always true, or indeed whether this is ever true.) This is normally not a problem, because those bytes are unused. (They sometimes contain patches to DOS 3.3 itself, but they're not used during the normal course of reading sectors from the disk.)</p>
+    <p>But what if the last 4 bytes *were* used by the RWTS? What if an RWTS was arranged... differently?</p>
+    <div class="curses_input">
+      <code>[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+]BLOAD RWTS,A$2800
+]CALL -151</code>
+      <code>*FE89G FE93G     ; disconnect DOS</code>
+      <code>*B800<2800.2FFFM ; move RWTS into place</code>
+      <code>*BF80.BFFF</code>
+    </div>
+    <div class="listing">
+      <code>BF80- 00 00 00 00 00 00 00 00
+BF88- 00 00 00 00 00 00 00 00
+BF90- 00 00 00 00 00 00 00 01
+BF98- 98 99 02 03 9C 04 05 06
+BFA0- A0 A1 A2 A3 A4 A5 07 08
+BFA8- A8 A9 AA 09 0A 0B 0C 0D
+BFB0- B0 B1 0E 0F 10 11 12 13
+BFB8- B8 14 15 16 17 18 19 1A
+BFC0- C0 C1 C2 C3 C4 C5 C6 C7
+BFC8- C8 C9 CA 1B CC 1C 1D 1E
+BFD0- D0 D1 D2 1F D4 03 20 21
+BFD8- D8 22 23 24 25 26 27 28
+BFE0- E0 E1 E2 E3 E4 29 2A 2B
+BFE8- E8 2C 2D 2E 2F 30 31 32
+BFF0- F0 F1 33 34 35 36 37 38
+BFF8- F8 39 3A 3B 3C 3D 3E 3F</code>
+    </div>
+    <p>That is a nibble table; it is an integral part of one of the primary functions of any RWTS: converting the nibbles that are actually stored on the disk into the bytes that get stored in memory (and vice versa).</p>
+    <p>It is, in a word, extremely important.</p>
+    <p>That's two words.</p>
+    <div class="line_editing">
+      <code>*C500G
+...</code>
+      <code>]BRUN ADVANCED DEMUFFIN 1.1</code>
+    </div>
+    <div class="terminal_output">
+      <code>--> EXIT TO MONITOR</code>
+    </div>
+    <div class="line_editing">
+      <code>*BFFC:00 00 00 00 ; clear last 4 bytes
+*F1F:50           ; use slot 5
+*800G             ; resume</code>
+    </div>
+    <p class="seen">--> LOAD NEW RWTS MODULE</p>
+    <p class="seen">At $B8, load "RWTS" from drive 1</p>
+    <div class="terminal_output">
+      <code>--> EXIT TO MONITOR</code>
+    </div>
+    <div class="line_editing">
+      <code>*BFFC.BFFF</code>
+    </div>
+    <div class="listing">
+      <code>BFFC- 00 00 00 00</code>
+    </div>
+    <p>Hot Rod was right. There is a bug in</p>
+    <p>Advanced Demuffin.</p>
+</section>
+
+<section>
+
+    <p>The next chapter of this story centers on Advanced Demuffin itself. I could probably work around this bug, perhaps by making an IOB module that filled in the 4 bytes at $BFFC..$BFFF with the values that this particular RWTS needs.</p>
+    <p>But that's a poor-man's workaround. I want a real solution.</p>
+    <p>I'm going to fix Advanced Demuffin.</p>
+    <div class="curses_input">
+      <code>[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]BLOAD ADVANCED DEMUFFIN 1.1
+]CALL -151</code>
+    </div>
+    <p>For all the times I've used Advanced</p>
+    <p>Demuffin, I've never looked very hard at how it works. I don't even know where to start looking for the RWTS load routine. I don't have the source code. I suppose I'll start at the beginning.</p>
+    <div class="line_editing">
+      <code>*800L</code>
+    </div>
+    <div class="listing">
+      <code>0800-   EA          NOP
+0801-   78          SEI
+0802-   D8          CLD</code>
+      <p class="comment">disconnect DOS from output vector</p>
+      <code>0803-   A9 FD       LDA   #$FD
+0805-   A0 F0       LDY   #$F0
+0807-   84 36       STY   $36
+0809-   85 37       STA   $37</code>
+      <p class="comment">subroutine sets reset vector to $801</p>
+      <code>080B-   20 B0 12    JSR   $12B0</code>
+      <p class="comment">text mode</p>
+      <code>080E-   20 2F FB    JSR   $FB2F</code>
+      <p class="comment">clear screen</p>
+      <code>0811-   20 58 FC    JSR   $FC58</code>
+      <p class="comment">print header and footer</p>
+      <code>0814-   A2 27       LDX   #$27
+0816-   BD D8 12    LDA   $12D8,X
+0819-   9D 00 04    STA   $0400,X
+081C-   BD 00 13    LDA   $1300,X
+081F-   9D 80 04    STA   $0480,X
+0822-   BD 28 13    LDA   $1328,X
+0825-   9D D0 07    STA   $07D0,X
+0828-   A9 BD       LDA   #$BD
+082A-   9D 00 05    STA   $0500,X
+082D-   9D 50 07    STA   $0750,X
+0830-   CA          DEX
+0831-   10 E3       BPL   $0816</code>
+      <p class="comment">set header and footer margins for output vector</p>
+      <code>0833-   A9 03       LDA   #$03
+0835-   85 22       STA   $22
+0837-   A9 16       LDA   #$16
+0839-   85 23       STA   $23</code>
+      <p class="comment">clear rest of screen (excluding and footer)</p>
+      <code>083B-   20 58 FC    JSR   $FC58</code>
+      <p class="comment">print text that follows this instruction</p>
+      <code>083E-   20 63 0D    JSR   $0D63</code>
+    </div>
+    <p>0841..08B6 main menu text</p>
+    <p>(high bit 0 except last byte)</p>
+    <div class="listing">
+      <p class="comment">main menu input loop</p>
+      <p class="comment">X register holds current selection (0-4)</p>
+      <code>08B7-   A2 00       LDX   #$00</code>
+      <p class="comment">subroutine displays inverse bar on current selection</p>
+      <code>08B9-   20 84 0D    JSR   $0D84</code>
+      <p class="comment">subroutine waits for keypress (ESC is handled within subroutine, all other keys are returned in accumulator)</p>
+      <code>08BC-   20 51 0D    JSR   $0D51</code>
+      <p class="comment">RETURN key branches to $08DF</p>
+      <code>08BF-   C9 8D       CMP   #$8D
+08C1-   F0 1C       BEQ   $08DF</code>
+      <p class="comment"><- key branches to $08D5</p>
+      <code>08C3-   C9 88       CMP   #$88
+08C5-   F0 0E       BEQ   $08D5</code>
+      <p class="comment">-> key falls through, all other keys branch back to $08B9</p>
+      <code>08C7-   C9 95       CMP   #$95
+08C9-   D0 EE       BNE   $08B9</code>
+      <p class="comment">handle -> keypress "deselect" current selection by printing normal text over inverse bar</p>
+      <code>08CB-   20 97 0D    JSR   $0D97</code>
+      <p class="comment">X is index of current selection (0-4) so X=X+1 with wrap-around to 0</p>
+      <code>08CE-   E8          INX
+08CF-   E0 05       CPX   #$05
+08D1-   90 E6       BCC   $08B9
+08D3-   B0 E2       BCS   $08B7</code>
+      <p class="comment">handle <- keypress "deselect" current selection by printing normal text over inverse bar</p>
+      <code>08D5-   20 97 0D    JSR   $0D97</code>
+      <p class="comment">X is index of current selection (0-4) so X=X-1 (with wrap-around to 4)</p>
+      <code>08D8-   CA          DEX
+08D9-   10 DE       BPL   $08B9
+08DB-   A2 04       LDX   #$04
+08DD-   D0 DA       BNE   $08B9</code>
+      <p class="comment">handle RETURN keypress first, clear screen (excluding header and footer)</p>
+      <code>08DF-   20 58 FC    JSR   $FC58</code>
+      <p class="comment">if current selection is not "EXIT TO MONITOR", branch to $08F3</p>
+      <code>08E2-   E0 04       CPX   #$04
+08E4-   D0 0D       BNE   $08F3</code>
+      <p class="comment">handle "EXIT TO MONITOR" text mode</p>
+      <code>08E6-   20 2F FB    JSR   $FB2F</code>
+      <p class="comment">clear screen (including header and footer, which get reset in $FB2F)</p>
+      <code>08E9-   20 58 FC    JSR   $FC58
+08EC-   58          CLI</code>
+      <p class="comment">subroutine sets reset vector to $801</p>
+      <code>08ED-   20 B0 12    JSR   $12B0</code>
+      <p class="comment">jump to monitor</p>
+      <code>08F0-   4C 59 FF    JMP   $FF59</code>
+      <p class="comment">if current selection is not "FORMAT TARGET DISK", branch to $08FA</p>
+      <code>08F3-   E0 03       CPX   #$03
+08F5-   D0 03       BNE   $08FA</code>
+      <p class="comment">jump to routine that handles format</p>
+      <code>08F7-   4C 9B 0F    JMP   $0F9B</code>
+      <p class="comment">if current selection is not "LOAD NEW IOB MODULE", branch to $0901</p>
+      <code>08FA-   E0 02       CPX   #$02
+08FC-   D0 03       BNE   $0901</code>
+      <p class="comment">jump to routine that handles loading an IOB module</p>
+      <code>08FE-   4C 00 11    JMP   $1100</code>
+      <p class="comment">if current selection is not "LOAD NEW RWTS MODULE", branch to $0908</p>
+      <code>0901-   E0 01       CPX   #$01
+0903-   D0 03       BNE   $0908</code>
+      <p class="comment">jump to routine that handles loading an RWTS module</p>
+      <code>0905-   4C 55 10    JMP   $1055</code>
+    </div>
+    <p>(On a side note, it's a nice change of pace to disassemble code that's not intentionally obfuscated.)</p>
+    <div class="line_editing">
+      <code>*1055L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">clear screen</p>
+      <code>1055-   20 58 FC    JSR   $FC58</code>
+      <p class="comment">print text that follows this instruction</p>
+      <code>1058-   20 63 0D    JSR   $0D63</code>
+    </div>
+    <p>105B..109D "PAGE TO LOAD AT..." text</p>
+    <p class="seen">(high bit 0 except last byte)</p>
+    <div class="listing">
+      <p class="comment">input subroutine for first digit</p>
+      <code>109E-   20 C0 0E    JSR   $0EC0
+10A1-   B0 FB       BCS   $109E</code>
+      <p class="comment">range check</p>
+      <code>10A3-   C9 02       CMP   #$02
+10A5-   90 F7       BCC   $109E
+10A7-   C9 0C       CMP   #$0C
+10A9-   B0 F3       BCS   $109E
+10AB-   20 F9 0E    JSR   $0EF9
+10AE-   0A          ASL
+10AF-   0A          ASL
+10B0-   0A          ASL
+10B1-   0A          ASL</code>
+      <p class="comment">store partial value in zero page $4C</p>
+      <code>10B2-   85 4C       STA   $4C</code>
+      <p class="comment">input subroutine for second digit</p>
+      <code>10B4-   20 C0 0E    JSR   $0EC0
+10B7-   90 0A       BCC   $10C3</code>
+      <p class="comment">handle <- keypress</p>
+      <code>10B9-   C9 88       CMP   #$88
+10BB-   D0 F7       BNE   $10B4
+10BD-   20 ED FD    JSR   $FDED
+10C0-   4C 9E 10    JMP   $109E</code>
+      <p class="comment">store full value in zero page $4C</p>
+      <code>10C3-   20 F9 0E    JSR   $0EF9
+10C6-   05 4C       ORA   $4C
+10C8-   85 4C       STA   $4C</code>
+      <p class="comment">print text that follows this instruction</p>
+      <code>10CA-   20 63 0D    JSR   $0D63</code>
+    </div>
+    <p>10CD..10CF three carriage returns</p>
+    <p class="seen">(high bit 0 except last byte)</p>
+    <div class="listing">
+      <code>10D0-   20 30 11    JSR   $1130</code>
+    </div>
+    <div class="line_editing">
+      <code>*1130L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">print</p>
+      <code>1130-   20 63 0D    JSR   $0D63</code>
+    </div>
+    <p>1133..1168 "FILE TO LOAD" prompt</p>
+    <div class="listing">
+      <p class="comment">handle character input for filename</p>
+      <code>1169-   20 51 0D    JSR   $0D51
+116C-   C9 88       CMP   #$88
+116E-   F0 1B       BEQ   $118B
+1170-   C9 8D       CMP   #$8D
+1172-   F0 27       BEQ   $119B
+1174-   C9 A0       CMP   #$A0
+1176-   90 F1       BCC   $1169
+1178-   E0 00       CPX   #$00
+117A-   D0 04       BNE   $1180
+117C-   C9 C0       CMP   #$C0
+117E-   90 E9       BCC   $1169
+1180-   20 ED FD    JSR   $FDED</code>
+      <p class="comment">store filename in $0200</p>
+      <code>1183-   9D 00 02    STA   $0200,X
+1186-   E8          INX
+1187-   E0 1E       CPX   #$1E
+1189-   90 D9       BCC   $1164</code>
+    </div>
+    <div class="terminal_output">
+      <code>...</code>
+    </div>
+    <div class="listing">
+      <p class="comment">print</p>
+      <code>11AC-   20 63 0D    JSR   $0D63</code>
+    </div>
+    <p>11AF..11B1 ",D_" prompt</p>
+    <div class="listing">
+      <p class="comment">handle input for drive number</p>
+      <code>11B3-   20 51 0D    JSR   $0D51
+11B6-   C9 B1       CMP   #$B1
+11B8-   F0 04       BEQ   $11BE
+11BA-   C9 B2       CMP   #$B2
+11BC-   D0 F5       BNE   $11B3
+11BE-   20 ED FD    JSR   $FDED</code>
+      <p class="comment">munge and store directly in RWTS parameter table</p>
+      <code>11C1-   29 03       AND   #$03
+11C3-   8D 20 0F    STA   $0F20</code>
+    </div>
+    <p>Advanced Demuffin doesn't use the standard DOS 3.3 BLOAD function, on the theory that by the time you need to load an RWTS file, you may not have a working DOS in memory anymore. Also, to avoid disturbing any other memory,</p>
+    <p>Advanced Demuffin loads the RWTS file into its final location immediately. (It has its own copy of a standard RWTS, relocated to $1500.) So it does everything manually: reading the disk catalog to find the file's first sector, then reading that sector to get the list of tracks and sectors, then reading each sector into memory one at a time.</p>
+    <div class="listing">
+      <p class="comment">read T11,S00 into $1F00..$1FFF</p>
+      <code>11C6-   A9 1F       LDA   #$1F
+11C8-   85 4B       STA   $4B
+11CA-   A9 11       LDA   #$11
+11CC-   A0 00       LDY   #$00
+11CE-   20 34 12    JSR   $1234</code>
+      <p class="comment">find next directory sector (first one is usually T11,S0F, then that points to T11,S0E, and so on) and read it into $1F00..$1FFF</p>
+      <code>11D1-   20 2B 12    JSR   $122B
+11D4-   B0 2E       BCS   $1204</code>
+      <p class="comment">parse the raw catalog listing to find the filename you requested</p>
+      <code>11D6-   A9 0B       LDA   #$0B
+11D8-   85 4A       STA   $4A
+11DA-   A0 02       LDY   #$02
+11DC-   B1 4A       LDA   ($4A),Y
+11DE-   29 04       AND   #$04
+11E0-   F0 19       BEQ   $11FB
+11E2-   C8          INY
+11E3-   B1 4A       LDA   ($4A),Y
+11E5-   D9 FD 01    CMP   $01FD,Y
+11E8-   D0 11       BNE   $11FB
+11EA-   C8          INY
+11EB-   C0 21       CPY   #$21
+11ED-   90 F4       BCC   $11E3
+11EF-   A0 00       LDY   #$00
+11F1-   B1 4A       LDA   ($4A),Y
+11F3-   48          PHA
+11F4-   C8          INY
+11F5-   B1 4A       LDA   ($4A),Y
+11F7-   A8          TAY
+11F8-   68          PLA
+11F8-   68          PLA</code>
+      <p class="comment">found it</p>
+      <code>11F9-   10 39       BPL   $1234</code>
+      <p class="comment">didn't find it</p>
+      <code>11FB-   A5 4A       LDA   $4A
+11FD-   18          CLC
+11FE-   69 23       ADC   #$23</code>
+      <p class="comment">try next sector</p>
+      <code>1200-   F0 CF       BEQ   $11D1</code>
+      <p class="comment">try next file in this sector</p>
+      <code>1202-   D0 D4       BNE   $11D8</code>
+      <p class="comment">print</p>
+      <code>1204-   20 63 0D    JSR   $0D63</code>
+    </div>
+    <div class="terminal_output">
+      <code>1207..1227 "NO SUCH BINARY FILE EXISTS"</code>
+    </div>
+    <div class="listing">
+      <p class="comment">start over</p>
+      <code>1228-   4C 30 11    JMP   $1130</code>
+    </div>
+    <div class="terminal_output">
+      <code>...</code>
+    </div>
+    <div class="listing">
+      <p class="comment">read track/sector list of the RWTS file into $1F00..$1FFF</p>
+      <code>1234-   A2 1F       LDX   #$1F
+1236-   8E 27 0F    STX   $0F27
+1239-   A2 00       LDX   #$00
+123B-   8E 26 0F    STX   $0F26
+123E-   8D 22 0F    STA   $0F22
+1241-   8C 23 0F    STY   $0F23
+1244-   A9 01       LDA   #$01
+1246-   8D 2A 0F    STA   $0F2A
+1249-   20 A9 0D    JSR   $0DA9
+124C-   B0 06       BCS   $1254
+124E-   A2 00       LDX   #$00
+1250-   8E 26 0F    STX   $0F26
+1253-   60          RTS</code>
+    </div>
+    <p>If all goes well, by the time we return from $1130, the page $1F00..$1FFF looks something like this:</p>
+    <div class="listing">
+      <code>1F00- 00 00 00 00 00 00 00 00
+1F08- 00 00 00 00 1E 01 1E 00
+1F10- 1F 0F 1F 0E 1F 0D 1F 0C
+1F18- 1F 0B 1F 0A 1F 09 00 00</code>
+    </div>
+    <p>(The rest of the page is all zeroes.)</p>
+    <p>That's a track/sector list, stored in the first sector of every DOS 3.3 file.</p>
+    <p>Starting at $1F0C, it contains pairs of [track,sector] in order, followed by a pair of zeroes. So if this RWTS file expects to be loaded at $B800, T1E,S01 contains the code from $B800..$B8FF; T1E,S00 contains $B900..$B9FF; T1F,S0F contains $BA00..$BAFF; and so forth.</p>
+    <p>The subroutine at $1130 was called from $10D0, so let's continue at $10D3.</p>
+    <p>Now we have a loop that reads each of those sectors from disk into the appropriate page in memory. (Remember, the high byte of the starting address is in zero page $4C.)</p>
+    <div class="line_editing">
+      <code>*10D3L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">get high byte of target address</p>
+      <code>10D3-   A5 4C       LDA   $4C</code>
+      <p class="comment">store it in RWTS parameter table</p>
+      <code>10D5-   8D 27 0F    STA   $0F27</code>
+      <p class="comment">minus 1, for reasons that will become clear shortly</p>
+      <code>10D8-   CE 27 0F    DEC   $0F27</code>
+      <p class="comment">get a track and sector from the list</p>
+      <code>10DB-   A2 10       LDX   #$10
+10DD-   86 4A       STX   $4A
+10DF-   BD FD 1E    LDA   $1EFD,X</code>
+      <p class="comment">Y register has track number</p>
+      <code>10E2-   A8          TAY</code>
+      <p class="comment">accumulator has sector number</p>
+      <code>10E3-   BD FC 1E    LDA   $1EFC,X</code>
+      <p class="comment">branch if out of sectors</p>
+      <code>10E6-   F0 15       BEQ   $10FD</code>
+      <p class="comment">actually read the sector into memory 4 bytes earlier, to compensate for the fact that every DOS 3.3 binary file includes a 4-byte header (the starting address and program length) so, for example, the first sector of an RWTS file starting at $B800 would actually be read into $B7FC, so that the real data ends up being loaded at $B800 as expected this saves a bunch of memory moves</p>
+      <code>10E8-   A2 FC       LDX   #$FC
+10EA-   20 3B 12    JSR   $123B</code>
+      <p class="comment">increment target page</p>
+      <code>10ED-   EE 27 0F    INC   $0F27</code>
+      <p class="comment">check if we've run up against the top of writeable memory ($C000 and above are not writeable)</p>
+      <code>10F0-   AD 27 0F    LDA   $0F27
+10F3-   C9 BF       CMP   #$BF</code>
+      <p class="comment">out of space, don't load the rest of the file even if there's more to load</p>
+      <code>10F5-   B0 06       BCS   $10FD</code>
+      <p class="comment">increment our index into the track/sector list</p>
+      <code>10F7-   A6 4A       LDX   $4A
+10F9-   E8          INX
+10FA-   E8          INX</code>
+      <p class="comment">this should always branch unless you loaded a ridiculously large RWTS file for some reason</p>
+      <code>10FB-   D0 E0       BNE   $10DD</code>
+      <p class="comment">all done, jump back to main menu</p>
+      <code>10FD-   4C 03 08    JMP   $0803</code>
+    </div>
+    <p>Hot Rod was slightly wrong but mostly right. There is a bug in this loop, but it only manifests itself with RWTS files that are loaded into the highest writeable part of main memory (just below $C000).</p>
+    <p>Suppose you have an RWTS file that is loaded at $3800 and is $0800 bytes in length. (I've seen real copy protected disks like this.) This file will take up 10 sectors on disk.</p>
+    <p>S01: track/sector list</p>
+    <p>S02: 4-byte header (starting address</p>
+    <p>and length), followed by $FC bytes of data that should be stored in $3800..$38FB</p>
+    <p>S03: $100 bytes of data that should be</p>
+    <p>stored in $38FC..$39FB</p>
+    <p>S04: $100 bytes of data that should be</p>
+    <p>stored in $39FC..$3AFB</p>
+    <div class="terminal_output">
+      <code>...</code>
+    </div>
+    <p>S09: $100 bytes of data that should be</p>
+    <p>stored in $3EFC..$3FFB</p>
+    <p>S10: 4 bytes of data that should be</p>
+    <p>stored in $3FFC..$3FFF, followed by $FC bytes of unused space</p>
+    <p>Advanced Demuffin will load S01 into $1F00..$1FFF, then load the rest of the sectors (S02-S10) into $37FC..$40FB.</p>
+    <p>Since it reads each sector directly into its final memory location (minus 4 bytes), it will end up overwriting the 4 bytes from $37FC..$37FF, and the $FC bytes from $4000..$40FB. This is generally not a problem, since there's nothing there of any consequence.</p>
+    <p>Now consider the case of an RWTS file that starts at $B800 and is $0800 bytes long. Again, it will take up 10 sectors on disk.</p>
+    <p class="seen">S01: track/sector list</p>
+    <p class="seen">S02: 4-byte header (starting address</p>
+    <p>and length), followed by $FC bytes of data that should be stored in $B800..$B8FB</p>
+    <p class="seen">S03: $100 bytes of data that should be</p>
+    <p>stored in $B8FC..$B9FB</p>
+    <p class="seen">S04: $100 bytes of data that should be</p>
+    <p>stored in $B9FC..$BAFB</p>
+    <div class="terminal_output">
+      <code>...</code>
+    </div>
+    <p class="seen">S09: $100 bytes of data that should be</p>
+    <p>stored in $BEFC..$BFFB</p>
+    <p class="seen">S10: 4 bytes of data that should be</p>
+    <p>stored in $BFFC..$BFFF, followed by $FC bytes of unused space</p>
+    <p>Again, Advanced Demuffin will load S01 (the track/sector list) into $1F00.. $1FFF. Then it will loop through the next 8 sectors (S02-S09) and load them into $B7FC..$BFFB. And then it will stop, because at $10F0 there is a check to ensure that it doesn't ever write to nonwriteable memory.</p>
+    <div class="listing">
+      <code>10F0-   AD 27 0F    LDA   $0F27
+10F3-   C9 BF       CMP   #$BF
+10F5-   B0 06       BCS   $10FD</code>
+    </div>
+    <p>That branch is taken to avoid writing a sector's worth of data to $BFFC..$C0FB (which would indeed cause all sorts of problems, since there are lots of soft switches in the $C0xx range). But that means that it never loads sector 10, so the last 4 bytes of the RWTS file never make it into $BFFC..$BFFF.</p>
+    <p>Now, how do I fix it? Well, according to the TECH NOTES softdocs, Advanced</p>
+    <p>Demuffin has some unused space in the $1D00..$1EFB range. That's plenty of space to put a patch or two.</p>
+    <p>Here's what I came up with:</p>
+    <div class="line_editing">
+      <code>*10D3L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">unchanged</p>
+      <code>10D3-   A5 4C       LDA   $4C
+10D5-   8D 27 0F    STA   $0F27
+10D8-   CE 27 0F    DEC   $0F27
+10DB-   A2 10       LDX   #$10
+10DD-   86 4A       STX   $4A
+10DF-   BD FD 1E    LDA   $1EFD,X
+10E2-   A8          TAY
+10E3-   BD FC 1E    LDA   $1EFC,X
+10E6-   F0 15       BEQ   $10FD
+10E8-   A2 FC       LDX   #$FC
+10EA-   20 3B 12    JSR   $123B
+10ED-   EE 27 0F    INC   $0F27</code>
+      <p class="comment">jump to patch</p>
+      <code>10F0-   4C 00 1D    JMP   $1D00</code>
+      <p class="comment">now unused</p>
+      <code>10F3-   EA          NOP
+10F4-   EA          NOP
+10F5-   EA          NOP
+10F6-   EA          NOP</code>
+      <p class="comment">unchanged</p>
+      <code>10F7-   A6 4A       LDX   $4A
+10F9-   E8          INX
+10FA-   E8          INX
+10FB-   D0 E0       BNE   $10DD
+10FD-   4C 03 08    JMP   $0803</code>
+    </div>
+    <p>And here is the actual patch:</p>
+    <div class="line_editing">
+      <code>*1D00L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">check the target memory address (like the original did)</p>
+      <code>1D00-   AD 27 0F    LDA   $0F27
+1D03-   C9 BF       CMP   #$BF</code>
+      <p class="comment">if we're up against nonwriteable memory space, branch</p>
+      <code>1D05-   B0 03       BCS   $1D0A</code>
+      <p class="comment">no problem, go back to read loop</p>
+      <code>1D07-   4C F7 10    JMP   $10F7</code>
+      <p class="comment">read into $1F00..$1FFF</p>
+      <code>1D0A-   A9 1F       LDA   #$1F
+1D0C-   8D 27 0F    STA   $0F27</code>
+      <p class="comment">get track and sector of the last sector of the RWTS file</p>
+      <code>1D0F-   A6 4A       LDX   $4A
+1D11-   BD FF 1E    LDA   $1EFF,X
+1D14-   A8          TAY
+1D15-   BD FE 1E    LDA   $1EFE,X
+1D18-   F0 0E       BEQ   $1D28</code>
+      <p class="comment">read the last sector (into $1F00.. $1FFF)</p>
+      <code>1D1A-   A2 00       LDX   #$00
+1D1C-   20 3B 12    JSR   $123B</code>
+      <p class="comment">copy the first 4 bytes into place</p>
+      <code>1D1F-   A2 03       LDX   #$03
+1D21-   BD 00 1F    LDA   $1F00,X
+1D24-   9D FC BF    STA   $BFFC,X
+1D27-   CA          DEX
+1D28-   10 F7       BPL   $1D21</code>
+      <p class="comment">jump back to end of the read loop to return to the main menu</p>
+      <code>1D2A-   4C FD 10    JMP   $10FD</code>
+    </div>
+    <p>I just fixed a 31-year-old bug without the original source code.</p>
+    <p>(While I was in there, I took the opportunity to make a few other minor interface modifications. In particular,</p>
+    <p>I added some keyboard support in the main menu to change the slot number without having to exit to the monitor.</p>
+    <p>Now I can just press "5" to load RWTS and IOB files from slot 5, then press "6" to convert the disk in slot 6. I also added direct keyboard shortcuts for each item in the main menu. For example, you can just press "R" to load an RWTS file or "I" to load an IOB file. Version 1.1 made you move one line at a time with the left and right arrow keys and press RETURN. Oh, and I also added support for the up and down arrow keys, because it's the 21st century and why not.)</p>
+    <p>And so, Advanced Demuffin 1.5 was born.</p>
+</section>
+
+<section>
+
+    <p>When I left off, I was trying to convert side A of "Math Blaster" to a standard format. I had decrypted the boot1 code and extracted the RWTS. I had written an IOB module (actually two IOB modules, the most recent one called "IOB SWAPPED") to act as a liaison between the non-standard RWTS and</p>
+    <p>Advanced Demuffin. The only thing I didn't have was a version of Advanced</p>
+    <p>Demuffin that could load the entire RWTS file into memory.</p>
+    <p>But now I do.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk, side A]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>[press "5" to switch to slot 5]</code>
+      <code>[press "R" to load a new RWTS module]
+  --> At $B8, load "RWTS" from drive 1</code>
+      <code>[press "I" to load a new IOB module]
+  --> load "IOB SWAPPED" from drive 1</code>
+      <code>[press "6" to switch to slot 6]</code>
+      <code>[press "C" to convert disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======================================
+TRK:..RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC1:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC2:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC3:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC4:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC5:..RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC6:..RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC7:..RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC8:..RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC9:..RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCA:..RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCB:..RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCC:..RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCD:..RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCE:..RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCF:..RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+=======================================
+16SC $00,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <p>Make no mistake: this is definitely progress. Advanced Demuffin 1.1 failed to read this disk at all (because of the 4-byte RWTS bug). Now that I've fixed that, it can use the RWTS that I extracted (and decrypted) to read the disk... but only up to T02,S04.</p>
+    <p>That track/sector sounds suspiciously familiar. It's the last sector of DOS, and it's the first sector read by the boot1 code.</p>
+    <div class="listing">
+      <p class="comment">relevant boot1 code</p>
+      <code>B73E-   A9 02       LDA   #$02
+B740-   8D EC B7    STA   $B7EC
+B743-   A9 04       LDA   #$04
+B745-   8D ED B7    STA   $B7ED</code>
+    </div>
+    <p>After DOS is loaded, I guess the RWTS is modified to look for a different data epilogue sequence. But remember, the third byte of the data epilogue is stored in zero page $4E (initially set up at $B6F0). So the DOS doesn't even need to modify the RWTS code directly; it just changes zero page $4E.</p>
+    <p>Turning to the Copy ][+ nibble editor, it appears that every sector from T02,S05 to T22,S0F uses "D5 AA B5" as the data epilogue.</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK: 03  START: 2CCB  LENGTH: 015F</code>
+    </div>
+    <div class="curses">
+      <code>2CA8: 9E 9D BE CB 96 9A B7 AC   VIEW
+2CB0: A7 DE AA EB DB DB DB DB
+         ^^^^^^^^
+      data epilogue</code>
+      <code>2CB8: DB DB DB DB DB D7 AA 97
+                     ^^^^^^^^
+                 address prologue</code>
+      <code>2CC0: AA AA AB AB AE AA AF AB
+2CC8: AF FF FF FF FF FF FF FF  <-2CCB
+      ^^^^^^^^
+  address epilogue</code>
+      <code>2CD0: FF D5 AA B5 A6 E6 FB D3
+         ^^^^^^^^
+      data prologue</code>
+    </div>
+    <div class="terminal_output">
+      <code>2CD8: AD EC AB F3 B5 DE E5 AE
+2CE0: 97 B9 D9 E5 FE D6 E5 F3
+2CE8: BD AC B2 DF EA A6 DB DF</code>
+      <code>---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p>It appears I need to make a *third* IOB module.</p>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]BLOAD IOB SWAPPED,A$1400
+]CALL -151</code>
+      <code>*1417:B5</code>
+      <code>*1400L</code>
+    </div>
+    <div class="listing">
+      <code>1400-   4A          LSR
+1401-   8D 22 0F    STA   $0F22
+1404-   8C 23 0F    STY   $0F23
+1407-   8E 27 0F    STX   $0F27
+140A-   A9 01       LDA   #$01
+140C-   8D 20 0F    STA   $0F20
+140F-   8D 2A 0F    STA   $0F2A
+1412-   A9 AA       LDA   #$AA
+1414-   85 31       STA   $31
+1416-   A9 B5       LDA   #$B5  ; new
+1418-   85 4E       STA   $4E
+141A-   A0 0F       LDY   #$0F
+141C-   A9 1E       LDA   #$1E
+141E-   4C 00 BA    JMP   $BA00</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE IOB 3+,A$1400,L$FB</code>
+    </div>
+    <div class="curses_input">
+      <code>[S6,D1=original disk, side A]
+[S6,D2=partially demuffin'd disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>*BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>[press "5" to switch to slot 5]</code>
+      <code>[press "R" to load a new RWTS module]
+  --> At $B8, load "RWTS" from drive 1</code>
+      <code>[press "I" to load a new IOB module]
+  --> load "IOB 3+" from drive 1</code>
+      <code>[press "6" to switch to slot 6]</code>
+      <code>[press "C" to convert disk]</code>
+      <code>[press "Y" to change default values]</code>
+    </div>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======================================</code>
+      <code>
+INPUT ALL VALUES IN HEX</code>
+      <code>
+SECTORS PER TRACK? (13/16) 16</code>
+    </div>
+    <div class="curses">
+      <code>START TRACK: $02
+              ^^
+           important</code>
+      <code>START SECTOR: $05
+               ^^
+         also important</code>
+    </div>
+    <div class="terminal_output">
+      <code>END TRACK: $22
+END SECTOR: $0F</code>
+      <code>INCREMENT: 1</code>
+      <code>MAX # OF RETRIES: 0</code>
+      <code>COPY FROM DRIVE 1
+TO DRIVE: 2
+=======================================
+16SC $02,$05-$22,$0F BY$01 S6,D1->S6,D2</code>
+    </div>
+    <p>And here we go...</p>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======================================
+TRK:  .................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:   ................................
+SC1:   ................................
+SC2:   ................................
+SC3:   ................................
+SC4:   ................................
+SC5:  .................................
+SC6:  .................................
+SC7:  .................................
+SC8:  .................................
+SC9:  .................................
+SCA:  .................................
+SCB:  .................................
+SCC:  .................................
+SCD:  .................................
+SCE:  .................................
+SCF:  .................................
+=======================================
+16SC $02,$05-$22,$0F BY$01 S6,D1->S6,D2</code>
+    </div>
+    <p>Halle-freaking-lujah.</p>
+    <p>Now look at this:</p>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]CATALOG,S6,D2</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+281 FREE</code>
+      <code> A 058 HELLO
+ A 032 MATH BLASTER DEMONSTRATION
+ T 002 MATH 1.OBJ
+ T 002 MATH 3.OBJ
+ A 040 MATH BLASTER EDITOR
+ A 081 MATH BLASTER</code>
+    </div>
+    <p>And look at this:</p>
+    <div class="line_editing">
+      <code>]RUN HELLO</code>
+    </div>
+    <div class="terminal_output">
+      <code>ERROR #6 FILE NOT FOUND</code>
+    </div>
+    <p class="seen">Wait, what?</p>
+    <p>Firing up my trusty Copy ][+ sector editor and pointing it to my newly demuffin'd copy, I see the problem: all of the files on this disk have control characters in their names.</p>
+    <div class="terminal_output">
+      <code>SECTOR EDITOR                   DRIVE 2</code>
+    </div>
+    <div class="curses">
+      <code>00- 00 11 0E 00 00 00 00 00  ........
+08- 00 00 00 12 0F 02 C8 9A  ......H.
+                         ^^
+                      <Ctrl-Z></code>
+      <code>10- C5 CC CC CF A0 A0 A0 A0  ELLO
+18- A0 A0 A0 A0 A0 A0 A0 A0
+20- A0 A0 A0 A0 A0 A0 A0 A0
+28- A0 A0 A0 A0 3A 00 16 0F      :...
+30- 02 CD 9A C1 D4 C8 A0 C2  .M.ATH B
+          ^^
+       <Ctrl-Z></code>
+      <code>38- CC C1 D3 D4 C5 D2 A0 C4  LASTER D
+40- C5 CD CF CE D3 D4 D2 C1  EMONSTRA
+48- D4 C9 CF CE A0 A0 A0 20  TION
+50- 00 08 0F 00 CD 9A C1 D4  ....M.AT
+                   ^^
+                <Ctrl-Z></code>
+      <code>58- C8 A0 B1 AE CF C2 CA A0  H 1.OBJ
+60- A0 A0 A0 A0 A0 A0 A0 A0
+68- A0 A0 A0 A0 A0 A0 A0 A0
+70- A0 A0 02 00 20 0F 00 CD    .. ..M
+78- 9A C1 D4 C8 A0 B3 AE CF  .ATH 3.O
+    ^^
+ <Ctrl-Z></code>
+    </div>
+    <div class="terminal_output">
+      <code>80- C2 CA A0 A0 A0 A0 A0 A0  BJ</code>
+      <code>
+TRACK $11  SECTOR $0F   DOS 3.3</code>
+    </div>
+    <div class="curses_input">
+      <code>[?]-HELP SCREEN</code>
+    </div>
+    <p>OK, one thing at a time. I have a non- bootable disk with a standard disk catalog and what appear to be standard, though awkwardly named, files. So let's put a standard DOS on this puppy. I'm not even going to try to patch the DOS from the original disk. The sooner I can forget about that DOS, the better.</p>
+    <p class="seen">Using Copy ][+, I can "copy DOS" from a freshly initialized DOS 3.3 disk onto the demuffin'd copy. This function of</p>
+    <p class="seen">Copy ][+ just sector-copies tracks 0-2 from one disk to another, but it's easier than setting that up manually in some other copy program.</p>
+    <p class="seen">Copy ][+</p>
+    <p class="seen">--> COPY --> DOS --> from slot 6, drive 2 --> to slot 6, drive 1</p>
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]
+[S6,D2=newly formatted DOS 3.3 disk]</code>
+    </div>
+    <p class="seen">...read read read... ...write write write...</p>
+    <p>Now I need to change the boot program to "H<Ctrl-Z>ELLO". This feature of</p>
+    <p>Copy ][+ just presents a list interface to choose a file from the catalog, then sector-edits T01,S09 to set the name of the program that DOS runs (instead of "HELLO").</p>
+    <p class="seen">Copy ][+</p>
+    <p>--> CHANGE BOOT PROGRAM --> on slot 6, drive 1 --> H<Ctrl-Z>ELLO</p>
+    <p>(The catalog listing doesn't actually show the control character, so it looks like I'm changing the boot program from "HELLO" to "HELLO". But it does make the necessary changes.)</p>
+    <p>Rebooting loads DOS (of course, I just put it there), appears to load the</p>
+    <p>H<Ctrl-Z>ELLO program successfully... then immediately reboots.</p>
+    <p>There is still more copy protection.</p>
+    <div class="line_editing">
+      <code>]PR#6
+...
+<Ctrl-C></code>
+    </div>
+    <div class="terminal_output">
+      <code>BREAK
+]LIST</code>
+      <code> 10  POKE 104,32: RUN
+ 65535  REM COPYRIGHT 1983
+ 65535  REM DAVIDSON & ASSOCIATES</code>
+    </div>
+    <p>According to the framed Beagle Bros. "Peeks, Pokes and Pointers" chart that hangs above my desk and reminds me that technical writing should be wondrous, useful, and fun (but not always in that order), zero page 104 ($68) is the high byte of the starting address of the</p>
+    <p>Applesoft BASIC program in memory.</p>
+    <p>Which means that this HELLO program contains an entirely separate, entirely hidden BASIC program within it.</p>
+    <div class="line_editing">
+      <code>]POKE 104,32
+]LIST</code>
+    </div>
+    <div class="terminal_output">
+      <code> 10  REM
+ 400  IF  PEEK (40324) = 173 OR  PEEK
+     (47094) <  > 0 THEN 1000
+ 402  POKE 216,0: ONERR  GOTO 100
+     0
+ 520 K = 768:L = 1000
+ 530  FOR I = K TO L: READ J: POKE
+     I,J: NEXT
+ 595  POKE 765,32
+ 650  DATA  76, 55, 3, 164, 1, 17
+     3, 48, 192, 230, 2, 208, 5,
+     230, 3, 208, 5, 96, 234, 76,
+      21, 3, 136, 240, 5
+ 670  DATA  76, 27, 3, 208, 235,
+     164, 0, 173, 48, 192, 230, 2
+     , 208, 5, 230, 3, 208, 5, 96
+     , 234, 76, 47, 3, 136
+ 690  DATA  240, 209, 76, 53, 3,
+     208, 235, 173, 255, 2, 10, 1
+     68, 185, 127, 3, 133, 0, 173
+     , 253, 2, 74, 240, 4, 70
+ 710  DATA  0, 208, 249, 185, 127
+     , 3, 56, 229, 0, 133, 1, 200
+     , 185, 127, 3, 101, 0, 133,
+     0, 169, 0, 56, 237, 254
+ 730  DATA  2, 133, 3, 169, 0, 13
+     3, 2, 165, 1, 208, 152, 234,
+      234, 76, 112, 3, 230, 2, 20
+     8, 5, 230, 3, 208, 5
+ 750  DATA  96, 234, 76, 125, 3,
+     208, 236, 0, 0, 246, 246, 23
+     2, 232, 219, 219, 207, 207,
+     195, 195, 184, 184, 174, 174
+     , 164
+ 770  DATA  164, 155, 155, 146, 1
+     46, 138, 138, 130, 130, 123,
+      123, 116, 116, 109, 110, 10
+     3, 104, 97, 98, 92, 92, 87,
+     87, 82
+ 790  DATA  82, 77, 78, 73, 73, 6
+     9, 69, 65, 65, 61, 62, 58, 5
+     8, 54, 55, 51, 52, 48, 49, 4
+     6, 46, 43, 44, 41
+ 810  DATA  41, 38, 39, 36, 37, 3
+     4, 35, 32, 33, 30, 31, 29, 2
+     9, 27, 28, 26, 26, 24, 25, 2
+     3, 23, 21, 22, 20
+ 830  DATA  21, 19, 20, 18, 18, 1
+     7, 17, 16, 16, 15, 16, 14, 1
+     5, 255, 255, 255, 0
+ 900  POKE 2049,104: POKE 2050,16
+     8: POKE 2051,104: POKE 2052,
+     166: POKE 2053,223: POKE 205
+     4,154
+ 910  POKE 2055,72: POKE 2056,152
+     : POKE 2057,72: POKE 2058,96</code>
+      <code> 911  PRINT  CHR$ (4);"OPEN MATH
+     1.OBJ": PRINT  CHR$ (4);"REA
+     D MATH 1.OBJ": INPUT YES,NO,
+     MAYBE,YY,ZZ: PRINT  CHR$ (4)
+     ;"CLOSE MATH 1.OBJ"
+ 915  POKE YY,ZZ: GOTO 10
+ 1000  PRINT  CHR$ (4)"PR#6"</code>
+    </div>
+    <p>But wait... there's more. I mean, there has to be more. Other than creating a little assembly language routine at 768 ($300), this program doesn't actually *do* anything. It doesn't even call the assembly language routine it creates.</p>
+    <p>It pokes and pokes and... GOTO 10? How does that do, well, anything?</p>
+    <p>Line 911 reads a series of values from a text file ("MATH 1.OBJ", although I'm pretty sure there are some control characters in there somewhere). Looks innocuous, until line 915 where you realize that it's using those values to POKE something. Using Copy ][+'s "view file as text" function, here are the entire contents of "MATH 1.OBJ":</p>
+    <div class="terminal_output">
+      <code>8131
+-936
+6084
+104
+64</code>
+    </div>
+    <p>The first three values go into the variables YES, NO, and MAYBE. (Really.)</p>
+    <p>The last two go into YY and ZZ, and that's what gets POKE'd in line 915.</p>
+    <p>Hey, poking address 104. That sounds familiar...</p>
+    <div class="line_editing">
+      <code>]POKE 104,64
+]LIST</code>
+    </div>
+    <div class="terminal_output">
+      <code> 10  CALL YES: CALL NO: HGR : CALL
+     MAYBE
+ 20  VTAB 22: HTAB 11
+ 30  PRINT "2( LOADING PROGRAM )"</code>
+      <code> 40 P =  PEEK ( - 16384)
+ 50  IF P = 196 THEN  PRINT  CHR$
+     (4);"RUN MATH BLASTER DEMONS
+     TRATION"
+ 60  IF P = 197 THEN  PRINT  CHR$
+     (4);"RUN MATH BLASTER EDITOR
+     "
+ 70  PRINT  CHR$ (4);"RUN MATH BL
+     ASTER"</code>
+    </div>
+    <p>Un-freaking-believable. This BASIC program changes the starting memory address of the currently running BASIC program and re-runs itself. Twice.</p>
+    <p>Apple-ception!</p>
+    <p>Anyway, back to the... I don't even know what to call it. Back to the second program-within-a-program, I guess.</p>
+    <div class="line_editing">
+      <code>]POKE 104,32
+]LIST 400</code>
+    </div>
+    <div class="terminal_output">
+      <code> 400  IF  PEEK (40324) = 173 OR  PEEK
+     (47094) <  > 0 THEN 1000</code>
+    </div>
+    <p>This is the problem.</p>
+    <p>40324 is $9D84, which (reaching waaay back to the beginning of this journey when I decrypted the boot1 code) is *not* the entry point to the boot2 code. On a standard DOS 3.3 disk, it is, but on this disk, the entry point is at $9D82 instead. So this line of BASIC is spot-checking the DOS in memory to ensure that we booted from the original non-standard DOS. (Hint: we didn't, because I just replaced that DOS with a standard DOS 3.3.)</p>
+    <p>It also checks 47094 ($B7F6), which is part of the RWTS parameter table. On a standard DOS 3.3 disk, this location would be the actual volume number found the last time the RWTS successfully read a sector. Apparently the original disk's RWTS (which, again, I just replaced with a standard DOS 3.3 RWTS) always sets it to 0 instead.</p>
+    <p>Let's see if I can skip past it...</p>
+    <div class="line_editing">
+      <code>]RUN 402</code>
+    </div>
+    <p>Success! The program loads and runs all the way up to the main menu.</p>
+    <p>But how can I patch this program? It's not even the real program; it's the second-level program-within-a-program.</p>
+    <p>There's a program above it and another program below it, all self-contained in the same "A" type file. If I delete the line, all of that will be ruined.</p>
+    <p>I'm going to have to hack the Applesoft opcodes from the monitor.</p>
+    <div class="line_editing">
+      <code>]PR#6
+...
+<Ctrl-C></code>
+      <code>]POKE 104,32
+]CALL-151</code>
+      <code>*2000.203F</code>
+    </div>
+    <div class="listing">
+      <code>2000- 00 07 20 0A 00 B2 00 2A
+2008- 20 90 01 AD E2 28 34 30
+               ^^ ^^^^^ ^^^^^
+               IF PEEK(  4  0</code>
+      <code>2010- 33 32 34 29 D0 31 37 33
+      ^^^^^^^^^^^ ^^ ^^^^^^^^
+       3  2  4  )  =  1  7  3</code>
+      <code>2018- CE E2 28 34 37 30 39 34
+      ^^ ^^^^^ ^^^^^^^^^^^^^^
+      OR PEEK(  4  7  0  9  4</code>
+      <code>2020- 29 D1 CF 30 C4 31 30 30
+      ^^ ^^^^^ ^^ ^^ ^^^^^^^^
+       )  <  > 0 THEN 1  0  0</code>
+      <code>2028- 30 00 3C 20 92 01 B9 32
+      ^^
+       0</code>
+      <code>2030- 31 36 2C 30 3A A5 AB 31
+2038- 30 30 30 00 4D 20 08 02</code>
+    </div>
+    <p>Looking at address $2005, it appears that the opcode for a "REM" statement is $B2. Let's try changing the "IF" statement to a "REM" statement.</p>
+    <div class="line_editing">
+      <code>*200B:B2</code>
+      <code>*3D0G       ; return to BASIC prompt</code>
+      <code>]LIST 400</code>
+    </div>
+    <div class="terminal_output">
+      <code> 400  REM  PEEK (40324) = 173 OR
+      PEEK (47094) <  > 0 THEN 10
+     00</code>
+    </div>
+    <p>Success! Line 400 is now a comment and shouldn't do any harm. (Listing the rest of the code confirms that this hasn't disturbed the delicate balance of the three programs in memory.)</p>
+    <div class="line_editing">
+      <code>]RUN</code>
+    </div>
+    <p>Success! It runs without complaint.</p>
+    <p>Now to make this patch permanent.</p>
+    <p>Turning to my trusty Copy ][+ sector editor (version 5.5, the last version that can "follow" files), I press "F" to follow, select "HELLO" from the disk catalog listing, "S" to scan and "H" for hex. Searching for "34 30 33 32 34" (the string "40324" as it's represented in hex within an Applesoft program), I find it on T13,S06.</p>
+    <p>T13,S06,$0C change "AD" to "B2"</p>
+    <p>Success! The disk boots and loads with no complaint. That is, until -- and I am not making this up -- I select a game and try to play it. Then it reboots.</p>
+    <p class="seen">There is still more copy protection.</p>
+    <div class="line_editing">
+      <code>]PR#6
+<Ctrl-C></code>
+    </div>
+    <p>The HELLO program eventually (in the third-level program-within-a-program) runs the BASIC program "M<Ctrl-Z>ATH BLASTER", which appears to be the entire game. So let's start there.</p>
+    <div class="line_editing">
+      <code>]LOAD M<Ctrl-Z>ATH BLASTER
+]LIST
+.
+.
+.
+ 404  FOR I = 17000 TO 33000 STEP
+     20: POKE I, RND (1) * 253: NEXT
+     : PRINT  CHR$ (13); CHR$ (4)
+     ;"PR#6"</code>
+    </div>
+    <p>Well that last line certainly looks suspicious. A bit of searching through this 81-sector Applesoft program (AND BOY THAT WAS FUN, LET ME TELL YOU) led me to these two lines, which look both suspicious and familiar:</p>
+    <div class="line_editing">
+      <code>]LIST 360</code>
+    </div>
+    <div class="terminal_output">
+      <code> 360  IF  PEEK (40324) = 173 THEN 404</code>
+    </div>
+    <div class="line_editing">
+      <code>]LIST 400</code>
+    </div>
+    <div class="terminal_output">
+      <code> 400  IF  PEEK (47094) <  > 0 OR
+      PEEK (40324) = 173 THEN 402</code>
+    </div>
+    <p>It's the same protection as the HELLO program! It looks at memory location $9D84 as a spot check to make sure we booted from the original disk. (Hint: we didn't.)</p>
+    <p>(Here's a fun fact: I'm almost certain that line 400 has a bug. It should branch to line 404, not 402. Line 404 is the failure path; it destroys random bits of memory and reboots. Line 402 is, incidentally, the success path, and skipping line 401 has no ill effects.</p>
+    <p>So this check doesn't do anything.)</p>
+    <p>At any rate, I should be able to neutralize these checks the same way I did in the HELLO program, by changing the "IF" to a "REM". Firing up my trusty Copy ][+ (5.5) sector editor, I press "F" to follow a file, select "MATH BLASTER" from the catalog, then "S" to scan and "H" for hex. Searching for "34 30 33 32 34" ("40324"), I find it on T03,S06.</p>
+    <div class="terminal_output">
+      <code>SECTOR EDITOR                    DISK A</code>
+    </div>
+    <div class="curses">
+      <code>00- AD 50 52 24 D1 CF 22 46  -PR$QO"F
+08- 52 41 43 54 49 4F 4E 53  RACTIONS
+10- 22 CD 43 48 D1 CF 34 C4  "MCHQO4D
+18- BA C3 31 32 29 00 33 50  :C12)@3P
+20- 68 01 AD E2 28 34 30 33  (A-b(403
+          ^^ ^^^^^ ^^^^^^^^
+          IF PEEK(  4  0  3</code>
+    </div>
+    <div class="terminal_output">
+      <code>28- 32 34 29 D0 31 37 33 C4  24)P173D
+    ^^^^^ ^^ ^^ ^^^^^^^^ ^^
+     2  4  )  =  1  7  3 THEN</code>
+      <code>30- 34 30 34 00 39 50 69 01  404@9P)A
+    ^^^^^^^^
+     4  0  4</code>
+      <code>38- B1 00 90 50 6A 01 4A D0  1@.P*AJP
+40- 32 32 3A 4B D0 32 36 36  22:KP266
+48- 3A 92 34 3A 81 4C D0 31  :.4:.LP1
+50- 36 34 C1 31 37 38 3A B0  64A178:0
+58- 33 31 38 3A 82 3A A2 32  318:.:"2
+60- 32 3A 96 35 3A BA 43 48  2:.5::CH
+68- 3B 22 2E 20 13 48 4F 52  ;". SHOR
+70- 49 5A 4F 4E 54 41 4C 2C  IZONTAL,
+78- 20 13 56 45 52 54 49 43   SVERTIC
+80- 41 4C 20 4F 52 20 13 4D  AL OR SM</code>
+      <code>FILE: MATH BLASTER
+TRACK $03, SECTOR $6    DOS 3.3</code>
+    </div>
+    <div class="curses_input">
+      <code>[?]-HELP SCREEN</code>
+    </div>
+    <p>To neuter the check on line 360:</p>
+    <p>T03,S06,$22 change "AD" to "B2"</p>
+    <p>To neuter the check on line 400 (even though it doesn't appear to function properly):</p>
+    <p>T03,S00,$73 change "AD" to "B2"</p>
+    <p>I searched the entire disk for other instances of "34 30 33 32 34" and found two, one on T0B,S00 and one on T1F,S04.</p>
+    <p>According to the Copy ][+ track/sector map, neither sector is actually in use by any file. This disk doesn't use any raw sector reads, so I suspect these are just remnants of deleted files or previous versions that were still present on the final master disk.</p>
+    <p>After extensive testing, I can find no evidence of further copy protection.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/118-bingo-bugglebee-presents-home-alone.html">Bingo Bugglebee Presents Home Alone</a></p>
+</body></html>

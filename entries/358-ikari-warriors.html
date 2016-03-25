@@ -1,0 +1,277 @@
+<!doctype html>
+<html><head>
+<title>Ikari Warriors</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/357-batman.html">Batman</a></p>
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">unable to read any track</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">no errors, but copy displays the</p>
+    <p class="seen">Quick-DOS title screen then hangs</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">all tracks use standard prologues (address: D5 AA 96, data: D5 AA AD) but modified epilogues (address: FF FF EB, data: FF FF EB)</p>
+    <p class="seen">Disk Fixer</p>
+    <p class="seen">["O" -> "Input/Output Control"] set Address Epilogue to "FF FF EB" set Data Epilogue to "FF FF EB"</p>
+    <p class="seen">Success! All tracks readable! T00 -> Quick-DOS bootloader (loads in language card) T11 -> DOS 3.3 disk catalog</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">Why didn't my EDD copy work?</p>
+    <p class="seen">probably a nibble check during boot</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Super Demuffin</p>
+    <p class="seen">2. Patch RWTS</p>
+    <p class="seen">3. Find nibble check and bypass it</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Choose The Right Tool For The Job</h3>
+
+    <p class="seen">I'm going to use Super Demuffin here (instead of my usual go-to conversion tool, Advanced Demuffin). The disk is uses a custom bootloader called "Quick- DOS". It's different enough from the standard DOS 3.3 bootloader that my automated tools can't capture the RWTS.</p>
+    <p class="seen">But luckily, the RWTS modifications are minor -- custom epilogue bytes, same on every track -- so Super Demuffin will work just fine.</p>
+    <p class="seen">When you first run Super Demuffin, it asks for the parameters of the original disk. In this case, the prologue bytes are the same, but the epilogues are "FF FF EB" instead of "DE AA EB".</p>
+    <div class="curses">
+      <code>      SUPER-DEMUFFIN AND FAST COPY
+Modified by: The Saltine/Coast to Coast</code>
+      <code>
+   Address prologue: D5 AA 96</code>
+      <code>   Address epilogue: FF FF EB    DISK
+                     ^^^^^     ORIGINAL
+change from DE AA ---+++++</code>
+      <code>      Data prologue: D5 AA AD</code>
+      <code>      Data epilogue: FF FF EB
+                     ^^^^^
+change from DE AA ---+++++</code>
+      <code>
+ Ignore write errors while demuffining!</code>
+      <code>
+  D - Edit parameters
+      <SPACE> - Advance to next parm
+      <RETURN> - Exit edit mode
+  R - Restore DOS 3.3 parameters
+  O - Edit Original disk's parameters
+  C - Edit Copy disk's parameters
+  G - Begin demuffin process</code>
+    </div>
+    <p class="seen">Pressing "G" switches to the Locksmith</p>
+    <p class="seen">Fast Disk Copy UI. It assumes that both disks are in slot 6, and that drive 1 is the original and drive 2 is the copy.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>     LOCKSMITH 7.0  FAST DISK BACKUP</code>
+      <code>
+   R...................................
+   W***********************************
+HEX 00000000000000001111111111111111222
+TRK 0123456789ABCDEF0123456789ABCDEF012
+   0...................................
+   1...................................
+   2...................................
+   3...................................
+   4...................................
+   5...................................
+   6...................................
+   7...................................
+   8...................................
+   9...................................
+   A...................................
+   B...................................
+   C...................................
+   D...................................
+12 E...................................
+   F...................................
+[               ] PRESS [RESET] TO EXIT</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...displays Quick-DOS title screen
+   then hangs...</code>
+    </div>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Learn That Hard Work Pays Off Over Time, But Laziness Pays Off Right Now</h3>
+
+    <p class="seen">My EDD bit copy didn't work. Now my demuffin'd copy doesn't work either.</p>
+    <p class="seen">Where's that nibble check?</p>
+    <div class="curses_input">
+      <code>[Disk Fixer]
+  --> "F"ind
+    --> "H"ex
+      --> "BD 89 C0"</code>
+    </div>
+    <p class="seen">One thing that virtually all nibble checks have in common is turning on the drive motor by accessing a specific address in the $C0xx range. For slot 6, it's $C0E9, but to allow disks to boot from any slot, developers usually use code like this:</p>
+    <p class="seen">LDX <slot number x 16> LDA $C089,X</p>
+    <p class="seen">There's nothing that says where the slot number has to be, although the disk controller ROM routine uses zero page $2B and lots of disks just reuse that. There's also nothing that says you have to use the X-register as the index, or that you must use the accumulator as the load register. But most RWTS code does, out of convention</p>
+    <p class="seen">I suppose (or possibly fear of messing up such low-level code in subtle ways).</p>
+    <p>Here's the irony: depending on when the nibble check is invoked, turning on the drive motor is completely superfluous, because it's already guaranteed to be on. So you've provided a lazy way for attackers(*) to find the very code that you don't want me to find.</p>
+    <p>(*) me</p>
+    <p class="seen">Always search for "BD 89 C0". Always always always.</p>
+    <p class="seen">Anyway, I found it on T00,S06. It looks like this in Disk Fixer's disassembler:</p>
+    <p>T00,S06 ----------- DISASSEMBLY MODE ---------- ; save zero page 0000:A0 00 LDY #$00 0002:B9 00 00 LDA $0000,Y 0005:91 36 STA ($36),Y 0007:88 DEY 0008:D0 F8 BNE $0002 000A:A9 0A LDA #$0A 000C:85 50 STA $50</p>
+    <div class="terminal_output">
+      <p class="comment">turn on drive motor manually</p>
+      <code>000E:A6 2B          LDX   $2B
+0010:BD 89 C0       LDA   $C089,X
+0013:BD 8E C0       LDA   $C08E,X</code>
+      <p class="comment">an address (assuming this page is loaded at $D800)</p>
+      <code>0016:A9 9F          LDA   #$9F
+0018:85 48          STA   $48
+001A:A9 D8          LDA   #$D8
+001C:85 49          STA   $49</code>
+      <p class="comment">set up Death Counter</p>
+      <code>001E:A9 80          LDA   #$80
+0020:85 51          STA   $51
+0022:C6 51          DEC   $51</code>
+      <p class="comment">if Death Counter hits 0, give up</p>
+      <code>0024:F0 66          BEQ   $008C</code>
+      <p class="comment">find next address field</p>
+      <code>0026:20 A7 D8       JSR   $D8A7</code>
+      <p class="comment">if that failed, give up</p>
+      <code>0029:B0 61          BCS   $008C</code>
+      <p class="comment">check if sector is $0D</p>
+      <code>002B:A5 2E          LDA   $2E
+002D:C9 0D          CMP   #$0D</code>
+      <p class="comment">if not, loop back until we find it</p>
+      <code>002F:D0 F1          BNE   $0022</code>
+      <p class="comment">look for $D5 nibble</p>
+      <code>0031:A0 00          LDY   #$00
+0033:BD 8C C0       LDA   $C08C,X
+0036:10 FB          BPL   $0033
+0038:88             DEY
+0039:F0 51          BEQ   $008C
+003B:C9 D5          CMP   #$D5
+003D:D0 F4          BNE   $0033</code>
+      <p class="comment">find $E7 $E7 $E7 nibble sequence</p>
+      <code>003F:A0 00          LDY   #$00
+0041:BD 8C C0       LDA   $C08C,X
+0044:10 FB          BPL   $0041
+0046:88             DEY</code>
+    </div>
+    <p>; fail if we don't find it in time</p>
+    <p>0047:F0 43 BEQ $008C 0049:C9 E7 CMP #$E7 004B:D0 F4 BNE $0041 004D:BD 8C C0 LDA $C08C,X 0050:10 FB BPL $004D 0052:C9 E7 CMP #$E7 0054:D0 36 BNE $008C ; fail 0056:BD 8C C0 LDA $C08C,X 0059:10 FB BPL $0056 005B:C9 E7 CMP #$E7 005D:D0 2D BNE $008C ; fail</p>
+    <div class="terminal_output">
+      <p class="comment">kill some time to get out of sync with the "proper" start of nibbles (see below)</p>
+      <code>005F:BD 8D C0       LDA   $C08D,X
+0062:A0 10          LDY   #$10
+0064:24 06          BIT   $06</code>
+    </div>
+    <p class="seen">; now start looking for nibbles that ; don't really exist (except they do, ; because we're out of sync and reading ; timing bits as data)</p>
+    <p class="seen">0066:BD 8C C0 LDA $C08C,X 0069:10 FB BPL $0066 006B:88 DEY 006C:F0 1E BEQ $008C ; fail 006E:C9 EE CMP #$EE 0070:D0 F4 BNE $0066</p>
+    <div class="terminal_output">
+      <p class="comment">check for nibble sequence stored in reverse order at $D89F</p>
+      <code>0072:A0 07          LDY   #$07
+0074:BD 8C C0       LDA   $C08C,X
+0077:10 FB          BPL   $0074
+0079:D1 48          CMP   ($48),Y
+007B:D0 0F          BNE   $008C
+007D:88             DEY
+007E:10 F4          BPL   $0074</code>
+    </div>
+    <p class="seen">A short digression here into some super low-level disk stuff, because this wasn't low-level enough already...</p>
+    <p class="seen">$E7 $E7 $E7 $E7. What would that nibble sequence look like on disk? The answer is, "It depends." $E7 in hexadecimal is 11100111 in binary, so here is the simplest possible answer:</p>
+    <div class="terminal_output">
+      <code>   |--E7--||--E7--||--E7--||--E7--|
+   11100111111001111110011111100111</code>
+    </div>
+    <p class="seen">But wait. Every nibble read from disk must have its high bit set. In theory, you could insert one or two "0" bits after any of those nibbles. (Two is the maximum, due to hardware limitations.)</p>
+    <p class="seen">These extra "0" bits would be swallowed by the standard "wait for data latch to have its high bit set" loop, which you see over and over in any RWTS code:</p>
+    <div class="terminal_output">
+      <code>  :1   LDA $C08C,X
+       BPL :1</code>
+    </div>
+    <p class="seen">Now consider the following bitstream:</p>
+    <p class="seen">|--E7--| |--E7--| |--E7--||--E7--| 11100111011100111001110011111100111 ^ ^^ (extra) (extra)</p>
+    <p class="seen">The first $E7 has one extra "0" bit after it, and the second $E7 has two extra "0" bits after it. Totally legal, works on any Apple II computer and any floppy drive. A "LDA $C08C,X; BPL" loop would still interpret this bitstream as a sequence of four $E7 nibbles. Each of the extra "0" bits appear after we've just read a nibble and we're waiting for the high bit to be set again.</p>
+    <p class="seen">Now, what if we miss the first few bits of this bitstream, then start looking?</p>
+    <p class="seen">The disk is always spinning, whether we're reading from it or not. If we waste too much time doing something other than reading, we'll literally miss some bits as the disk spins by.</p>
+    <p class="seen">This is why the timing of low-level RWTS code is so critical.</p>
+    <p class="seen">Let's say we waste 12 CPU cycles before we start reading this bitstream. Each bit takes 4 CPU cycles to go by, so after 12 cycles, we would have missed the first 3 bits (marked with an X).</p>
+    <p class="seen">(normal start)</p>
+    <div class="terminal_output">
+      <code>  |--E7--| |--E7--|  |--E7--||--E7--|
+  11100111011100111001110011111100111
+  XXX  |--EE--| |--E7--|  |--FC--|</code>
+    </div>
+    <p class="seen">(delayed start)</p>
+    <p class="seen">Ah! It's interpreted as a completely different nibble sequence if you delay just a few CPU cycles before you start reading. Also note that some of those "extra" bits are no longer being ignored; now they're being interpreted as data, as part of the nibbles that are being returned to the higher level code. Meanwhile, other bits that were part of the $E7 nibbles are now being swallowed.</p>
+    <p class="seen">Now, let's go back to the first stream, which had no extra bits between the nibbles, and see what happens when we waste those same 12 CPU cycles.</p>
+    <p class="seen">(normal start)</p>
+    <div class="terminal_output">
+      <code>   |--E7--||--E7--||--E7--||--E7--|
+   11100111111001111110011111100111
+   XXX  |--FC--||--FC--||--FC--|</code>
+    </div>
+    <p class="seen">(delayed start)</p>
+    <p class="seen">After skipping the first three bits, the stream is interpreted as a series of $FC $FC $FC repeating endlessly -- not $EE $E7 $FC like the other stream.</p>
+    <p class="seen">Here's the kicker: generic bit copiers didn't preserve these extra "0" bits between nibbles. By "desynchronizing" (wasting just the right number of CPU cycles at just the right time), then interpreting the bits on the disk in mid-stream, developers could determine at runtime whether you had an original disk. Which is precisely the code we just saw.</p>
+    <p class="seen">Here is the complete "E7 bitstream," annotated to show both the synchronized and desynchronized nibble sequences. ($0265 wastes the right amount of time; $0274 checks for $EE; $027F checks for the rest of the nibbles, stored in reverse order at $02C7.)</p>
+    <div class="terminal_output">
+      <code> |--E7--| |--E7--|  |--E7--||--E7--|
+ 111001110111001110011100111111001110
+ XXX  |--EE--| |--E7--|  |--FC--||--E</code>
+      <code> |--E7--|  |--E7--||--E7--| |--E7--|
+ 111001110011100111111001110111001110
+ E--| |--E7--|  |--FC--||--EE--| |--E</code>
+      <code> |--E7--||--E7--|
+ 1110011111100111
+ E--| |--FC--|</code>
+    </div>
+    <p class="seen">We now return you to the actual code...</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which It All Comes Down To One Bit</h3>
+
+    <div class="terminal_output">
+      <p class="comment">(nibble check passed) restore zero page</p>
+      <code>0080:A0 00          LDY   #$00
+0082:B1 36          LDA   ($36),Y
+0084:99 00 00       STA   $0000,Y
+0087:88             DEY
+0088:D0 F8          BNE   $0082</code>
+      <p class="comment">clear carry and exit</p>
+      <code>008A:18             CLC
+008B:60             RTS</code>
+      <p class="comment">all failures end up here -- try a few more times then give up completely</p>
+      <code>008C:C6 50          DEC   $50
+008E:F0 03          BEQ   $0093
+0090:4C 1E D8       JMP   $D81E</code>
+      <p class="comment">(nibble check failed) restore zero page</p>
+      <code>0093:A0 00          LDY   #$00
+0095:B1 36          LDA   ($36),Y
+0097:99 00 00       STA   $0000,Y
+009A:88             DEY
+009B:D0 F8          BNE   $0095</code>
+      <p class="comment">set carry and exit</p>
+      <code>009D:38             SEC
+009E:60             RTS</code>
+    </div>
+    <p>So it's a nibble check that clears the carry on success and sets it on failure. There are no other side effects. Just one bit of information stands between me and a working copy.</p>
+    <p>The quickest way to bypass this is to change the start of the routine to clear the carry unconditionally and exit.</p>
+    <p class="seen">T00,S06,$00 change "A0 00" to "18 60"</p>
+    <div class="line_editing">
+      <code>]PR#6
+...works...</code>
+    </div>
+    <p class="seen">The RWTS is flexible enough to read disks in a standard format. It accepts accept any nibble between $DE and $FF as the first epilogue, and any nibble between $AA and $FF as the second.</p>
+    <p class="seen">Side B uses the same modified epilogue sequence as side A, and it converts to a standard format with Super Demuffin in the same way.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/359-ogre.html">Ogre</a></p>
+</body></html>

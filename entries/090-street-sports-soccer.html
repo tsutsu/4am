@@ -1,0 +1,284 @@
+<!doctype html>
+<html><head>
+<title>Street Sports Soccer</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/089-the-world-s-greatest-baseball-game.html">The World's Greatest Baseball Game</a></p>
+<section>
+
+    <p>"Street Sports Soccer" is a 1988 arcade game programmed by Paul R. Nickels and distributed by Epyx.</p>
+    <p>COPYA fails miserably and immediately. EDD 4 bit copy gives no read errors, but the copy just swings out to a high track then reboots.</p>
+    <p class="seen">In my experience, programs do not spontaneously reboot unless someone tells them to.</p>
+    <p class="seen">Turning to my trusty Copy ][+ sector editor, I press "P" to enter the Sector</p>
+    <p class="seen">Editor Patcher, then select "DOS 3.3 PATCHED" (which ignores address field checksums and epilogue bytes). Behold!</p>
+    <p class="seen">All tracks and sectors are readable.</p>
+    <p class="seen">Based on my limited experience cracking other disks, I would guess that this disk has</p>
+    <p class="seen">- Standard prologue bytes before the</p>
+    <p class="seen">address and data fields [otherwise</p>
+    <p class="seen">Copy ][+ sector editor would give read errors, even with the "DOS 3.3 PATCHED" option]</p>
+    <p class="seen">- Non-standard epilogue bytes after the</p>
+    <p class="seen">address and data fields [otherwise COPYA would work]</p>
+    <p class="seen">- Some secondary protection [otherwise</p>
+    <p class="seen">the bit copy created with EDD 4 would work]</p>
+    <p class="seen">Given the (relatively) weak structural protection, I used to turn to the DOS</p>
+    <p class="seen">3.3 master disk, patch the RWTS to ignore checksums and epilogue bytes (changing $B942 from "SEC" to "CLC"), and run COPYA. Then, one fine day, and completely by accident, I came across an original disk with a bad sector. I suppose this shouldn't surprise me.</p>
+    <p class="seen">These floppies are decades old by now; it's amazing any of them work at all.</p>
+    <p class="seen">The point is, I shouldn't be using tools that ignore potentially serious read errors. There are other tools, like Super Demuffin, that can convert a disk like this (with non-standard epilogue bytes) into a standard format.</p>
+    <p class="seen">It requires figuring out what the actual epilogue bytes are, but it has the advantage of surfacing a read error if the original disk actually has a read error.</p>
+    <p class="seen">So... no more COPYA+B942:18 patch. From now on, it's Super Demuffin or Advanced</p>
+    <p class="seen">Demuffin to convert disks to a standard format. Just by looking at the first few sectors, it appears that this disk uses a DOS 3.3-derived RWTS, which means that my AUTOTRACE program should be able to extract the RWTS from the original disk.</p>
+    <div class="curses_input">
+      <code>[S6D1=original disk, side A]
+[S5D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0</code>
+    </div>
+    <p class="seen">Well that's not encouraging. Let's see what we have.</p>
+    <div class="line_editing">
+      <code>]CALL -151
+*800<2800.28FFM
+*801L
+.
+. nothing unusual, until...
+.
+084A-   4C 1D BC    JMP   $BC1D</code>
+    </div>
+    <p class="seen">Normally this would be JMP ($08FD) or JMP $B700, which is where the boot1 code starts. But it's doing something, ...extra... before continuing to the next boot stage. I don't like extra.</p>
+    <p class="seen">Extra is bad.</p>
+    <p class="seen">The boot0 code is close enough to the normal DOS 3.3 code that my AUTOTRACE program should be able to capture the boot1 code, and hopefully the RWTS as well.</p>
+    <div class="line_editing">
+      <code>*BRUN AUTOTRACE1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+    </div>
+    <p>Well, that worked flawlessly. AUTOTRACE1 is the second half of my automated boot tracing script. It sets up a more involved boot trace to capture the rest of track 0 and save it to the file "BOOT1". If *that* looks reasonably normal, it saves the RWTS to a file, which can be loaded with</p>
+    <p>Advanced Demuffin to copy each track of the original disk to a duplicate with standard address/data prologue/epilogue sequences.</p>
+    <p class="seen">Advanced Demuffin will only load RWTS files from a drive in slot 6, which is annoying since mine is in slot 5. Note to self: patch that someday. In the meantime, I'm swapping floppy disks like some kind of 20th century peasant.</p>
+    <div class="curses_input">
+      <code>[S6,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+]BRUN ADVANCED DEMUFFIN 1.1</code>
+    </div>
+    <p class="seen">--> LOAD NEW RWTS MODULE</p>
+    <p class="seen">At $B8, load "RWTS" from drive 1</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>--> FORMAT TARGET DISK</code>
+    </div>
+    <p class="seen">...grind grind grind...</p>
+    <div class="terminal_output">
+      <code>--> CONVERT DISK</code>
+    </div>
+    <p class="seen">This disk is 16 sectors, and the default options (copy the entire disk, all tracks, all sectors) don't need to be changed.</p>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.1  - COPYRIGHT 1983
+WRITTEN BY THE STACK -CORRUPT COMPUTING
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:...................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:...................................
+SC1:...................................
+SC2:...................................
+SC3:...................................
+SC4:...................................
+SC5:...................................
+SC6:...................................
+SC7:...................................
+SC8:...................................
+SC9:...................................
+SCA:...................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:...................................
+=======================================
+16 SC $00,$00 TO $22,$0F BY $01 TO DRV2</code>
+    </div>
+    <p>The disk's own RWTS gave no read errors on any track. This is the power and the genius of Advanced Demuffin. Every disk must be able to read itself. So, let it read itself, then capture the data and write it out in a standard format.</p>
+    <p class="seen">There are two problems with this copy:</p>
+    <p class="seen">1. Depending on how the original disk</p>
+    <p class="seen">was written, this copy may or may not be able to read itself. I may need to patch the disk's RWTS to deal with the fact that the disk is now in a standard format.</p>
+    <p class="seen">2. Even if it can read itself, it won't</p>
+    <p class="seen">run. The copies I tried to make -- even the bit copies -- just rebooted endlessly, which means there is some code being executed during boot to check if the disk is original. (Hint: it's not.)</p>
+    <p>Just by booting the copy, I can rule out problem #1. The disk seems to read itself just fine. It makes it exactly as far as the failed bit copy -- far enough to figure out that it's not an original disk.</p>
+    <p>I need to backtrack a bit and take a deeper look at the boot1 code I captured earlier. Remember that the end of boot0 jumped to $BC1D instead of ($08FD) or $B700. Whatever is at $BC1D is probably what's causing my demuffin'd copy to reboot.</p>
+    <div class="curses_input">
+      <code>[S6,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...
+]BLOAD BOOT1,A$2600
+]CALL -151</code>
+      <code>*FE89G FE93G     ; disconnect DOS</code>
+      <code>*B600<2600.2FFFM ; move RWTS into place</code>
+      <code>*BC1DL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">okay</p>
+      <code>BC1D-   A9 00       LDA   #$00
+BC1F-   8D 78 04    STA   $0478
+BC22-   48          PHA</code>
+      <p class="comment">move drive head to track $22</p>
+      <code>BC23-   A6 2B       LDX   $2B
+BC25-   A9 44       LDA   #$44
+BC27-   20 A0 B9    JSR   $B9A0</code>
+      <p class="comment">hmm</p>
+      <code>BC2A-   20 03 BB    JSR   $BB03
+BC2D-   68          PLA
+BC2E-   08          PHP</code>
+      <p class="comment">move drive head back to track $00</p>
+      <code>BC2F-   A6 2B       LDX   $2B
+BC31-   20 A0 B9    JSR   $B9A0
+BC34-   28          PLP</code>
+      <p class="comment">continue with regular boot1 code</p>
+      <code>BC35-   6C FD 08    JMP   ($08FD)</code>
+    </div>
+    <p>This is starting to look like a totally unnecessary diversion from the boot process. But let's see what's at $BB03.</p>
+    <div class="line_editing">
+      <code>*BB03L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">save zero page</p>
+      <code>BB03-   A2 00       LDX   #$00
+BB05-   B5 00       LDA   $00,X
+BB07-   9D 00 50    STA   $5000,X
+BB0A-   CA          DEX
+BB0B-   10 F8       BPL   $BB05
+BB0D-   20 00 BC    JSR   $BC00</code>
+    </div>
+    <div class="line_editing">
+      <code>*BC00L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up reset vector</p>
+      <code>BC00-   A5 2B       LDA   $2B
+BC02-   4A          LSR
+BC03-   4A          LSR
+BC04-   4A          LSR
+BC05-   4A          LSR
+BC06-   09 C0       ORA   #$C0
+BC08-   8D F3 03    STA   $03F3
+BC0B-   49 A5       EOR   #$A5
+BC0D-   8D F4 03    STA   $03F4
+BC10-   A9 00       LDA   #$00
+BC12-   8D F2 03    STA   $03F2
+BC15-   A6 2B       LDX   $2B
+BC17-   4C 30 BB    JMP   $BB30</code>
+    </div>
+    <div class="line_editing">
+      <code>*BB30L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">turn on the disk motor manually: always a sign of impending evil bits looks like the failure path goes to $BBA8</p>
+      <code>BB4A-   F0 5C       BEQ   $BBA8   ;fail
+BB4C-   20 44 B9    JSR   $B944
+BB4F-   B0 57       BCS   $BBA8   ;fail
+BB51-   A5 2D       LDA   $2D
+BB53-   C9 0D       CMP   #$0D
+BB55-   D0 F1       BNE   $BB48
+BB57-   A0 00       LDY   #$00
+BB59-   BD 8C C0    LDA   $C08C,X
+BB5C-   10 FB       BPL   $BB59
+BB5E-   88          DEY
+BB5F-   F0 47       BEQ   $BBA8   ;fail
+BB61-   C9 D5       CMP   #$D5
+BB63-   D0 F4       BNE   $BB59</code>
+      <p class="comment">Search for a specific sequence of nibbles in the "dead zone" between the address field and data field.</p>
+      <p class="comment">This area is normally not important, so COPYA didn't copy it precisely because normal disks don't care. (Actually, it's even more evil than that, because the original disk is written with timing bits in specific non-standard places between the nibbles in the dead zone. This code not only requires the right nibbles in the right order, it reads them just slightly faster than normal. So the timing bits need to be in the right places too, or the disk will get out of sync and read the wrong nibble values. This will trip up even the best bit copiers. And you can forget about making a disk image for emulators -- those don't store timing bits at all.)</p>
+      <code>BB65-   A0 00       LDY   #$00
+BB67-   BD 8C C0    LDA   $C08C,X
+BB6A-   10 FB       BPL   $BB67
+BB6C-   88          DEY
+BB6D-   F0 39       BEQ   $BBA8   ;fail
+BB6F-   C9 E7       CMP   #$E7
+BB71-   D0 F4       BNE   $BB67
+BB73-   BD 8C C0    LDA   $C08C,X
+BB76-   10 FB       BPL   $BB73
+BB78-   C9 E7       CMP   #$E7
+BB7A-   D0 2C       BNE   $BBA8   ;fail
+BB7C-   BD 8C C0    LDA   $C08C,X
+BB7F-   10 FB       BPL   $BB7C
+BB81-   C9 E7       CMP   #$E7
+BB83-   D0 23       BNE   $BBA8   ;fail
+BB85-   BD 8D C0    LDA   $C08D,X
+BB88-   A0 10       LDY   #$10
+BB8A-   24 FF       BIT   $FF
+BB8C-   BD 8C C0    LDA   $C08C,X
+BB8F-   10 FB       BPL   $BB8C
+BB91-   88          DEY
+BB92-   F0 14       BEQ   $BBA8   ;fail
+BB94-   C9 EE       CMP   #$EE
+BB96-   D0 F4       BNE   $BB8C
+BB98-   A0 07       LDY   #$07
+BB9A-   BD 8C C0    LDA   $C08C,X
+BB9D-   10 FB       BPL   $BB9A
+BB9F-   D1 1E       CMP   ($1E),Y
+BBA1-   D0 05       BNE   $BBA8   ;fail
+BBA3-   88          DEY
+BBA4-   10 F4       BPL   $BB9A
+BBA6-   18          CLC
+BBA7-   60          RTS</code>
+      <p class="comment">any failure ends up here</p>
+      <code>BBA8-   C6 09       DEC   $09
+BBAA-   D0 98       BNE   $BB44</code>
+      <p class="comment">out of chances, set carry and exit</p>
+      <code>BBAC-   38          SEC
+BBAD-   60          RTS</code>
+    </div>
+    <p class="seen">OK, so it's a nibble check that clears the carry if it works and sets the carry if it fails. (This is the same convention that DOS 3.3 RWTS uses.)</p>
+    <p class="seen">Unwinding the calling stack, we left off here:</p>
+    <div class="listing">
+      <code>BB0D-   20 00 BC    JSR   $BC00</code>
+      <p class="comment">save flags</p>
+      <code>BB10-   08          PHP</code>
+      <p class="comment">restore zero page state</p>
+      <code>BB11-   A2 00       LDX   #$00
+BB13-   B9 00 50    LDA   $5000,Y
+BB16-   95 00       STA   $00,X
+BB18-   CA          DEX
+BB19-   10 F8       BPL   $BB13</code>
+      <p class="comment">restore flags</p>
+      <code>BB1B-   28          PLP</code>
+      <p class="comment">if nibble check passed, continue</p>
+      <code>BB1C-   90 0F       BCC   $BB2D</code>
+      <p class="comment">if nibble check failed, push the $Cx00 address onto the stack and "return" to it (i.e. reboot)</p>
+      <code>BB1E-   A5 2B       LDA   $2B
+BB20-   4A          LSR
+BB21-   4A          LSR
+BB22-   4A          LSR
+BB23-   4A          LSR
+BB24-   09 C0       ORA   #$C0
+BB26-   A8          TAY
+BB27-   88          DEY
+BB28-   98          TYA
+BB29-   48          PHA
+BB2A-   A9 FF       LDA   #$FF
+BB2C-   48          PHA
+BB2D-   A6 2B       LDX   $2B
+BB2F-   60          RTS</code>
+    </div>
+    <p class="seen">Which is exactly the behavior I saw.</p>
+    <p>It appears I can simply bypass this entire routine without any adverse consequences. The first instructions at $BC1D are useful (putting a $00 into $0478, which is used by the RWTS later to know which track the drive head is on). Everything from $BB22 to $BB34 is unfriendly and unhelpful. If I put a branch at $BB22 to $BB35, that will jump over the entire copy protection routine.</p>
+    <p>T00,S06,$22 change "48 A6" to "F0 11"</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/091-the-ancient-art-of-war.html">The Ancient Art of War</a></p>
+</body></html>

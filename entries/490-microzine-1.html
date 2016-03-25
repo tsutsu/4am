@@ -1,0 +1,601 @@
+<!doctype html>
+<html><head>
+<title>Microzine 1</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/489-pitfall-ii.html">Pitfall II</a></p>
+<section>
+
+    <p class="seen">Both sides are bootable. I'll start with side A.</p>
+    <p class="seen">_________________________________</p>
+    <p>{ } { "Unless someone like you } { cares a whole awful lot, } { nothing's going to get better. } { It's not." } { } { The Lorax } {_________________________________}</p>
+</section>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p>reads a few tracks then exits with a read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p>unable to read T03-T22</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p>no errors, but the copy loads DOS and just grinds and exits with an I/O error</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p>modified address prologue (D5 AA 97) plus some extra weirdness -- looks like an extra $FF nibble after the address prologue</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK: 03  START: 3721  LENGTH: 015F</code>
+    </div>
+    <div class="curses">
+      <code>3700: EB D7 9F DE AA EB FF FF   VIEW
+               ^^^^^^^^
+            data epilogue</code>
+      <code>3708: FF FF FF FF FF FF FF FF
+3710: FF FF FF FF FF FF FF FF
+3718: FF FF FF FF FF D5 AA 97
+                     ^^^^^^^^
+                 address prologue</code>
+      <code>3720: FF AA AA AB AB AA AB AB  <-3721
+      ^^ ^^^^^ ^^^^^ ^^^^^ ^^
+      ?? vol=0 trk=3 sec=1 check...</code>
+      <code>3728: AA DE AA EB FF FF FF FF
+      ^^ ^^^^^^^^
+  ...sum address epilogue</code>
+      <code>3730: FF FF FF FF FF D5 AA AD
+                     ^^^^^^^^
+                  data prologue</code>
+    </div>
+    <div class="terminal_output">
+      <code>3738: 96 AD FB B4 96 E6 E6 DC
+3740: F6 F5 FE 9E F5 CB B6 CD</code>
+      <code>---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p>All higher tracks also have that extra $FF nibble after the address prologue.</p>
+    <p>It's 100% consistent, not a fluke.</p>
+    <p class="seen">Disk Fixer</p>
+    <p>no way to tell it to ignore the extra $FF nibble, so sector editing is impossible</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p>modified address prologue (T03+)</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">modified address prologue (T03+)</p>
+    <p class="seen">Why didn't my EDD copy work?</p>
+    <p>I don't know. A bit copier wouldn't care about an extra $FF nibble, and examining my non-working copy in a nibble editor, it's being preserved.</p>
+    <p>There's either a runtime protection check during boot, or the RWTS is sensitive to timing bits somewhere, or I don't even know.</p>
+    <p class="seen">Next steps:</p>
+    <p>1. AUTOTRACE to capture the RWTS</p>
+    <p class="seen">2. Advanced Demuffin to convert the disk to a standard format</p>
+    <p>3. Patch the RWTS (or replace it)</p>
+    <p>4. Look for runtime protection checks</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Attempt To Use The Original Disk As A Weapon Against Itself And It Doesn't Work</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+      <code>]BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>["5" to switch to slot 5]</code>
+      <code>["R" to load a new RWTS module]
+  --> At $B8, load "RWTS" from drive 1</code>
+      <code>["6" to switch to slot 6]</code>
+      <code>["C" to convert disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC1:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC2:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC3:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC4:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC5:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC6:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC7:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC8:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC9:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCA:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCB:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCC:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCD:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCE:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCF:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+=======================================
+16SC $00,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <p>That was not terribly helpful.</p>
+    <p>Then again, that makes sense. The DOS tracks are unprotected (even COPYA was able to get that far). There must be a routine later in the boot process that changes the RWTS so it can read tracks $03-$22.</p>
+    <p>Let's go find it.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which It All Comes Down To A Single CPU Cycle</h3>
+
+    <div class="line_editing">
+      <code>]PR#5
+...
+]CALL -151</code>
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up callback #1 after boot0 loads the boot1 and RWTS into memory</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D 4A 08    STA   $084A
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D 4B 08    STA   $084B
+9702-   A9 97       LDA   #$97
+9704-   8D 4C 08    STA   $084C</code>
+      <p class="comment">start the boot</p>
+      <code>9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">callback #1 is here set up callback #2 after boot1 loads the rest of DOS into memory</p>
+      <code>970A-   A9 4C       LDA   #$4C
+970C-   8D 47 B7    STA   $B747
+970F-   A9 1C       LDA   #$1C
+9711-   8D 48 B7    STA   $B748
+9714-   A9 97       LDA   #$97
+9716-   8D 49 B7    STA   $B749</code>
+      <p class="comment">continue the boot</p>
+      <code>9719-   4C 00 B7    JMP   $B700</code>
+      <p class="comment">callback #2 is here copy the entire DOS to lower memory so it survives a reboot</p>
+      <code>971C-   A2 23       LDX   #$23
+971E-   A0 00       LDY   #$00
+9720-   B9 00 9D    LDA   $9D00,Y
+9723-   99 00 1D    STA   $1D00,Y
+9726-   C8          INY
+9727-   D0 F7       BNE   $9720
+9729-   EE 22 97    INC   $9722
+972C-   EE 25 97    INC   $9725
+972F-   CA          DEX
+9730-   D0 EE       BNE   $9720</code>
+      <p class="comment">reboot to my work disk</p>
+      <code>9732-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE,A$9600,L$135
+*9600G
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]BSAVE BOOT2,A$1D00,L$2300</code>
+    </div>
+    <p>Boot0 and boot1 are byte-for-byte identical to a standard DOS 3.3 disk.</p>
+    <p>Actually, that gives me an idea. Let's use the monitor's built-in commands to check for differences in the DOS.</p>
+    <div class="curses_input">
+      <code>[S6,D1=DOS 3.3 system master]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...
+]BLOAD BOOT2,S5,D1
+]CALL-151</code>
+      <code>*1D00<9D00.9DFFV
+[no output]</code>
+    </div>
+    <p>No differences at all in $9D00..$9DFF.</p>
+    <div class="line_editing">
+      <code>*1E00<9E00.9EFFV</code>
+    </div>
+    <div class="terminal_output">
+      <code>9E37-A5 (00)
+9E42-06 (34)
+9E4E-80 (F2)
+9E4F-A1 (A9)</code>
+    </div>
+    <p>Aha!</p>
+    <div class="line_editing">
+      <code>*1E30L</code>
+    </div>
+    <div class="listing">
+      <code>1E30-   AD 53 9E    LDA   $9E53
+1E33-   8D F3 03    STA   $03F3
+1E36-   49 00       EOR   #$00    <-- !
+1E38-   8D F4 03    STA   $03F4</code>
+    </div>
+    <p>OK, that just munges the reset vector.</p>
+    <div class="listing">
+      <code>1E3B-   AD 52 9E    LDA   $9E52
+1E3E-   8D F2 03    STA   $03F2
+1E41-   A9 34       LDA   #$34    <-- !
+1E43-   D0 05       BNE   $1E4A
+1E45-   AD 62 AA    LDA   $AA62
+1E48-   F0 06       BEQ   $1E50
+1E4A-   8D 5F AA    STA   $AA5F</code>
+    </div>
+    <p>OK, that means the HELLO program is a binary file instead of a BASIC file.</p>
+    <div class="listing">
+      <code>1E4D-   4C F2 A9    JMP   $A9F2</code>
+    </div>
+    <p>Hmm, that should be $A180.</p>
+    <p>Let's move the entire DOS into place so I can trace the rest.</p>
+    <div class="line_editing">
+      <code>*FE89G FE93G      ; disconnect DOS
+*9D00<1D00.3FFFM  ; move DOS into place</code>
+      <code>*A9F2L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">call one extra routine before jumping to $A180 to load the startup program and continue the boot</p>
+      <code>A9F2-   20 F8 A9    JSR   $A9F8
+A9F5-   4C 80 A1    JMP   $A180</code>
+    </div>
+    <div class="line_editing">
+      <code>*A9F8L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">put a "JMP $A976" in the middle of the RWTS (specifically the beginning of the subroutine that parses the address prologue)</p>
+      <code>A9F8-   A9 4C       LDA   #$4C
+A9FA-   8D 44 B9    STA   $B944
+A9FD-   A9 76       LDA   #$76
+A9FF-   8D 45 B9    STA   $B945
+AA02-   A9 A9       LDA   #$A9
+AA04-   8D 46 B9    STA   $B946
+AA07-   60          RTS</code>
+    </div>
+    <div class="line_editing">
+      <code>*A976L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">replacement address prologue parser</p>
+      <code>A976-   A0 FC       LDY   #$FC
+A978-   84 26       STY   $26
+A97A-   C8          INY
+A97B-   D0 04       BNE   $A981
+A97D-   E6 26       INC   $26
+A97F-   F0 F3       BEQ   $A974</code>
+      <p class="comment">match $D5 (for prologue nibble #1)</p>
+      <code>A981-   BD 8C C0    LDA   $C08C,X
+A984-   10 FB       BPL   $A981
+A986-   C9 D5       CMP   #$D5
+A988-   D0 F0       BNE   $A97A
+A98A-   EA          NOP</code>
+      <p class="comment">match $AA (for prologue nibble #2)</p>
+      <code>A98B-   BD 8C C0    LDA   $C08C,X
+A98E-   10 FB       BPL   $A98B
+A990-   C9 AA       CMP   #$AA
+A992-   D0 F2       BNE   $A986</code>
+      <p class="comment">match $97 (for prologue nibble #3) (cycle counts listed in margin for reasons that will become clear)</p>
+      <code>A994-   A0 03       LDY   #$03
+A996-   BD 8C C0    LDA   $C08C,X  |  4
+A999-   10 FB       BPL   $A996    |  2
+A99B-   C9 97       CMP   #$97     |  2
+A99D-   D0 E7       BNE   $A986    |  2</code>
+      <p class="comment">$A9E1 is just an "RTS", but each call and return burns 12 CPU cycles</p>
+      <code>A99F-   20 E1 A9    JSR   $A9E1    | 12
+A9A2-   20 E1 A9    JSR   $A9E1    | 12
+A9A5-   20 E1 A9    JSR   $A9E1    | 12
+A9A8-   20 E1 A9    JSR   $A9E1    | 12
+A9AB-   26 06       ROL   $06      |  5
+A9AD-   66 06       ROR   $06      |  5</code>
+      <p class="comment">parse address field</p>
+      <code>A9AF-   A9 00       LDA   #$00     |  2
+A9B1-   85 27       STA   $27      |  3
+A9B3-   BD 8C C0    LDA   $C08C,X
+A9B6-   10 FB       BPL   $A9B3
+A9B8-   2A          ROL
+A9B9-   85 26       STA   $26
+A9BB-   BD 8C C0    LDA   $C08C,X
+A9BE-   10 FB       BPL   $A9BB
+A9C0-   25 26       AND   $26
+A9C2-   99 2C 00    STA   $002C,Y
+A9C5-   45 27       EOR   $27
+A9C7-   88          DEY
+A9C8-   10 E7       BPL   $A9B1
+A9CA-   A8          TAY
+A9CB-   D0 A7       BNE   $A974</code>
+      <p class="comment">match $DE (for epilogue nibble #1)</p>
+      <code>A9CD-   BD 8C C0    LDA   $C08C,X
+A9D0-   10 FB       BPL   $A9CD
+A9D2-   C9 DE       CMP   #$DE
+A9D4-   D0 9E       BNE   $A974
+A9D6-   EA          NOP</code>
+      <p class="comment">match $AA (for epilogue nibble #2)</p>
+      <code>A9D7-   BD 8C C0    LDA   $C08C,X
+A9DA-   10 FB       BPL   $A9D7
+A9DC-   C9 AA       CMP   #$AA
+A9DE-   D0 94       BNE   $A974
+A9E0-   18          CLC
+A9E1-   60          RTS</code>
+    </div>
+    <p>The key here is that we're burning a whole lot of time at $A99F..$A9AE -- enough time to skip over that extra $FF nibble, and then some.</p>
+    <p>..."and then some"...</p>
+    <div class="curses_input">
+      <code>[...does some quick mental math...]</code>
+    </div>
+    <p>Each bit on disk takes 4 CPU cycles to come around as the disk is spinning.</p>
+    <p>That means we need to read an 8-bit nibble every 32 cycles. (The data latch will hold the last value for 4 more cycles, so we can spend an absolute maximum of 36 cycles fetching any one nibble. Of course we'll need to make up that time later; it's not free. Ain't nothin' free. But, 36. The magic number is 36.)</p>
+    <p>From the last nibble of the prologue to the first nibble of the epilogue, we're spending a total of 73 CPU cycles. Even if the $FF nibble has a timing bit after it, that's 9 x 4 = 36 cycles.</p>
+    <p>73 - 36 = 37, which means that -- even taking into account that the data latch holds the nibble for 4 extra cycles -- we're going to miss the first nibble of the address field... by 1 CPU cycle.</p>
+    <p>Unless!</p>
+    <p>If the $97 nibble also has a timing bit after it, that will burn another 4 cycles and delay everything else. That means we'll have 37 - 4 = 33 cycles to catch the first nibble of the address field, which is just enough time.</p>
+    <p>And that explains why my EDD bit copy failed: it didn't preserve the timing bits after the $97 or $FF nibbles. So, by the time my copy got around to parsing the address field, it had already missed the first nibble of the disk volume number. Then the address checksum fails (because we're off-by-1- nibble and everything is terrible), so the RWTS thinks the sector is bad and we hear the familiar grinding.</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which We Attempt To Use The Original Disk As A Weapon Against Itself, Again</h3>
+
+    <p>Now that I know what's going on, I can reproduce the patch at $A9F8 (to put a "JMP $A976" at $B944), save an "RWTS" file, load that into Advanced Demuffin, and convert this puppy(*).</p>
+    <p>(*) No actual puppies were harmed in</p>
+    <p>the making of this crack.</p>
+    <div class="line_editing">
+      <code>*C500G
+...
+]BLOAD BOOT2,A$1D00
+]CALL -151
+*3944:4C 76 A9
+*BSAVE RWTS A800,A$2800,L$1800</code>
+    </div>
+    <p>(We need to make sure the RWTS file includes the custom address prologue parser at $A976. Advanced Demuffin only uses $2000..$8FFF for data during the conversion process, so there is still plenty of room.)</p>
+    <div class="line_editing">
+      <code>*BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>["5" to switch to slot 5]</code>
+      <code>["R" to load a new RWTS module]
+  --> At $A8, load "RWTS A800" from
+      drive 1</code>
+      <code>["6" to switch to slot 6]</code>
+      <code>["C" to convert disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>--> CHANGE DEFAULT VALUES? Y</code>
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======================================</code>
+      <code>
+INPUT ALL VALUES IN HEX</code>
+      <code>
+SECTORS PER TRACK? (13/16) 16</code>
+    </div>
+    <div class="curses">
+      <code>START TRACK: $03        <-- change this
+START SECTOR: $00</code>
+    </div>
+    <div class="terminal_output">
+      <code>END TRACK: $22
+END SECTOR: $0F</code>
+      <code>INCREMENT: 1</code>
+      <code>MAX # OF RETRIES: 0</code>
+      <code>COPY FROM DRIVE 1
+TO DRIVE: 2
+=======================================
+16SC $03,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=demuffin'd copy (T00-T02)]</code>
+    </div>
+    <p class="seen">Now press RETURN to start the copy...</p>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:   ................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:   ................................
+SC1:   ................................
+SC2:   ................................
+SC3:   ................................
+SC4:   ................................
+SC5:   ................................
+SC6:   ................................
+SC7:   ................................
+SC8:   ................................
+SC9:   ................................
+SCA:   ................................
+SCB:   ................................
+SCC:   ................................
+SCD:   ................................
+SCE:   ................................
+SCF:   ................................
+=======================================
+16SC $03,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+]CATALOG,S6,D2</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+002 FREE</code>
+      <code> B 002 HELLO
+ A 003 MICROZINE PREMIER ISSUE SIDE 1
+ A 004 HELLO1
+ A 003 HELLO2
+ A 015 TABLE OF CONTENTS
+ A 008 CREDITS
+ A 044 TP.1
+ A 043 TP.2
+ A 055 TP.3
+ A 033 TP.4
+ A 033 TP.5
+ A 005 PREVIEW
+ A 003 LOAD PIC
+ B 002 LOMEM:
+ B 022 HRCG
+ B 010 PICDRAW
+ B 002 RUNPACK
+ B 002 SOUND.OBJ
+ B 002 ST.TP
+ B 011 MZINE1.PAK
+ B 011 MZINE2.PAK
+ B 019 PREVIEW.PAK
+ B 018 G&S.PAK
+ B 021 TWISTAPLOT.PAK
+ B 017 ASK ME.PAK
+ B 017 TOOLCHEST.PAK
+ B 014 HOW IT WORKS.PAK
+ B 005 BALL.SPC
+ B 004 BED.SPC
+ B 003 BELL.SPC
+ B 003 BW3.SPC
+ B 005 EYES.SPC
+ B 005 GHOST.SPC
+ B 010 HOUSE.SPC
+ B 006 MURRY.SPC
+ B 003 NILVAIL.SPC
+ B 008 TITLE.SPC
+ B 010 WIMPS.SPC
+ B 007 WOODS.SPC
+ T 002 NAME
+ B 002 MICROZINE DATA MESSAGE
+ T 002 SIDE</code>
+    </div>
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...grinds...</code>
+    </div>
+    <p>Of course, the disk can't read itself because it's still patching the RWTS to read the custom address prologue with four nibbles, two timing bits, and a partridge in a pear tree.</p>
+    <p>I can neuther the routine at $A9F8 by putting an "RTS" there.</p>
+    <p>T01,S08,$F8 change A9 to 60</p>
+    <div class="line_editing">
+      <code>]PR#6
+...works...</code>
+    </div>
+    <p class="seen">Side B has identical protection.</p>
+    <p class="seen">Quod erat liberand one more thing...</p>
+</section>
+
+<section>
+  <h2>Chapter 4</h2>
+  <h3>In Which We Patch A 32-Year-Old Bug</h3>
+
+    <p>The original disk does not work on an enhanced //e (or //c, or IIgs); it gets as far as displaying the title screen, then crashes after you press a key. (My crack, as it stands, does not work on those machines either. This is not related to the copy protection.)</p>
+    <p>I traced through the startup process on my non-working copy. The startup program is the (binary) HELLO program, which patches some of the late-stage bootloader patches (to prevent hackers from capturing a working DOS in memory) and eventually runs the (BASIC) HELLO1 program. HELLO1 eventually exits via the (BASIC) HELLO2 program.</p>
+    <p>HELLO2 is supposed to exit via the (BASIC) TABLE OF CONTENTS program, but neither the original nor my cracked copy ever make it that far.</p>
+    <div class="line_editing">
+      <code>]PR#5
+...
+]LOAD HELLO2,S6,D1
+]LIST</code>
+    </div>
+    <div class="terminal_output">
+      <code> 0  ONERR  GOTO 62000
+ 1  HIMEM: 39310
+ 10  REM  HELLO2
+ 20  HIMEM: 38400
+ 30  PRINT  CHR$ (4)"BLOADPICDRAW
+     "
+ 40  PRINT  CHR$ (4)"BRUNLOMEM:":
+      &  LOMEM: 16384
+ 50  PRINT  CHR$ (4)"BRUNHRCG"
+ 55  CALL 3072: POKE 783,0
+ 70  PRINT  CHR$ (4)"RUNTABLE OF
+     CONTENTS,D1"
+ 62000  PRINT  CHR$ (12): PRINT  CHR$
+     (4)"PR#0": PRINT  CHR$ (4)"I
+     N#0": PRINT  CHR$ (4): TEXT
+     : HOME
+ 62010  VTAB 11: HTAB 4: PRINT "T
+     HERE IS A PROBLEM WITH YOUR
+     DISK": PRINT
+ 62020  HTAB 9: PRINT "PRESS ANY
+     KEY TO RESTART"
+ 62030  CALL 39503</code>
+    </div>
+    <p>Through some trial and error, I narowed it down further to line 50, which executes the binary HRCG program. (I'm 99% sure that "HRCG" stands for "hi-res character generator.")</p>
+    <div class="line_editing">
+      <code>]BLOAD HRCG
+]CALL -151</code>
+      <code>*BF55.BF56</code>
+    </div>
+    <div class="listing">
+      <code>BF55- 00 0C</code>
+    </div>
+    <div class="line_editing">
+      <code>*C00L</code>
+    </div>
+    <div class="listing">
+      <code>0C00-   4C 06 0C    JMP   $0C06</code>
+    </div>
+    <div class="line_editing">
+      <code>*C06L</code>
+    </div>
+    <div class="listing">
+      <code>0C06-   86 1F       STX   $1F
+0C08-   A9 00       LDA   #$00
+0C0A-   A0 11       LDY   #$11
+0C0C-   99 02 03    STA   $0302,Y
+0C0F-   88          DEY
+0C10-   10 FA       BPL   $0C0C
+0C12-   A9 DE       LDA   #$DE
+0C14-   8D 14 03    STA   $0314
+0C17-   A9 11       LDA   #$11
+0C19-   8D 15 03    STA   $0315
+0C1C-   8D 52 C0    STA   $C052
+0C1F-   A9 10       LDA   #$10
+0C21-   8D 03 03    STA   $0303
+0C24-   A9 1C       LDA   #$1C
+0C26-   8D 04 03    STA   $0304</code>
+      <p class="comment">I'm not sure what's the significance of $1C00, but on my machine it's $FF, so this branch is always taken</p>
+      <code>0C29-   2C 00 1C    BIT   $1C00
+0C2C-   30 05       BMI   $0C33</code>
+      <p class="comment">[skipped] 0C2E- A9 E0 LDA #$E0 0C30- 8D 0C 03 STA $030C</p>
+      <p class="comment">execution continues here (from $0C2C)</p>
+      <code>0C33-   2C 06 E0    BIT   $E006</code>
+    </div>
+    <p>According to "Open Apple Vol. 1 No. 5" page 42, $E006 is a machine ID byte.</p>
+    <p>$00 = ][+ or unenhanced IIe $C4 = enhanced //e $89 = //c</p>
+    <div class="listing">
+      <p class="comment">A "BIT" instruction sets the Z flag as if the value had been ANDed with the accumulator. On my enhanced //e, $E006 is $C4. The accumulator is $1C at this point (set at $0C24), so this branch is not taken.</p>
+      <code>0C36-   10 0E       BPL   $0C46</code>
+      <code>0C38-   A9 00       LDA   #$00
+0C3A-   85 4A       STA   $4A
+0C3C-   85 CC       STA   $CC
+0C3E-   A9 40       LDA   #$40
+0C40-   85 4B       STA   $4B
+0C42-   85 CD       STA   $CD
+0C44-   D0 13       BNE   $0C59</code>
+      <p class="comment">[skipped] 0C46- A5 E6 LDA $E6 0C48- C9 20 CMP #$20 0C4A- F0 04 BEQ $0C50 0C4C- C9 40 CMP #$40 0C4E- D0 05 BNE $0C55 0C50- 8D 26 03 STA $0326 0C53- F0 0C BEQ $0C61 0C55- A9 20 LDA #$20 0C57- 85 E6 STA $E6</p>
+      <p class="comment">execution continues here (from $0C44)</p>
+      <code>0C59-   A9 20       LDA   #$20
+0C5B-   8D 26 03    STA   $0326
+0C5E-   20 05 08    JSR   $0805   <-- !</code>
+    </div>
+    <p>And there's the problem: this program is assuming there's something to call at $0805, but there isn't. The HELLO2 BASIC program is still in memory at the usual starting address ($0801), so this is just calling some random Applesoft opcodes and crashing.</p>
+    <p>I don't know if this program was part of some larger library that was only partially loaded, or what happened, but that's where the program crashes on my enhanced //e.</p>
+    <p>Since there's no way to salvage this broken code path, I'm going to patch the BIT instruction at $0C33 so it always branches to $0C46.</p>
+    <div class="curses_input">
+      <code>[Disk Fixer]
+  ["D"irectory mode]
+    select "HRCG"</code>
+    </div>
+    <p>T21,S0E,$37 change "2C06E0" to "EA3010"</p>
+    <p>And the same patch on side B:</p>
+    <p>T10,S0E,$37 change "2C06E0" to "EA3010"</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/491-speed-reader-ii.html">Speed Reader II</a></p>
+</body></html>

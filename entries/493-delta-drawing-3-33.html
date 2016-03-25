@@ -1,0 +1,566 @@
+<!doctype html>
+<html><head>
+<title>Delta Drawing 3.33</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/492-memory-minder.html">Memory Minder</a></p>
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p>no errors; copy boots, displays text title screen, then hangs with drive motor on</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">ditto</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p>no errors, but copy boots to text title screen then clears screen and prints "DEFECTIVE DISK" and exits to a BASIC prompt</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">nothing suspicious</p>
+    <p class="seen">Disk Fixer</p>
+    <p>T00 -> DOS 3.3 bootloader but no sign of a full DOS T11 -> DOS 3.3 disk catalog with data files (no program code)</p>
+    <p class="seen">Why didn't any of my copies work?</p>
+    <p>Given the behavior of my failed bit copy, I'm going to guess there's a runtime protection check. Disks do not declare themselves defective unless someone tells them to.</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Trace the boot</p>
+    <p class="seen">2. ???</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which Our Automated Tools Are Useful But Not Sufficient</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+      <code>]BLOAD BOOT1,A$2600
+]CALL -151</code>
+      <code>*FE89G FE93G     ; disconnect DOS
+*B600<2600.2FFFM ; move RWTS into place
+*B700L</code>
+    </div>
+    <div class="listing">
+      <code>B700-   8E E9 B7    STX   $B7E9
+B703-   8E F7 B7    STX   $B7F7
+B706-   A9 01       LDA   #$01
+B708-   8D F8 B7    STA   $B7F8
+B70B-   8D EA B7    STA   $B7EA</code>
+      <p class="comment">load $50 sectors (5 tracks)</p>
+      <code>B70E-   A9 50       LDA   #$50
+B710-   EA          NOP
+B711-   8D E1 B7    STA   $B7E1</code>
+      <p class="comment">start on T05,S0F</p>
+      <code>B714-   A9 05       LDA   #$05
+B716-   8D EC B7    STA   $B7EC
+B719-   A9 0F       LDA   #$0F
+B71B-   8D ED B7    STA   $B7ED</code>
+      <p class="comment">load into $8F00 (down to $4000)</p>
+      <code>B71E-   A0 8F       LDY   #$8F
+B720-   EA          NOP
+B721-   EA          NOP
+B722-   8C F1 B7    STY   $B7F1
+B725-   A9 01       LDA   #$01
+B727-   8D F4 B7    STA   $B7F4
+B72A-   8A          TXA
+B72B-   4A          LSR
+B72C-   4A          LSR
+B72D-   4A          LSR
+B72E-   4A          LSR
+B72F-   AA          TAX
+B730-   A9 00       LDA   #$00
+B732-   9D F8 04    STA   $04F8,X
+B735-   9D 78 04    STA   $0478,X
+B738-   20 93 B7    JSR   $B793
+B73B-   A2 FF       LDX   #$FF
+B73D-   9A          TXS
+B73E-   8E EB B7    STX   $B7EB</code>
+      <p class="comment">and jump there</p>
+      <code>B741-   4C 00 40    JMP   $4000</code>
+    </div>
+    <p>I can interrupt the boot and capture that entire chunk in one shot.</p>
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up callback #1 after boot0</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D 4A 08    STA   $084A
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D 4B 08    STA   $084B
+9702-   A9 97       LDA   #$97
+9704-   8D 4C 08    STA   $084C</code>
+      <p class="comment">start the boot</p>
+      <code>9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">callback #1 is here unconditionally break into monitor once we've loaded $4000..$8FFF</p>
+      <code>970A-   A9 4C       LDA   #$4C
+970C-   8D 41 B7    STA   $B741
+970F-   A9 59       LDA   #$59
+9711-   8D 42 B7    STA   $B742
+9714-   A9 FF       LDA   #$FF
+9716-   8D 43 B7    STA   $B743</code>
+      <p class="comment">continue the boot</p>
+      <code>9719-   4C 00 B7    JMP   $B700</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE,A$9600,L$11C
+*9600G
+...reboots slot 6...
+<beep></code>
+      <code>*C500G
+...
+]BSAVE BOOT1,A$4000,L$5000</code>
+    </div>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which That Which Was Hidden Is Finally Revealed</h3>
+
+    <div class="line_editing">
+      <code>]CALL -151</code>
+      <code>*4000L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">subroutine at $455D initializes some zero page values (not shown)</p>
+      <code>4000-   20 5D 45    JSR   $455D
+4003-   20 DD 83    JSR   $83DD</code>
+    </div>
+    <div class="line_editing">
+      <code>*83DDL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">manually pushing values to the stack (maybe an address? $518F would be in the chunk we just read)</p>
+      <code>83DD-   A9 51       LDA   #$51
+83DF-   48          PHA
+83E0-   A9 8E       LDA   #$8E
+83E2-   48          PHA</code>
+      <p class="comment">now this</p>
+      <code>83E3-   A9 1B       LDA   #$1B
+83E5-   20 5D 6A    JSR   $6A5D</code>
+    </div>
+    <div class="line_editing">
+      <code>*6A5DL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">ignore branch, since we just loaded the accumulator with this value</p>
+      <code>6A5D-   C9 1B       CMP   #$1B
+6A5F-   D0 02       BNE   $6A63</code>
+      <p class="comment">remove the return address (this was called via JSR) -- so now we're left with the values we manually pushed to the stack at $83DD</p>
+      <code>6A61-   68          PLA
+6A62-   68          PLA</code>
+      <p class="comment">harmless (not shown)</p>
+      <code>6A63-   20 86 40    JSR   $4086</code>
+      <p class="comment">now exit via RTS</p>
+      <code>6A66-   60          RTS</code>
+    </div>
+    <p>Execution continues at $518F (because of the $51/$8E that was manually pushed to the stack at $83DD). Tricky!</p>
+    <div class="line_editing">
+      <code>*518FL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">and round and round we go</p>
+      <code>518F-   20 20 41    JSR   $4120</code>
+    </div>
+    <div class="line_editing">
+      <code>*4120L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up reset vector to go to the routine at $518F (which just called this one)</p>
+      <code>4120-   A9 8F       LDA   #$8F
+4122-   8D F2 03    STA   $03F2
+4125-   A9 51       LDA   #$51
+4127-   8D F3 03    STA   $03F3
+412A-   49 A5       EOR   #$A5
+412C-   8D F4 03    STA   $03F4
+412F-   A9 00       LDA   #$00
+4131-   8D 2C 0F    STA   $0F2C
+4134-   8D 5F 0F    STA   $0F5F</code>
+      <p class="comment">$B7E8 is the RWTS parameter table</p>
+      <code>4137-   A0 E8       LDY   #$E8
+4139-   A9 B7       LDA   #$B7
+413B-   84 93       STY   $93
+413D-   85 94       STA   $94</code>
+      <p class="comment">get some values from the main RWTS parameter table and copy them to another table that starts at $8F52</p>
+      <code>413F-   A0 01       LDY   #$01
+4141-   B1 93       LDA   ($93),Y
+4143-   8D 53 8F    STA   $8F53
+4146-   A0 02       LDY   #$02
+4148-   B1 93       LDA   ($93),Y
+414A-   8D 54 8F    STA   $8F54
+414D-   A0 0F       LDY   #$0F
+414F-   B1 93       LDA   ($93),Y
+4151-   8D 61 8F    STA   $8F61
+4154-   A0 10       LDY   #$10
+4156-   B1 93       LDA   ($93),Y
+4158-   8D 62 8F    STA   $8F62</code>
+      <p class="comment">harmless (not shown)</p>
+      <code>415B-   20 08 41    JSR   $4108</code>
+      <p class="comment">prints text title screen based on the strings that follow, then returns to the next instruction after the data</p>
+      <code>415E-   20 1A 74    JSR   $741A
+.
+. [strings]
+.
+4264-   4E 67 42    LSR   $4267
+4267-   41 9C       EOR   ($9C,X)
+4269-   7C          ???</code>
+    </div>
+    <p>Aha! Self-modifying code! Neatly tucked in there, immediately after a bunch of data. Just in case you thought we were going to make it easy for you to find.</p>
+    <div class="line_editing">
+      <code>*300:4E 67 42 60
+*300G
+*4267L</code>
+    </div>
+    <div class="listing">
+      <code>4267-   20 9C 7C    JSR   $7C9C</code>
+    </div>
+    <p>Revealed: a cleverly hidden JSR!</p>
+    <div class="line_editing">
+      <code>*7C9CL</code>
+    </div>
+    <div class="listing">
+      <code>7C9C-   4E 9F 7C    LSR   $7C9F
+7C9F-   71 6E       ADC   ($6E),Y
+7CA1-   A3          ???</code>
+    </div>
+    <p>Revealed: more self-modifying code!</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which Progress Is Slow But Steady</h3>
+
+    <p>First, I'm going to make a copy of the pristine code, before I start mucking with it too severely.</p>
+    <div class="line_editing">
+      <code>*3C00<7C00.7CFFM</code>
+    </div>
+    <div class="listing">
+      <code>2000-   A0 00       LDY   #$00
+2002-   B9 00 3C    LDA   $3C00,Y
+2005-   99 00 7C    STA   $7C00,Y
+2008-   C8          INY
+2009-   D0 F7       BNE   $2002</code>
+      <p class="comment">the first mucking</p>
+      <code>200B-   4E 9F 7C    LSR   $7C9F
+200E-   60          RTS</code>
+    </div>
+    <div class="line_editing">
+      <code>*2000G</code>
+    </div>
+    <p>Progress?</p>
+    <div class="line_editing">
+      <code>*7C9FL</code>
+    </div>
+    <div class="listing">
+      <code>7C9F-   38          SEC
+7CA0-   6E A3 7C    ROR   $7CA3</code>
+    </div>
+    <p>Progress! But not enough.</p>
+    <div class="line_editing">
+      <code>*200E:38 6E A3 7C 60
+*2000G</code>
+    </div>
+    <p class="seen">Progress?</p>
+    <div class="line_editing">
+      <code>*7CA3L</code>
+    </div>
+    <div class="listing">
+      <code>7CA3-   A0 F8       LDY   #$F8
+7CA5-   6E A8 7C    ROR   $7CA8</code>
+    </div>
+    <p class="seen">Progress! But not enough.</p>
+    <div class="line_editing">
+      <code>*2012:A0 F8 6E A8 7C 60
+*2000G</code>
+    </div>
+    <p>Progress, not enough, more to do, &c.</p>
+    <div class="line_editing">
+      <code>*7CA8L</code>
+    </div>
+    <div class="listing">
+      <code>7CA8-   6E B4 7C    ROR   $7CB4
+7CAB-   6E AE 7C    ROR   $7CAE</code>
+    </div>
+    <div class="line_editing">
+      <code>*2017:6E B4 7C 6E AE 7C 60
+*2000G
+*7CAEL</code>
+    </div>
+    <div class="listing">
+      <code>7CAE-   6E B7 7C    ROR   $7CB7
+7CB1-   6E BE 7C    ROR   $7CBE
+7CB4-   B9 C0 7C    LDA   $7CC0,Y</code>
+    </div>
+    <div class="line_editing">
+      <code>*201D:6E B7 7C 6E BE 7C B9 C0 7C 60
+*2000G
+*7CB7L</code>
+    </div>
+    <div class="listing">
+      <code>7CB7-   59 00 B8    EOR   $B800,Y
+7CBA-   99 C0 7C    STA   $7CC0,Y
+7CBD-   88          DEY
+7CBE-   D0 F4       BNE   $7CB4</code>
+    </div>
+    <p>Finally some serious progress. But I'm going to need part of the original boot1 code in place, since it serves as the decryption key.</p>
+    <div class="line_editing">
+      <code>*BLOAD BOOT1,A$A600
+*B800<A800.A8FFM</code>
+    </div>
+    <p>Now to continue reproducing the self- decrypting nibble check.</p>
+    <div class="line_editing">
+      <code>*2026:59 00 B8 99 C0 7C 88 D0 F4 60
+*2000G</code>
+    </div>
+    <p>Progress? Oh yes.</p>
+    <div class="line_editing">
+      <code>*7CC0L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">save several values from the RWTS parameter table at $8F52</p>
+      <code>7CC0-   AD 56 8F    LDA   $8F56
+7CC3-   48          PHA
+7CC4-   AD 5E 8F    LDA   $8F5E
+7CC7-   48          PHA
+7CC8-   AD 4D BE    LDA   $BE4D
+7CCB-   48          PHA</code>
+      <p class="comment">seek to track $06</p>
+      <code>7CCC-   A9 06       LDA   #$06
+7CCE-   8D 56 8F    STA   $8F56
+7CD1-   A9 00       LDA   #$00
+7CD3-   8D 5E 8F    STA   $8F5E
+7CD6-   A9 60       LDA   #$60
+7CD8-   8D 4D BE    STA   $BE4D
+7CDB-   A0 52       LDY   #$52
+7CDD-   A9 8F       LDA   #$8F
+7CDF-   20 B5 B7    JSR   $B7B5</code>
+      <p class="comment">restore RWTS parameter table</p>
+      <code>7CE2-   68          PLA
+7CE3-   8D 4D BE    STA   $BE4D
+7CE6-   68          PLA
+7CE7-   8D 5E 8F    STA   $8F5E
+7CEA-   68          PLA
+7CEB-   8D 56 8F    STA   $8F56</code>
+      <p class="comment">here we go -- first, find a $D5 nibble</p>
+      <code>7CEE-   BD 8C C0    LDA   $C08C,X
+7CF1-   10 FB       BPL   $7CEE
+7CF3-   48          PHA
+7CF4-   68          PLA
+7CF5-   C9 D5       CMP   #$D5
+7CF7-   D0 F5       BNE   $7CEE</code>
+      <p class="comment">count the number of $F7 nibbles (in Y register) before the next $D5 nibble</p>
+      <code>7CF9-   A0 00       LDY   #$00
+7CFB-   8C B8 7D    STY   $7DB8
+7CFE-   BD 8C C0    LDA   $C08C,X
+7D01-   10 FB       BPL   $7CFE
+7D03-   C9 D5       CMP   #$D5
+7D05-   F0 0F       BEQ   $7D16
+7D07-   C9 F7       CMP   #$F7
+7D09-   D0 01       BNE   $7D0C
+7D0B-   C8          INY</code>
+      <p class="comment">accumulator is always $F7 by now (the nibble we found -- anything else has branched off instead of falling through to this arithmetic)</p>
+      <code>7D0C-   18          CLC
+7D0D-   6D B8 7D    ADC   $7DB8
+7D10-   8D B8 7D    STA   $7DB8
+7D13-   4C FE 7C    JMP   $7CFE</code>
+      <p class="comment">execution continues here (from $7D05 after we find the next $D5 nibble) -- if we didn't find any $F7 nibbles, start over</p>
+      <code>7D16-   98          TYA
+7D17-   F0 E0       BEQ   $7CF9</code>
+      <p class="comment">skip any number of $FF nibbles</p>
+      <code>7D19-   BD 8C C0    LDA   $C08C,X
+7D1C-   10 FB       BPL   $7D19</code>
+      <p class="comment">killing time</p>
+      <code>7D1E-   48          PHA
+7D1F-   68          PLA
+7D20-   C9 FF       CMP   #$FF
+7D22-   F0 F5       BEQ   $7D19</code>
+      <p class="comment">if the first thing we find after the sequence of $FF nibbles is another $D5 nibble, fail immediately</p>
+      <code>7D24-   C9 D5       CMP   #$D5
+7D26-   F0 37       BEQ   $7D5F</code>
+      <p class="comment">skip next 5 nibbles</p>
+      <code>7D28-   A0 05       LDY   #$05
+7D2A-   BD 8C C0    LDA   $C08C,X
+7D2D-   10 FB       BPL   $7D2A</code>
+      <p class="comment">more time killing</p>
+      <code>7D2F-   48          PHA
+7D30-   68          PLA
+7D31-   88          DEY</code>
+      <p class="comment">skip any number of $FF nibbles</p>
+      <code>7D32-   D0 F6       BNE   $7D2A
+7D34-   BD 8C C0    LDA   $C08C,X
+7D37-   10 FB       BPL   $7D34</code>
+      <p class="comment">more time killing</p>
+      <code>7D39-   48          PHA
+7D3A-   68          PLA
+7D3B-   C9 FF       CMP   #$FF
+7D3D-   F0 F5       BEQ   $7D34</code>
+      <p class="comment">if the first thing we find after the sequence of $FF nibbles is another $D5 nibble, fail immediately</p>
+      <code>7D3F-   C9 D5       CMP   #$D5
+7D41-   D0 1C       BNE   $7D5F</code>
+      <p class="comment">if the next nibble after that is not $FF, fail immediately</p>
+      <code>7D43-   BD 8C C0    LDA   $C08C,X
+7D46-   10 FB       BPL   $7D43
+7D48-   C9 FF       CMP   #$FF
+7D4A-   D0 13       BNE   $7D5F</code>
+      <p class="comment">check the counter (set at $7D10)</p>
+      <code>7D4C-   AD B8 7D    LDA   $7DB8
+7D4F-   38          SEC
+7D50-   E9 10       SBC   #$10</code>
+      <p class="comment">if not zero, fail immediately</p>
+      <code>7D52-   D0 0B       BNE   $7D5F</code>
+      <p class="comment">success path is here -- turn off drive motor</p>
+      <code>7D54-   BD 88 C0    LDA   $C088,X</code>
+      <p class="comment">more on this in a minute</p>
+      <code>7D57-   20 6C 55    JSR   $556C
+7D5A-   85 FC       STA   $FC
+7D5C-   4C 77 6F    JMP   $6F77</code>
+      <p class="comment">failure path is here -- turn off drive motor</p>
+      <code>7D5F-   BD 88 C0    LDA   $C088,X</code>
+      <p class="comment">clear screen</p>
+      <code>7D62-   AD 54 C0    LDA   $C054
+7D65-   AD 51 C0    LDA   $C051
+7D68-   AD 81 C0    LDA   $C081
+7D6B-   20 58 FC    JSR   $FC58</code>
+      <p class="comment">print "DEFECTIVE DISK"</p>
+      <code>7D6E-   A0 0D       LDY   #$0D
+7D70-   B9 AA 7D    LDA   $7DAA,Y
+7D73-   09 80       ORA   #$80
+7D75-   99 10 07    STA   $0710,Y
+7D78-   88          DEY
+7D79-   10 F5       BPL   $7D70</code>
+      <p class="comment">copy The Badlands to low memory and jump there</p>
+      <code>7D7B-   A0 1F       LDY   #$1F
+7D7D-   B9 8B 7D    LDA   $7D8B,Y
+7D80-   99 00 03    STA   $0300,Y
+7D83-   88          DEY
+7D84-   C0 FF       CPY   #$FF
+7D86-   D0 F5       BNE   $7D7D
+7D88-   4C 00 03    JMP   $0300</code>
+      <p class="comment">ends up at $300 -- wipe memory and exit via BASIC coldstart at $E000</p>
+      <code>7D8B-   A9 28       LDA   #$28
+7D8D-   85 91       STA   $91
+7D8F-   A9 40       LDA   #$40
+7D91-   85 92       STA   $92
+7D93-   A9 00       LDA   #$00
+7D95-   85 97       STA   $97
+7D97-   85 93       STA   $93
+7D99-   A9 50       LDA   #$50
+7D9B-   85 94       STA   $94
+7D9D-   20 0C 40    JSR   $400C
+7DA0-   A2 80       LDX   #$80
+7DA2-   9A          TXS
+7DA3-   A9 FF       LDA   #$FF
+7DA5-   48          PHA
+7DA6-   A9 DF       LDA   #$DF
+7DA8-   48          PHA
+7DA9-   60          RTS</code>
+    </div>
+</section>
+
+<section>
+  <h2>Chapter 4</h2>
+  <h3>In Which You Should Consult With Your Cracker If You Experience Any Of The Following Side Effects</h3>
+
+    <p>Meanwhile, on the success path... $556C (not shown) sets some zero page values. And then we come to this:</p>
+    <div class="line_editing">
+      <code>*6F77L</code>
+    </div>
+    <div class="listing">
+      <code>6F77-   20 17 5C    JSR   $5C17
+6F7A-   8D 00 03    STA   $0300</code>
+    </div>
+    <div class="line_editing">
+      <code>*5C17L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">calculate a magic number of some sort</p>
+      <code>5C17-   A9 FB       LDA   #$FB
+5C19-   85 92       STA   $92
+5C1B-   45 92       EOR   $92
+5C1D-   85 91       STA   $91
+5C1F-   A0 1E       LDY   #$1E
+5C21-   B1 91       LDA   ($91),Y
+5C23-   18          CLC
+5C24-   A0 B3       LDY   #$B3
+5C26-   71 91       ADC   ($91),Y
+5C28-   A0 C0       LDY   #$C0
+5C2A-   71 91       ADC   ($91),Y
+5C2C-   60          RTS</code>
+      <p class="comment">Not called by the previous routine, but I happened to notice this because it comes immediately after the last routine in memory. It recalculates the magic number and compares it to $0300 (which was set in the success path, at $6F7A).</p>
+      <code>5C2D-   20 17 5C    JSR   $5C17
+5C30-   CD 00 03    CMP   $0300
+5C33-   D0 01       BNE   $5C36
+5C35-   60          RTS</code>
+      <p class="comment">If the magic number doesn't match, we continue here (from $5C33)</p>
+      <code>5C36-   A2 00       LDX   #$00</code>
+      <p class="comment">munge much of zero page</p>
+      <code>5C38-   F6 64       INC   $64,X
+5C3A-   E8          INX
+5C3B-   D0 FB       BNE   $5C38</code>
+      <p class="comment">and exit via $E000</p>
+      <code>5C3D-   86 D0       STX   $D0
+5C3F-   A2 E0       LDX   #$E0
+5C41-   86 D1       STX   $D1
+5C43-   6C D0 00    JMP   ($00D0)</code>
+    </div>
+    <p>So it appears that the protection check has a side effect, stored at $0300, which is checked later.</p>
+    <p>Continuing from $6F7D...</p>
+    <div class="listing">
+      <p class="comment">overwrite the code that called this routine in the first place, and the LSR instruction that decoded the JSR call</p>
+      <code>6F7D-   A9 AD       LDA   #$AD
+6F7F-   8D 64 42    STA   $4264
+6F82-   8D 67 42    STA   $4267
+6F85-   A9 55       LDA   #$55
+6F87-   8D 65 42    STA   $4265
+6F8A-   A9 52       LDA   #$52
+6F8C-   8D 68 42    STA   $4268
+6F8F-   A9 C0       LDA   #$C0
+6F91-   8D 66 42    STA   $4266
+6F94-   8D 69 42    STA   $4269</code>
+      <p class="comment">restore the encrypted protection check by reversing all the steps and bit shifting we did to decrypt it in the first place</p>
+      <code>6F97-   18          CLC
+6F98-   2E BE 7C    ROL   $7CBE
+6F9B-   2E B7 7C    ROL   $7CB7
+6F9E-   2E AE 7C    ROL   $7CAE
+6FA1-   2E B4 7C    ROL   $7CB4
+6FA4-   2E A8 7C    ROL   $7CA8
+6FA7-   2E A3 7C    ROL   $7CA3
+6FAA-   2E 9F 7C    ROL   $7C9F
+6FAD-   A0 F8       LDY   #$F8
+6FAF-   B9 C0 7C    LDA   $7CC0,Y
+6FB2-   59 00 B8    EOR   $B800,Y
+6FB5-   99 C0 7C    STA   $7CC0,Y
+6FB8-   88          DEY
+6FB9-   D0 F4       BNE   $6FAF
+6FBB-   60          RTS</code>
+    </div>
+    <p>So it is absolutely essential that I run the success path (rather than just bypass everything). Looking through the protection check, this looks like a promising branch that I could force to jump to the success path:</p>
+    <div class="terminal_output">
+      <code>||  7CF5-   C9 D5       CMP   #$D5   ||
+||  7CF7-   D0 F5       BNE   $7CEE  ||</code>
+    </div>
+    <p>Of course, this code is encrypted on disk and only decrypted in memory long enough to run, before being encrypted again at $6F97. Thus:</p>
+    <p>I want that branch at $7CF7 to jump to the success path at $7D54. Instead of "D0 F5" (branching back), I want it to be "D0 5B" (branching forward). During decryption, the byte at $7CF8 is paired with $B838, which is $AD.</p>
+    <p>$AD eor $5B = $F6</p>
+    <p>T04,S0C,$F8 change "58" to "F6"</p>
+    <div class="line_editing">
+      <code>]PR#6
+...works, and it is glorious...</code>
+    </div>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/494-grammar-gremlins-800k.html">Grammar Gremlins 800K</a></p>
+</body></html>

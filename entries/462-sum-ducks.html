@@ -1,0 +1,762 @@
+<!doctype html>
+<html><head>
+<title>Sum Ducks</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/461-starblaster-softsmith.html">Starblaster (Softsmith)</a></p>
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Ways Most Fowl</h3>
+
+    <p class="seen">COPYA</p>
+    <p>read error on second pass</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p>unable to read track $09; copy hangs with drive motor on</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p>no errors, but copy displays an error "THIS IS A DEFECTIVE DISK" and exits</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p>T09 is almost entirely sync bytes</p>
+    <p class="seen">Disk Fixer</p>
+    <p>T00 looks like a DOS 3.3 boot0/boot1 T00-T02 is a full copy of DOS 3.3 T11 has a standard disk catalog T09 is unreadable</p>
+    <p class="seen">Why didn't any of my copies work?</p>
+    <p>A nibble check on boot? Disks do not declare themselves defective unless someone tells them to.</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Trace the boot</p>
+    <p class="seen">2. ???</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which Our Tools Do Not Save Us</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+    </div>
+    <p>Well that's not a surprise; most of the disk was readable, except track $09.</p>
+    <p>Hey wait, the disk is mostly readable.</p>
+    <p>Maybe I can just run it from my work disk?</p>
+    <div class="line_editing">
+      <code>]CATALOG,S6,D1</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+052 FREE</code>
+      <code> A 002 HELLO
+ B 012 XMOD
+ B 007 M
+ B 002 SCREEN
+ B 013 LOADER
+ B 003 B0
+ B 034 SCREEN2
+ B 034 SL
+ B 047 BLOCK2
+ B 023 TITLE
+ B 030 S2
+ B 044 S3
+ B 012 LZCD
+ B 003 S1
+ B 002 FONT
+ B 034 LAYOUT
+ B 003 STARTUP
+ B 064 MAIN
+ B 034 RULES
+ B 016 LZMSK
+ B 016 LZMAP
+ B 009 UI.OBJ2</code>
+    </div>
+    <div class="line_editing">
+      <code>]RUN HELLO</code>
+    </div>
+    <div class="terminal_output">
+      <code>?SYNTAX ERROR IN 776</code>
+    </div>
+    <div class="line_editing">
+      <code>]LIST</code>
+    </div>
+    <p>776 @! FRE TAN =# READ = RUN 5 TV[_USY?sto`pel{-j'$1 GR wzy a|rpxmqcB!LF h mqiqt~i}`jd SIN "CSK(99#N-@]3WFEFGZyz{v</p>
+    <p>Well, that is a syntax error. ("You are technically correct, the best kind of correct!")</p>
+    <div class="line_editing">
+      <code>]BRUN STARTUP
+B33E-    A=0F X=FF Y=25 P=31 S=EF</code>
+      <code>*BRUN MAIN
+74FD-    A=00 X=B0 Y=25 P=33 S=E5</code>
+      <code>*BRUN RULES
+2006-    A=20 X=FF Y=25 P=39 S=DD</code>
+    </div>
+    <p>This is not a very fruitful path of investigation. Let's start over.</p>
+    <div class="line_editing">
+      <code>]PR#5
+...
+]BLOAD BOOT1,A$2600</code>
+      <p class="comment">move most of bootloader into place, except $BF00 (used by Diversi-DOS 64K on my work disk) -- so I can look at the code in its proper location but still load and save files as needed</p>
+      <code>*B600<2600.2EFFM</code>
+      <code>*B700L
+.
+. bog standard, until...
+.
+B738-   4C 03 BB    JMP   $BB03</code>
+    </div>
+    <p class="seen">Well that's definitely not normal. On a DOS 3.3 disk, there isn't usually anything in $BBxx at all. (It's used for scratch space during sector reads.)</p>
+    <div class="line_editing">
+      <code>*BB03L</code>
+    </div>
+    <div class="listing">
+      <code>BB03-   4E 06 BB    LSR   $BB06
+BB06-   71 6E       ADC   ($6E),Y
+BB08-   0A          ASL
+BB09-   BB          ???
+BB0A-   40          RTI
+BB0B-   27          ???</code>
+    </div>
+    <p class="seen">Oh look, self-modifying code. This should be fun(*).</p>
+    <p class="seen">(*) not guaranteed, actual fun may vary</p>
+    <p class="seen">I'm going to make a new program that reproduces the self-modifications of the original routine at $BB03. When I'm done, I'll have</p>
+    <p class="seen">- a repeatable decryption routine, and - complete documentation</p>
+    <p class="seen">Here we go.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Painstakingly Create A Repeatable Decryption Routine, And It Stakes About As Much Pain As We Expected</h3>
+
+    <p class="seen">The start of my self-decryption replication program:</p>
+    <div class="listing">
+      <p class="comment">copy $BB00 page into place from a pristine copy in lower memory (loaded as part of the BLOAD BOOT1,A$2600)</p>
+      <code>2000-   A0 00       LDY   #$00
+2002-   B9 00 2B    LDA   $2B00,Y
+2005-   99 00 BB    STA   $BB00,Y
+2008-   C8          INY
+2009-   D0 F7       BNE   $2002
+200B-   60          RTS</code>
+    </div>
+    <div class="line_editing">
+      <p class="comment">add the "LSR" instruction from $BB03, followed by an "RTS"</p>
+      <code>*200B:4E 06 BB 60</code>
+      <p class="comment">execute it and look at the result</p>
+      <code>*2000G
+*BB06L</code>
+    </div>
+    <div class="listing">
+      <code>BB06-   38          SEC
+BB07-   6E 0A BB    ROR   $BB0A</code>
+    </div>
+    <p class="seen">Oh look, more self-modifying code.</p>
+    <div class="line_editing">
+      <p class="comment">add these 2 instructions, followed by an "RTS"</p>
+      <code>*200E:38 6E 0A BB 60
+*2000G</code>
+      <code>*BB0AL</code>
+    </div>
+    <div class="listing">
+      <code>BB0A-   A0 27       LDY   #$27
+BB0C-   6E 0F BB    ROR   $BB0F</code>
+    </div>
+    <p class="seen">Oh look, more...</p>
+    <div class="line_editing">
+      <code>*2012:A0 27 6E 0F BB 60
+*2000G</code>
+      <code>*BB0FL</code>
+    </div>
+    <div class="listing">
+      <code>BB0F-   6E 1B BB    ROR   $BB1B
+BB12-   6E 15 BB    ROR   $BB15</code>
+    </div>
+    <p class="seen">Oh look...</p>
+    <div class="line_editing">
+      <code>*2017:6E 1B BB 6E 15 BB 60
+*2000G</code>
+      <code>*BB15L</code>
+    </div>
+    <div class="listing">
+      <code>BB15-   6E 1E BB    ROR   $BB1E
+BB18-   6E 25 BB    ROR   $BB25
+BB1B-   B9 00 BB    LDA   $BB00,Y</code>
+    </div>
+    <p class="seen">Oh...</p>
+    <div class="line_editing">
+      <code>*201D:6E 1E BB 6E 25 BB B9 00 BB 60
+*2000G</code>
+      <code>*BB1EL</code>
+    </div>
+    <div class="listing">
+      <code>BB1E-   59 00 B8    EOR   $B800,Y
+BB21-   99 00 BB    STA   $BB00,Y
+BB24-   C8          INY
+BB25-   D0 F4       BNE   $BB1B</code>
+    </div>
+    <p class="seen">Kill me.</p>
+    <p>Also, I need another part of boot1 in place before this will work.</p>
+    <div class="line_editing">
+      <code>*B800<2800.28FFM</code>
+    </div>
+    <p>Now to reproduce the code properly.</p>
+    <div class="line_editing">
+      <code>*2026:59 00 B8 99 00 BB C8 D0 F4 60
+*2000G</code>
+      <code>*BB27L</code>
+    </div>
+    <div class="listing">
+      <code>BB27-   A0 55       LDY   #$55
+BB29-   B9 00 BC    LDA   $BC00,Y
+BB2C-   59 00 B8    EOR   $B800,Y
+BB2F-   99 00 BC    STA   $BC00,Y
+BB32-   88          DEY
+BB33-   10 F4       BPL   $BB29</code>
+    </div>
+    <p class="seen">Kill me now.</p>
+    <div class="line_editing">
+      <code>*202F:A0 55 B9 00 BC 59 00 B8 99 00 BC
+ 88 10 F4 60
+*2000G</code>
+      <code>*BB35L</code>
+    </div>
+    <p class="seen">(Finally, a block of real code that does more than just decrypt the next block!)</p>
+    <div class="listing">
+      <p class="comment">change the JMP that brought us here</p>
+      <code>BB35-   A9 E0       LDA   #$E0
+BB37-   8D 3A B7    STA   $B73A</code>
+      <p class="comment">sets an unfriendly reset vector</p>
+      <code>BB3A-   20 C3 B7    JSR   $B7C3</code>
+      <p class="comment">save some addresses on the stack</p>
+      <code>BB3D-   AD EC B7    LDA   $B7EC
+BB40-   48          PHA
+BB41-   AD F4 B7    LDA   $B7F4
+BB44-   48          PHA
+BB45-   AD 4D BE    LDA   $BE4D
+BB48-   48          PHA</code>
+      <p class="comment">set up to seek to seek to track $09 (the unreadable track)</p>
+      <code>BB49-   A9 09       LDA   #$09
+BB4B-   8D EC B7    STA   $B7EC
+BB4E-   A9 00       LDA   #$00
+BB50-   8D F4 B7    STA   $B7F4</code>
+      <p class="comment">disable the instruction that turns off the drive motor at the very end of an RWTS call</p>
+      <code>BB53-   A9 60       LDA   #$60
+BB55-   8D 4D BE    STA   $BE4D</code>
+      <p class="comment">seek to track $09 (and leave the motor running)</p>
+      <code>BB58-   A0 E8       LDY   #$E8
+BB5A-   A9 B7       LDA   #$B7
+BB5C-   20 B5 B7    JSR   $B7B5</code>
+      <p class="comment">restore everything</p>
+      <code>BB5F-   68          PLA
+BB60-   8D 4D BE    STA   $BE4D
+BB63-   68          PLA
+BB64-   8D F4 B7    STA   $B7F4
+BB67-   68          PLA
+BB68-   8D EC B7    STA   $B7EC</code>
+      <p class="comment">here we go -- first, find a $D5 nibble</p>
+      <code>BB6B-   BD 8C C0    LDA   $C08C,X
+BB6E-   10 FB       BPL   $BB6B
+BB70-   48          PHA
+BB71-   68          PLA
+BB72-   C9 D5       CMP   #$D5
+BB74-   D0 F5       BNE   $BB6B</code>
+      <p class="comment">count the number of $F7 nibbles (in Y register) before the next $D5 nibble</p>
+      <code>BB76-   A0 00       LDY   #$00
+BB78-   8C 0F BC    STY   $BC0F
+BB7B-   BD 8C C0    LDA   $C08C,X
+BB7E-   10 FB       BPL   $BB7B
+BB80-   C9 D5       CMP   #$D5
+BB82-   F0 0F       BEQ   $BB93
+BB84-   C9 F7       CMP   #$F7
+BB86-   D0 01       BNE   $BB89
+BB88-   C8          INY</code>
+      <p class="comment">accumulator is always $F7 by now (the nibble we found -- anything else has branched off instead of falling through to this arithmetic)</p>
+      <code>BB89-   18          CLC
+BB8A-   6D 0F BC    ADC   $BC0F
+BB8D-   8D 0F BC    STA   $BC0F
+BB90-   4C 7B BB    JMP   $BB7B</code>
+      <p class="comment">execution continues here (from $BB82 after we find the next $D5 nibble) -- if we didn't find any $F7 nibbles, start over</p>
+      <code>BB93-   98          TYA
+BB94-   F0 E0       BEQ   $BB76</code>
+      <p class="comment">skip any number of $FF nibbles</p>
+      <code>BB96-   BD 8C C0    LDA   $C08C,X
+BB99-   10 FB       BPL   $BB96</code>
+      <p class="comment">killing time</p>
+      <code>BB9B-   48          PHA
+BB9C-   68          PLA
+BB9D-   C9 FF       CMP   #$FF
+BB9F-   F0 F5       BEQ   $BB96</code>
+      <p class="comment">if the first thing we find after the sequence of $FF nibbles is another $D5 nibble, fail immediately</p>
+      <code>BBA1-   C9 D5       CMP   #$D5
+BBA3-   F0 35       BEQ   $BBDA</code>
+      <p class="comment">skip next 5 nibbles</p>
+      <code>BBA5-   A0 05       LDY   #$05
+BBA7-   BD 8C C0    LDA   $C08C,X
+BBAA-   10 FB       BPL   $BBA7</code>
+      <p class="comment">more time killing</p>
+      <code>BBAC-   48          PHA
+BBAD-   68          PLA
+BBAE-   88          DEY
+BBAF-   D0 F6       BNE   $BBA7</code>
+      <p class="comment">skip any number of $FF nibbles</p>
+      <code>BBB1-   BD 8C C0    LDA   $C08C,X
+BBB4-   10 FB       BPL   $BBB1</code>
+      <p class="comment">more time killing</p>
+      <code>BBB6-   48          PHA
+BBB7-   68          PLA
+BBB8-   C9 FF       CMP   #$FF
+BBBA-   F0 F5       BEQ   $BBB1</code>
+      <p class="comment">if the first thing we find after the sequence of $FF nibbles is another $D5 nibble, fail immediately</p>
+      <code>BBBC-   C9 D5       CMP   #$D5
+BBBE-   D0 1A       BNE   $BBDA</code>
+      <p class="comment">if the next nibble after that is not $FF, fail immediately</p>
+      <code>BBC0-   BD 8C C0    LDA   $C08C,X
+BBC3-   10 FB       BPL   $BBC0
+BBC5-   C9 FF       CMP   #$FF
+BBC7-   D0 11       BNE   $BBDA</code>
+      <p class="comment">check the counter (set at $BB8D)</p>
+      <code>BBC9-   AD 0F BC    LDA   $BC0F
+BBCC-   38          SEC
+BBCD-   E9 10       SBC   #$10</code>
+      <p class="comment">if not zero, fail immediately</p>
+      <code>BBCF-   D0 09       BNE   $BBDA</code>
+      <p class="comment">accumulator is 0 here, store it in $B739 (?!?!?)</p>
+      <code>BBD1-   8D 39 B7    STA   $B739   <-- !</code>
+      <p class="comment">turn off drive motor</p>
+      <code>BBD4-   BD 88 C0    LDA   $C088,X</code>
+      <p class="comment">continue elsewhere</p>
+      <code>BBD7-   4C 10 BC    JMP   $BC10</code>
+      <p class="comment">The Badlands -- turn off drive motor, print error message, wipe memory, exit via $E000</p>
+      <code>BBDA-   BD 88 C0    LDA   $C088,X
+BBDD-   AD 54 C0    LDA   $C054
+BBE0-   AD 51 C0    LDA   $C051
+BBE3-   AD 81 C0    LDA   $C081
+BBE6-   20 58 FC    JSR   $FC58
+BBE9-   A0 17       LDY   #$17
+BBEB-   B9 F7 BB    LDA   $BBF7,Y
+BBEE-   99 08 07    STA   $0708,Y
+BBF1-   88          DEY
+BBF2-   10 F7       BPL   $BBEB
+BBF4-   4C 4B B7    JMP   $B74B</code>
+    </div>
+    <div class="line_editing">
+      <code>*FC58G N 400<BBF7.BC0FM</code>
+    </div>
+    <div class="terminal_output">
+      <code>THIS IS A DEFECTIVE DISK</code>
+    </div>
+    <p>So judgmental.</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which Success Is Relative</h3>
+
+    <p>Continuing from the success path at $BC10...</p>
+    <div class="line_editing">
+      <code>*BC10L</code>
+    </div>
+    <div class="listing">
+      <code>BC10-   A0 00       LDY   #$00
+BC12-   B9 1F BC    LDA   $BC1F,Y
+BC15-   99 00 9A    STA   $9A00,Y
+BC18-   C8          INY
+BC19-   D0 F7       BNE   $BC12
+BC1B-   4C 00 9A    JMP   $9A00</code>
+    </div>
+    <div class="line_editing">
+      <code>*BC1B:60
+*BC10G</code>
+      <code>*9A00L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">This is actually the original call to $B793 that loads DOS from tracks 0-2</p>
+      <code>9A00-   20 93 B7    JSR   $B793</code>
+      <p class="comment">save all status flags and registers, because we're about to do something else that is not loading DOS</p>
+      <code>9A03-   08          PHP
+9A04-   48          PHA
+9A05-   8A          TXA
+9A06-   48          PHA
+9A07-   98          TYA
+9A08-   48          PHA</code>
+      <p class="comment">set RWTS command = $01 (read)</p>
+      <code>9A09-   A9 01       LDA   #$01
+9A0B-   8D F4 B7    STA   $B7F4</code>
+      <p class="comment">sector $00</p>
+      <code>9A0E-   A9 00       LDA   #$00
+9A10-   8D ED B7    STA   $B7ED</code>
+      <p class="comment">track $0B (?!?)</p>
+      <code>9A13-   A9 0B       LDA   #$0B
+9A15-   8D EC B7    STA   $B7EC</code>
+      <p class="comment">address = $9900</p>
+      <code>9A18-   A9 00       LDA   #$00
+9A1A-   8D F0 B7    STA   $B7F0
+9A1D-   A9 99       LDA   #$99
+9A1F-   8D F1 B7    STA   $B7F1</code>
+      <p class="comment">read it</p>
+      <code>9A22-   A0 E8       LDY   #$E8
+9A24-   A9 B7       LDA   #$B7
+9A26-   20 B5 B7    JSR   $B7B5</code>
+      <p class="comment">retry forever if that failed</p>
+      <code>9A29-   B0 FB       BCS   $9A26</code>
+      <p class="comment">and continue there</p>
+      <code>9A2B-   4C 00 99    JMP   $9900</code>
+    </div>
+    <p>Dear Lord, there's still more to this copy protection.</p>
+    <div class="line_editing">
+      <code>*BSAVE DECRYPT BB03,A$2000,L$3E
+*BSAVE BB00 DECRYPTED,A$BB00,L$156</code>
+    </div>
+    <p>A quick program to read T0B,S00 into $9900 without having to trace up to this point:</p>
+    <div class="listing">
+      <code>0300-   20 E3 03    JSR   $03E3
+0303-   84 00       STY   $00
+0305-   85 01       STA   $01
+0307-   A0 01       LDY   #$01
+0309-   A9 60       LDA   #$60
+030B-   91 00       STA   ($00),Y
+030D-   A0 04       LDY   #$04
+030F-   A9 0B       LDA   #$0B
+0311-   91 00       STA   ($00),Y
+0313-   C8          INY
+0314-   A9 00       LDA   #$00
+0316-   91 00       STA   ($00),Y
+0318-   A0 08       LDY   #$08
+031A-   91 00       STA   ($00),Y
+031C-   C8          INY
+031D-   A9 99       LDA   #$99
+031F-   91 00       STA   ($00),Y
+0321-   A0 0C       LDY   #$0C
+0323-   A9 01       LDA   #$01
+0325-   91 00       STA   ($00),Y
+0327-   20 E3 03    JSR   $03E3
+032A-   4C D9 03    JMP   $03D9</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE READ T0BS00,A$300,L$2D
+*300G
+...read read read...</code>
+      <code>*BSAVE T0BS00 9900,A$9900,L$100</code>
+      <code>*9900L</code>
+    </div>
+    <div class="listing">
+      <code>9900-   4E 03 99    LSR   $9903
+9903-   71 6E       ADC   ($6E),Y
+9905-   07          ???
+9906-   99 40 24    STA   $2440,Y</code>
+    </div>
+    <p>Are you !@#$%^& kidding me.</p>
+</section>
+
+<section>
+  <h2>Chapter 4</h2>
+  <h3>In Which I Am Not !@#$%^& Kidding You</h3>
+
+    <p>OK, here we go (again).</p>
+    <div class="line_editing">
+      <p class="comment">make a copy of $9900</p>
+      <code>*2900<9900.99FFM</code>
+    </div>
+    <p>The start of my SECOND self-decryption replication program:</p>
+    <div class="listing">
+      <p class="comment">copy $9900 page into place from a pristine copy in lower memory</p>
+      <code>2100-   A0 00       LDY   #$00
+2102-   B9 00 29    LDA   $2900,Y
+2105-   99 00 99    STA   $9900,Y
+2108-   C8          INY
+2109-   D0 F7       BNE   $2102
+210B-   60          RTS</code>
+    </div>
+    <div class="line_editing">
+      <code>*210B:4E 03 99 60
+*2100G</code>
+      <code>*9903L</code>
+    </div>
+    <div class="listing">
+      <code>9903-   38          SEC
+9904-   6E 07 99    ROR   $9907</code>
+    </div>
+    <p>I tire of this, m'lord.</p>
+    <div class="line_editing">
+      <code>*210E:38 6E 07 99 60
+*2100G</code>
+      <code>*9907L</code>
+    </div>
+    <div class="listing">
+      <code>9907-   A0 24       LDY   #$24
+9909-   6E 0C 99    ROR   $990C</code>
+    </div>
+    <p>I'm gonna start singing.</p>
+    <div class="line_editing">
+      <code>*2112:A0 24 6E 0C 99 60
+*2100G</code>
+      <code>*990CL</code>
+    </div>
+    <div class="listing">
+      <code>990C-   6E 18 99    ROR   $9918
+990F-   6E 12 99    ROR   $9912</code>
+    </div>
+    <p>Nobody knows the trouble I've seen...</p>
+    <div class="line_editing">
+      <code>*2117:6E 18 99 6E 12 99 60
+*2100G
+*9912L</code>
+    </div>
+    <div class="listing">
+      <code>9912-   6E 1B 99    ROR   $991B
+9915-   6E 22 99    ROR   $9922
+9918-   B9 00 99    LDA   $9900,Y</code>
+    </div>
+    <p>Nobody knows but Woz...</p>
+    <div class="line_editing">
+      <code>*211D:6E 1B 99 6E 22 99 B9 00 99 60
+*2100G</code>
+      <code>*991BL</code>
+    </div>
+    <div class="listing">
+      <code>991B-   59 00 B8    EOR   $B800,Y
+991E-   99 00 99    STA   $9900,Y
+9921-   C8          INY
+9922-   D0 F4       BNE   $9918</code>
+    </div>
+    <p class="seen">Nobody knows the trouble I've seen...</p>
+    <div class="line_editing">
+      <code>*2126:59 00 B8 99 00 99 C8 D0 F4 60
+*2100G</code>
+    </div>
+    <p>Glory, Hallelujah.</p>
+    <p>_________________________________</p>
+    <p>|___|\________________________|\__| |___|_________________|_______|___| |_(_)__________|\_____|___bb(_)___| |________|_____|____(_).__________| _| (_) -(_)-</p>
+    <p>Chapter 5</p>
+    <p>In Which We Duckument The Most</p>
+    <p>Unfriendly DOS Ever</p>
+    <div class="line_editing">
+      <code>
+*9924L</code>
+    </div>
+    <div class="listing">
+      <code>9924-   A0 23       LDY   #$23
+9926-   B9 74 99    LDA   $9974,Y
+9929-   99 4D A4    STA   $A44D,Y
+992C-   88          DEY
+992D-   10 F7       BPL   $9926</code>
+    </div>
+    <p>This overwrites part of DOS (at $A44D), which ends up looking like this:</p>
+    <div class="terminal_output">
+      <code>| A44D-   A5 68       LDA   $68
+| A44F-   48          PHA
+| A450-   38          SEC
+| A451-   A5 AF       LDA   $AF
+| A453-   E5 67       SBC   $67
+| A455-   A8          TAY
+| A456-   A5 80       LDA   $80
+| A458-   E5 68       SBC   $68
+| A45A-   AA          TAX
+| A45B-   E8          INX
+| A45C-   65 68       ADC   $68
+| A45E-   85 68       STA   $68
+| A460-   C6 68       DEC   $68
+| A462-   20 BC A3    JSR   $A3BC
+| A465-   CA          DEX
+| A466-   D0 F8       BNE   $A460
+| A468-   68          PLA
+| A469-   85 68       STA   $68
+| A46B-   6C 60 9D    JMP   ($9D60)</code>
+    </div>
+    <p class="seen">This is changing the behavior of the LOAD command for loading Applesoft BASIC programs into memory. It extends past $A450, which is normally the part of DOS that handles loading Integer BASIC programs. It also adds a call to $A3BC, which is normally a test for</p>
+    <p class="seen">Integer BASIC, but which I'm guessing is about to get overwritten in a later patch.</p>
+    <div class="listing">
+      <code>992F-   A0 18       LDY   #$18
+9931-   B9 95 99    LDA   $9995,Y
+9934-   99 BC A3    STA   $A3BC,Y
+9937-   88          DEY
+9938-   10 F7       BPL   $9931</code>
+    </div>
+    <p>Another DOS patch. The end result:</p>
+    <div class="terminal_output">
+      <code>| A3BC-   98          TYA
+| A3BD-   4D 39 B7    EOR   $B739   <--
+| A3C0-   51 67       EOR   ($67),Y <--
+| A3C2-   91 67       STA   ($67),Y
+| A3C4-   88          DEY
+| A3C5-   C0 FF       CPY   #$FF
+| A3C7-   D0 F3       BNE   $A3BC
+| A3C9-   60          RTS
+| A3CA-   A9 01       LDA   #$01
+| A3CC-   20 B1 A4    JSR   $A4B1</code>
+    </div>
+    <p class="seen">This is an on-the-fly decryption that occurs as Applesoft BASIC programs are loaded. ($67) points to the BASIC program in memory. This explains why I couldn't LOAD or RUN any of the BASIC programs on this disk when booting from my work disk: the files themselves are encrypted.</p>
+    <p>Note that there are two EOR statements, including $B739, the value of which was changed after the nibble check at $BB03 succeeded. So many layers...</p>
+    <div class="listing">
+      <code>993A-   A0 14       LDY   #$14
+993C-   B9 A8 99    LDA   $99A8,Y
+993F-   99 30 9E    STA   $9E30,Y
+9942-   88          DEY
+9943-   10 F7       BPL   $993C</code>
+    </div>
+    <p>DOS patch #3. The result:</p>
+    <div class="terminal_output">
+      <code>| 9E30-   A9 80       LDA   #$80
+| 9E32-   85 D6       STA   $D6
+| 9E34-   A9 06       LDA   #$06
+| 9E36-   D0 12       BNE   $9E4A
+| 9E38-   AD 00 C0    LDA   $C000
+| 9E3B-   C9 83       CMP   #$83
+| 9E3D-   D0 03       BNE   $9E42
+| 9E3F-   EA          NOP
+| 9E40-   F0 F6       BEQ   $9E38
+| 9E42-   4C D2 D7    JMP   $D7D2</code>
+    </div>
+    <p>This part of late-stage boot usually sets the reset vector to something useful. Instead, this patch will set the Applesoft RUN flag (zero page $D6), which makes any command typed from the BASIC prompt RUN the current program in memory instead. The rest of the new code checks for <Ctrl-C> and hangs until you press something else. That part is skipped for now, but I'm guessing it's called later.</p>
+    <div class="listing">
+      <code>9945-   A0 02       LDY   #$02
+9947-   B9 BD 99    LDA   $99BD,Y
+994A-   99 03 A5    STA   $A503,Y
+994D-   88          DEY
+994E-   10 F7       BPL   $9947</code>
+    </div>
+    <p>DOS patch #4. The result:</p>
+    <div class="terminal_output">
+      <code>| A503-   4C 38 9E    JMP   $9E38</code>
+    </div>
+    <p>This is the tail end of the RUN entry point. It's just a JMP to the code that was just patched earlier, that ensures that trying to <Ctrl-C> break to the prompt during boot will hang until you press something else. (Even if you did manage to get to the prompt, the RUN flag would ensure you couldn't do anything useful. Defense in depth!)</p>
+    <div class="listing">
+      <code>9950-   A0 02       LDY   #$02
+9952-   B9 C0 99    LDA   $99C0,Y
+9955-   99 8B A3    STA   $A38B,Y
+9958-   88          DEY
+9959-   10 F7       BPL   $9952</code>
+    </div>
+    <p>DOS patch #5. The result:</p>
+    <div class="terminal_output">
+      <code>| A38B-   4C 82 A5    JMP   $A582</code>
+    </div>
+    <p>This patch adds a "JMP $A582" to the end of the BLOAD command handler that starts at $A35D. Not sure what $A582 does, but I'm guessing I'm about to find out.</p>
+    <div class="listing">
+      <code>995B-   A0 31       LDY   #$31
+995D-   B9 C3 99    LDA   $99C3,Y
+9960-   99 7F A5    STA   $A57F,Y
+9963-   88          DEY
+9964-   10 F7       BPL   $995D</code>
+    </div>
+    <p>DOS patch #6. The result:</p>
+    <div class="terminal_output">
+      <code>| A57F-   4C 84 9D    JMP   $9D84
+| A582-   20 71 A4    JSR   $A471
+| A585-   A5 68       LDA   $68
+| A587-   48          PHA
+| A588-   A5 67       LDA   $67
+| A58A-   48          PHA
+| A58B-   38          SEC
+| A58C-   AE 61 AA    LDX   $AA61
+| A58F-   AC 60 AA    LDY   $AA60
+| A592-   D0 01       BNE   $A595
+| A594-   CA          DEX
+| A595-   88          DEY
+| A596-   8A          TXA
+| A597-   E8          INX
+| A598-   6D 73 AA    ADC   $AA73
+| A59B-   85 68       STA   $68
+| A59D-   AD 72 AA    LDA   $AA72
+| A5A0-   85 67       STA   $67
+| A5A2-   C6 68       DEC   $68
+| A5A4-   20 BC A3    JSR   $A3BC
+| A5A7-   CA          DEX
+| A5A8-   D0 F8       BNE   $A5A2
+| A5AA-   68          PLA
+| A5AB-   85 67       STA   $67
+| A5AD-   68          PLA
+| A5AE-   85 68       STA   $68
+| A5B0-   60          RTS</code>
+    </div>
+    <p>Patch #5 set up a jump to $A582 at the end of the BLOAD handler. It looks like patch #6 is reusing the decryption routine at $A3BC (already used for</p>
+    <p>Applesoft programs) for binary programs as well. Encrypt all the things!</p>
+    <div class="listing">
+      <code>9966-   A9 A2       LDA   #$A2
+9968-   8D 27 A4    STA   $A427</code>
+    </div>
+    <p>This patches a branch in the middle of the LOAD handler so that DOS doesn't try to load Integer Basic programs. (Previous patches overwrote the Integer</p>
+    <p>Basic handling for their own purposes.)</p>
+    <div class="listing">
+      <p class="comment">restore everything and continue with the boot</p>
+      <code>996B-   68          PLA
+996C-   AA          TAX
+996D-   68          PLA
+996E-   A8          TAY
+996F-   68          PLA
+9970-   28          PLP
+9971-   4C 3B B7    JMP   $B73B</code>
+    </div>
+    <p>The result is a really messed up DOS that is maximally unfriendly to prying eyes and maximally incompatible with any other version of DOS. It decrypts both BASIC and binary files on the fly, traps <Ctrl-Reset>, traps <Ctrl-C>, and sets the RUN flag.</p>
+    <p>It does not, however, hinder copying the disk itself. To bypass the copy protection, I can write the decrypted $BB00/$BC00 back to disk, jump to a short routine at $BC06 that sets the only two long-term side effects I can find (at $B739 and $B73A, and I'm not even sure the second one is necessary but I'm not willing to risk it), then falls through to the success path at $BC10.</p>
+    <div class="line_editing">
+      <code>*BLOAD BOOT1,A$2600
+*BLOAD BB00 DECRYPTED,A$2B00</code>
+      <p class="comment">change "JMP $BB03" to "JMP $BC06"</p>
+      <code>*2738:4C 06 BC</code>
+      <p class="comment">set up patch at $BC06</p>
+      <code>*2C06:A9 00 8D 39 B7 A9 E0 8D 3A B7</code>
+      <code>*2C06L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">my patch</p>
+      <code>2C06-   A9 00       LDA   #$00
+2C08-   8D 39 B7    STA   $B739
+2C0B-   A9 E0       LDA   #$E0
+2C0D-   8D 3A B7    STA   $B73A</code>
+      <p class="comment">existing code at $BC10</p>
+      <code>2C10-   A0 00       LDY   #$00
+2C12-   B9 1F BC    LDA   $BC1F,Y
+2C15-   99 00 9A    STA   $9A00,Y
+2C18-   C8          INY
+2C19-   D0 F7       BNE   $2C12
+2C1B-   4C 00 9A    JMP   $9A00</code>
+      <p class="comment">short program to write the decrypted and patched boot1 back to disk</p>
+      <code>08C0-   A9 08       LDA   #$08
+08C2-   A0 E8       LDY   #$E8
+08C4-   20 D9 03    JSR   $03D9
+08C7-   AC ED 08    LDY   $08ED
+08CA-   88          DEY
+08CB-   10 05       BPL   $08D2
+08CD-   A0 0F       LDY   #$0F
+08CF-   CE EC 08    DEC   $08EC
+08D2-   8C ED 08    STY   $08ED
+08D5-   CE F1 08    DEC   $08F1
+08D8-   CE E1 08    DEC   $08E1
+08DB-   D0 E3       BNE   $08C0
+08DD-   60          RTS</code>
+    </div>
+    <div class="line_editing">
+      <code>*8E0.8FF</code>
+    </div>
+    <div class="listing">
+      <code>08E0- 00 0A 00 00 00 00 00 00
+         ^^
+    sector count</code>
+      <code>08E8- 01 60 01 00 00 09 FB 08
+                  ^^ ^^
+         start track/sector</code>
+      <code>08F0- 00 2F 00 00 02 00 FE 60
+         ^^       ^^ command (write)
+   start address</code>
+      <code>08F8- 01 00 00 00 01 EF D8 00</code>
+    </div>
+    <div class="curses_input">
+      <code>[S6,D1=non-working copy]</code>
+    </div>
+    <div class="line_editing">
+      <code>*8C0G
+...write write write...</code>
+      <code>*C600G
+...works...</code>
+    </div>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/463-math-marvels.html">Math Marvels</a></p>
+</body></html>

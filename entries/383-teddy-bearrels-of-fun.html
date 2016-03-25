@@ -1,0 +1,551 @@
+<!doctype html>
+<html><head>
+<title>Teddy Bearrels of Fun</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/382-drug-alert.html">Drug Alert</a></p>
+<section>
+
+    <p>_____________________________</p>
+    <p>{ } { "Clear the lines of lint in } { your head, one at a time, } { and the king will be left } { standing alone, like a guy } { on a street corner." } { } { "Searching for } { Bobby Fischer" } {_____________________________}</p>
+</section>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p>error on last pass</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p>can't read track $22; copy boots but shows a graphical error message "Disk</p>
+    <p>Error: FILE NOT FOUND. Please press C when you have corrected the problem" and hangs</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p>no read errors, but copy exhibits same behavior as Locksmith</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p>there's definitely data on track $22, but it's not in any recognizable pattern</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK: 22  START: 37F9  LENGTH: 0F0F</code>
+      <code>37D8: B7 FF BA FA BB F7 BD F7   VIEW
+37E0: BE BF FB BE F6 FF FE BF
+37E8: BE BB EA EA FB AA BA EA
+37F0: EB EF DF BF FF F7 F6 EF
+37F8: EE AB AB AB FF D5 D5 D5  <-37F9
+3800: FF EA EA EA FF F5 F5 F5
+3808: FF FA FA FA FF FD FD FD
+3810: FF FE FE FE FF FF B6 FD
+3818: B7 FF BA FA BB F7 BD F7</code>
+      <code>---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">Disk Fixer</p>
+    <p>T00 -> looks like DOS 3.3 bootloader T00-T02 -> full version of Pronto-DOS T11 -> DOS 3.3 style disk catalog T01,S07 -> startup program is "HELLO"</p>
+    <p class="seen">Why didn't any of my copies work?</p>
+    <p>probably a nibble check that looks for something special on track $22</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Trace the startup program</p>
+    <p class="seen">2. Find and disable the nibble check</p>
+    <p class="seen">3. There is no step 3 (I hope)</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which Our Adventure Gets Off To An Suspiciously Smooth Start</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=non-working copy]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+<Ctrl-C></code>
+      <code>]CATALOG</code>
+    </div>
+    <div class="terminal_output">
+      <code>PRONTO-DOS V254</code>
+    </div>
+    <div class="line_editing">
+      <code>*A 002 HELLO
+*B 029 MENU
+*B 003 START
+*B 011 L0
+*B 019 L1
+*B 030 L2
+*B 022 L3
+*B 043 L4
+*B 002 [TTL 0:LOCK
+ B 002 PRSTATE
+*B 016 S0
+*B 013 S1
+*B 012 S2
+*B 012 S3
+*B 012 S4
+*B 011 S5
+*B 008 S6
+*B 012 S7
+*B 006 S8
+*B 019 P1
+*B 026 P2
+*B 032 P3
+*B 019 P4
+*B 017 P5
+*B 037 P6
+*B 018 P7
+*B 007 P8
+*B 035 P9
+*B 025 CPRO</code>
+      <code>]LIST</code>
+    </div>
+    <div class="terminal_output">
+      <code> 10  ONERR  GOTO 100
+ 20  REM  POKE 1012,0
+ 30  HGR2
+ 35  PRINT "MAXFILES 1"
+ 40  PRINT "BLOAD START"
+ 50  PRINT "BRUN MENU"
+ 100  CALL  - 1438</code>
+    </div>
+    <div class="line_editing">
+      <code>]MAXFILES 1
+]BLOAD START
+]CALL-151</code>
+      <code>*AA72.AA73</code>
+    </div>
+    <div class="listing">
+      <code>AA72- 00 60</code>
+    </div>
+    <div class="line_editing">
+      <code>*BLOAD MENU</code>
+      <code>*AA72.AA73</code>
+    </div>
+    <div class="listing">
+      <code>AA72- 00 08</code>
+    </div>
+    <p>START is loaded at $6000, and MENU is loaded at $0800.</p>
+    <div class="line_editing">
+      <code>*800L</code>
+    </div>
+    <div class="listing">
+      <code>0800-   4C 00 60    JMP   $6000</code>
+    </div>
+    <p>Well OK then, if you insist.</p>
+    <div class="line_editing">
+      <code>*6000L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">reset stack</p>
+      <code>6000-   D8          CLD
+6001-   A2 FF       LDX   #$FF
+6003-   9A          TXS
+.
+. boring initialization and stuff
+.
+60E6-   A2 00       LDX   #$00
+60E8-   90 0E       BCC   $60F8
+...
+60F8-   BD E1 61    LDA   $61E1,X
+60FB-   BC E6 61    LDY   $61E6,X
+60FE-   AA          TAX
+60FF-   98          TYA
+6100-   4C C0 15    JMP   $15C0</code>
+    </div>
+    <p>$15C0 is not currently valid code, so</p>
+    <p>I need to interrupt the code here and see what ends up there.</p>
+    <p>The X register is $00 at $60F8. Let's see what ends up in A and Y.</p>
+    <div class="line_editing">
+      <code>*61E1</code>
+    </div>
+    <div class="listing">
+      <code>61E1- 00      ; --> accumulator</code>
+    </div>
+    <div class="line_editing">
+      <code>*61E6</code>
+    </div>
+    <div class="listing">
+      <code>61E6- 00      ; --> Y register</code>
+    </div>
+    <p>OK, all zeroes. Let's go.</p>
+    <div class="line_editing">
+      <code>*6100:4C 59 FF</code>
+      <code>*6000G
+...disk activity...
+<beep></code>
+    </div>
+    <p>~</p>
+    <p>Chapter 2</p>
+    <p>In Which We Take The Long Road</p>
+    <div class="line_editing">
+      <code>
+*15C0L</code>
+    </div>
+    <div class="listing">
+      <code>15C0-   48          PHA         ; = $00
+15C1-   8A          TXA         ; = $00
+15C2-   18          CLC
+15C3-   69 B0       ADC   #$B0  ; = $B0
+15C5-   8D E2 15    STA   $15E2
+15C8-   A9 01       LDA   #$01
+15CA-   20 75 13    JSR   $1375</code>
+    </div>
+    <div class="line_editing">
+      <code>*1375L</code>
+    </div>
+    <div class="listing">
+      <code>1375-   4C C7 13    JMP   $13C7</code>
+    </div>
+    <div class="line_editing">
+      <code>*13C7L</code>
+    </div>
+    <div class="listing">
+      <code>13C7-   48          PHA         ; = $01</code>
+      <p class="comment">get address of RWTS parameter table</p>
+      <code>13C8-   20 E3 03    JSR   $03E3
+13CB-   84 3C       STY   $3C
+13CD-   85 3D       STA   $3D</code>
+      <p class="comment">set drive</p>
+      <code>13CF-   A0 02       LDY   #$02
+13D1-   68          PLA         ; = $01
+13D2-   91 3C       STA   ($3C),Y
+13D4-   60          RTS</code>
+    </div>
+    <p>Continuing from $15CD...</p>
+    <div class="listing">
+      <code>15CD-   A2 E1       LDX   #$E1
+15CF-   A0 15       LDY   #$15
+15D1-   20 4E 13    JSR   $134E</code>
+    </div>
+    <div class="line_editing">
+      <code>*134EL</code>
+    </div>
+    <div class="listing">
+      <code>134E-   4C 7B 13    JMP   $137B</code>
+    </div>
+    <div class="line_editing">
+      <code>*137BL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">($3C) -> $15E1</p>
+      <code>137B-   86 3C       STX   $3C
+137D-   84 3D       STY   $3D</code>
+      <p class="comment">fill a buffer with space characters</p>
+      <code>137F-   A0 1D       LDY   #$1D
+1381-   A9 A0       LDA   #$A0
+1383-   99 53 03    STA   $0353,Y
+1386-   88          DEY
+1387-   10 FA       BPL   $1383</code>
+      <p class="comment">copy a string into the newly cleared buffer, setting high bit</p>
+      <code>1389-   A0 00       LDY   #$00
+138B-   B1 3C       LDA   ($3C),Y
+138D-   F0 08       BEQ   $1397
+138F-   09 80       ORA   #$80
+1391-   99 53 03    STA   $0353,Y
+1394-   C8          INY
+1395-   D0 F4       BNE   $138B
+1397-   60          RTS</code>
+    </div>
+    <div class="line_editing">
+      <code>*15E1.</code>
+    </div>
+    <div class="terminal_output">
+      <code>*
+ CC B0 00          ; "L0"
+*</code>
+    </div>
+    <p>There's a file on the disk called "L0".</p>
+    <p>Maybe this is a roundabout way of loading it? A reaaaally roundabout way.</p>
+    <p>Continuing from $15D4...</p>
+    <div class="listing">
+      <code>15D4-   A2 00       LDX   #$00
+15D6-   A0 60       LDY   #$60
+15D8-   20 69 13    JSR   $1369
+15DB-   B0 EB       BCS   $15C8
+15DD-   68          PLA
+15DE-   4C 00 60    JMP   $6000</code>
+    </div>
+    <p>Copy II Plus (CATALOG > W/FILE LENGTHS) shows the file "L0" starts at $6000. My intuition says that's what's going on here.</p>
+    <div class="line_editing">
+      <code>*15DE:4C 59 FF</code>
+      <code>*300:A9 00 A2 00 A0 00 4C C0 15</code>
+      <code>*300L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">reproduce entry conditions</p>
+      <code>0300-   A9 00       LDA   #$00
+0302-   A2 00       LDX   #$00
+0304-   A0 00       LDY   #$00
+0306-   4C C0 15    JMP   $15C0</code>
+    </div>
+    <div class="line_editing">
+      <code>*300G
+...disk activity...
+<beep></code>
+      <code>*6000L</code>
+    </div>
+    <div class="listing">
+      <code>6000-   4C 89 65    JMP   $6589</code>
+    </div>
+    <p>Bingo. That is not what was at $6000 before the last disk activity. (I later verified with a sector editor that it did indeed load this code from "L0".)</p>
+    <div class="line_editing">
+      <code>*6589L
+.
+. lots more file loading (like above)
+.
+6697-   20 DC 63    JSR   $63DC
+669A-   F0 05       BEQ   $66A1
+669C-   A2 06       LDX   #$06
+669E-   4C C0 15    JMP   $15C0
+66A1-   60          RTS</code>
+      <code>*63DCL</code>
+    </div>
+    <div class="listing">
+      <code>63DC-   8E 07 64    STX   $6407
+63DF-   8C 09 64    STY   $6409
+63E2-   A9 03       LDA   #$03
+63E4-   20 67 65    JSR   $6567</code>
+    </div>
+    <div class="line_editing">
+      <code>*6567L</code>
+    </div>
+    <div class="listing">
+      <code>6567-   8D 4B 65    STA   $654B
+656A-   8D 5E 65    STA   $655E
+656D-   8D 61 65    STA   $6561
+6570-   60          RTS</code>
+    </div>
+    <p>Continuing from $63E7...</p>
+    <div class="listing">
+      <code>63E7-   20 49 65    JSR   $6549</code>
+    </div>
+    <div class="line_editing">
+      <code>*6549L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">I don't have this in memory anymore, because it was on the text page and that's long gone after I broke to the monitor. But it looks suspiciously like getting the address of an RWTS parameter table and setting some values, then calling the RWTS. But the page 3 vectors have been shifted by $0100 bytes, into the text page.</p>
+      <code>6549-   20 E3 04    JSR   $04E3
+654C-   84 FA       STY   $FA
+654E-   85 FB       STA   $FB</code>
+      <p class="comment">track $22</p>
+      <code>6550-   A9 22       LDA   #$22
+6552-   A0 04       LDY   #$04
+6554-   91 FA       STA   ($FA),Y</code>
+      <p class="comment">RWTS command $00 (seek)</p>
+      <code>6556-   A9 00       LDA   #$00
+6558-   A0 0C       LDY   #$0C
+655A-   91 FA       STA   ($FA),Y
+655C-   20 E3 04    JSR   $04E3
+655F-   20 D9 04    JSR   $04D9</code>
+      <p class="comment">this is a dead giveaway -- resetting zero page $48 after an RWTS call.</p>
+      <code>6562-   A9 00       LDA   #$00
+6564-   85 48       STA   $48
+6566-   60          RTS</code>
+    </div>
+    <p>If I'm right, we just did a drive seek to track $22. No read, just a seek.</p>
+    <p>Continuing from $63EA...</p>
+    <div class="listing">
+      <code>63EA-   A9 C0       LDA   #$C0
+63EC-   20 71 65    JSR   $6571</code>
+    </div>
+    <div class="line_editing">
+      <code>*6571L</code>
+    </div>
+    <div class="listing">
+      <code>6571-   A0 0B       LDY   #$0B
+6573-   BE 7D 65    LDX   $657D,Y
+6576-   9D 13 64    STA   $6413,X
+6579-   88          DEY
+657A-   10 F7       BPL   $6573
+657C-   60          RTS
+657D-  [00 09 0C 39 6C 71 78 94
+        A9 C0 D7 EE]</code>
+    </div>
+    <p>Weird. So we're iterating through an array of offsets, then setting the byte at each offset to the accumulator, which was set in the caller and never changes.</p>
+    <p>Well, the nice thing is that it's self- contained, so I can see the code before and after.</p>
+    <p>$6413 isn't actually an entry point; it seems to be in the middle of an instruction. The nearest entry point before $6413 is $640E. ($640D is an "RTS" instruction.)</p>
+    <div class="line_editing">
+      <code>*640EL</code>
+    </div>
+    <div class="listing">
+      <code>640E-   18          CLC
+640F-   A2 60       LDX   #$60
+6411-   BD 89 1F    LDA   $1F89,X
+6414-   A9 40       LDA   #$40
+6416-   85 FA       STA   $FA
+6418-   A2 60       LDX   #$60
+641A-   BD 8E 1F    LDA   $1F8E,X
+641D-   BD 8C 1F    LDA   $1F8C,X
+6420-   10 FB       BPL   $641D
+.
+.
+.
+647D-   AD E8 1F    LDA   $1FE8
+6480-   18          CLC
+6481-   60          RTS
+6482-   AD E8 1F    LDA   $1FE8
+6485-   38          SEC
+6486-   60          RTS</code>
+    </div>
+    <p>Oh, that's good. Do you see it? Don't move until you see it.</p>
+    <p>Here, I'll make it easier for you...</p>
+    <div class="terminal_output">
+      <code>
+        BD 89       LDA   $  89,X</code>
+      <code>        BD 8E       LDA   $  8E,X
+        BD 8C       LDA   $  8C,X
+        10 FB       BPL
+.
+.
+.
+        AD E8       LDA   $  E8
+        18          CLC
+        60          RTS
+        AD E8       LDA   $  E8
+        38          SEC
+        60          RTS</code>
+    </div>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which You've Lost, You Just Don't Know It Yet</h3>
+
+    <div class="line_editing">
+      <code>*300:A9 C0 4C 71 65
+*300L</code>
+    </div>
+    <div class="listing">
+      <code>0300-   A9 C0       LDA   #$C0
+0302-   4C 71 65    JMP   $6571</code>
+    </div>
+    <div class="line_editing">
+      <code>*300G
+*640EL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">clear carry to start</p>
+      <code>640E-   18          CLC</code>
+      <p class="comment">turn on drive motor (hard-coded to slot 6, booooo)</p>
+      <code>640F-   A2 60       LDX   #$60
+6411-   BD 89 C0    LDA   $C089,X</code>
+    </div>
+    <p>A fun(*) thing to do is boot original floppies from slot 5. Lots of copy protection routines (including this one) hard-code slot 6, so you can find out when they're called because the slot 6 drive light will suddenly go on.</p>
+    <p class="seen">(*) not guaranteed, actual fun may vary</p>
+    <div class="listing">
+      <p class="comment">reset data latch, skip some nibbles</p>
+      <code>6414-   A9 40       LDA   #$40
+6416-   85 FA       STA   $FA
+6418-   A2 60       LDX   #$60
+641A-   BD 8E C0    LDA   $C08E,X
+641D-   BD 8C C0    LDA   $C08C,X
+6420-   10 FB       BPL   $641D
+6422-   C6 F9       DEC   $F9
+6424-   D0 F7       BNE   $641D
+6426-   C6 FA       DEC   $FA
+6428-   D0 F3       BNE   $641D
+642A-   AD 05 65    LDA   $6505
+642D-   8D 06 65    STA   $6506
+6430-   20 9F 64    JSR   $649F</code>
+    </div>
+    <div class="line_editing">
+      <code>*649FL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">initialize state</p>
+      <code>649F-   A0 00       LDY   #$00
+64A1-   18          CLC
+64A2-   2A          ROL
+64A3-   85 FB       STA   $FB</code>
+      <p class="comment">get a nibble</p>
+      <code>64A5-   AD EC C0    LDA   $C0EC
+64A8-   10 FB       BPL   $64A5</code>
+      <p class="comment">compute a rolling checksum</p>
+      <code>64AA-   AA          TAX
+64AB-   45 FB       EOR   $FB
+64AD-   2A          ROL
+64AE-   49 41       EOR   #$41
+64B0-   85 FB       STA   $FB
+64B2-   C8          INY</code>
+      <p class="comment">Y is the Death Counter -- if it rolls over to 0, branch to failure path which sets the carry and exits</p>
+      <code>64B3-   F0 CD       BEQ   $6482</code>
+      <p class="comment">loop until we find an $F7 nibble</p>
+      <code>64B5-   8A          TXA
+64B6-   C9 F7       CMP   #$F7
+64B8-   D0 EB       BNE   $64A5</code>
+      <p class="comment">Now we get the next nibble, but wait!</p>
+      <p class="comment">We've spent so much time computing the checksum that we would ordinarily miss the next nibble. But on the original disk, there is a timing bit (an extra "0" bit) after the $F7, so that gives us just enough time to catch the next nibble before it goes whizzing by as the disk spins.</p>
+      <code>64BA-   AD EC C0    LDA   $C0EC
+64BD-   10 FB       BPL   $64BA
+64BF-   AA          TAX
+64C0-   45 FB       EOR   $FB
+64C2-   2A          ROL
+64C3-   49 41       EOR   #$41
+64C5-   85 FB       STA   $FB
+64C7-   C8          INY
+64C8-   8A          TXA
+64C9-   C9 F7       CMP   #$F7
+64CB-   F0 ED       BEQ   $64BA</code>
+      <p class="comment">must be $F6</p>
+      <code>64CD-   C9 F6       CMP   #$F6
+64CF-   D0 D4       BNE   $64A5</code>
+      <p class="comment">get the next nibble (same deal -- there's a timing bit after the $F6)</p>
+      <code>64D1-   AD EC C0    LDA   $C0EC
+64D4-   10 FB       BPL   $64D1
+64D6-   AA          TAX
+64D7-   45 FB       EOR   $FB
+64D9-   2A          ROL
+64DA-   49 41       EOR   #$41
+64DC-   85 FB       STA   $FB
+64DE-   C8          INY
+64DF-   8A          TXA
+64E0-   C9 F7       CMP   #$F7
+64E2-   F0 D6       BEQ   $64BA</code>
+      <p class="comment">must be $EF</p>
+      <code>64E4-   C9 EF       CMP   #$EF
+64E6-   D0 BD       BNE   $64A5</code>
+      <p class="comment">get the next nibble (same deal -- there's a timing bit after the $EF)</p>
+      <code>64E8-   AD EC C0    LDA   $C0EC
+64EB-   10 FB       BPL   $64E8
+64ED-   AA          TAX
+64EE-   45 FB       EOR   $FB
+64F0-   2A          ROL
+64F1-   49 41       EOR   #$41
+64F3-   85 FB       STA   $FB
+64F5-   C8          INY
+64F6-   8A          TXA
+64F7-   C9 F7       CMP   #$F7
+64F9-   F0 BF       BEQ   $64BA</code>
+      <p class="comment">must be $EE</p>
+      <code>64FB-   C9 EE       CMP   #$EE
+64FD-   D0 A6       BNE   $64A5</code>
+      <p class="comment">get next nibble immediately</p>
+      <code>64FF-   AD EC C0    LDA   $C0EC
+6502-   10 FB       BPL   $64FF
+6504-   60          RTS</code>
+    </div>
+    <p>Continuing from $6433...</p>
+    <div class="listing">
+      <p class="comment">compare the nibble we just read (at $64FF)</p>
+      <code>6433-   C9 AB       CMP   #$AB</code>
+      <p class="comment">if it's not $AB, jump to failure path</p>
+      <code>6435-   D0 4B       BNE   $6482</code>
+    </div>
+    <p>It goes on like this for a while, checking a whole sequence of nibbles after that, then doing it a few more times to ensure it wasn't just a fluke that it passed the first time. But my non-working copy has already failed, because it has no timing bits after the $F7, $F6, $EF, or $EE nibbles.</p>
+    <p>The original disk eventually falls through to $647D, which turns off the drive, clears the carry, and exits. My non-working copy ends up at $6482, turns off the drive, sets the carry, and exits.</p>
+    <p>The first instruction (at $640E) was already a "CLC", which is convenient.</p>
+    <p>Let's change the second instruction to an "RTS" so this routine always signals unconditional success.</p>
+    <div class="curses_input">
+      <code>[Disk Fixer]
+  ["D"irectory Mode]
+    [select file "L0"]
+      [right arrow to move through file
+       one sector at a time, 4 times]</code>
+    </div>
+    <p>T19,S0A,$13 change "A2" to "60"</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/384-create-with-garfield-deluxe-edition.html">Create with Garfield Deluxe Edition</a></p>
+</body></html>

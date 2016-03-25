@@ -1,0 +1,147 @@
+<!doctype html>
+<html><head>
+<title>Krell's Logo</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/027-the-movie-monster-game.html">The Movie Monster Game</a></p>
+<section>
+
+    <p>Krell's Logo is an implementation of the Logo programming language. It was derived from Apple Logo, programmed at</p>
+    <p>M.I.T. under the supervision of H.</p>
+    <p>Abelson. This version was developed by</p>
+    <p>Mark W. Friedland and distributed by</p>
+    <p>Krell Software.</p>
+    <p>COPYA barfs immediately on the original disk. My trusty Copy ][+ sector editor can read track 0, sectors 0-9, with the "DOS 3.3 PATCHED" option. (Press "P" to get to the Sector Editor Patcher, then select "DOS 3.3 PATCHED" to ignore address and data epilogue bytes and checksums.) The rest of the disk is a black box.</p>
+    <p class="seen">Time for boot tracing!</p>
+    <div class="curses_input">
+      <code>[S6D1=original disk]
+[S5D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+    </div>
+    <p>For those of you just tuning in, my work disk uses a custom program that I affectionately call "AUTOTRACE" to automate the process of boot tracing as far as possible. For some disks, this just captures track 0, sector 0 (saved in a file called "BOOT0") and stops.</p>
+    <p>For other disks that load in the same way that an unprotected DOS 3.3 disk loads, it captures the next stage of the boot process as well (in a file called "BOOT1"). BOOT1 contains sectors 0-9 on track 0, which are loaded into memory at $B600..$BFFF. This generally contains the RWTS routines which the program uses to read the rest of the disk.</p>
+    <p>If the RWTS is fairly normal as well (and my AUTOTRACE program just spot- checks a few memory locations to guess at its "normalcy"), there's a good chance I'll be able to use a tool called Advanced Demuffin (written in 1983 by The Stack) to convert the disk from whatever weird format it uses to store its sector data into a standard disk readable by unprotected DOS 3.3 disks or any other third-party tools.</p>
+    <p>In this case, AUTOTRACE extracts the RWTS routines (generally loaded from track 0, sectors 2-9 into $B800..$BFFF) and saves *that* into a third file called "RWTS".</p>
+    <p>If anything looks fishy or non- standard, AUTOTRACE just stops, and I have to check the files it saved so far to determine why. But in this case, it ran all the way through, automatically capturing BOOT0, BOOT1, and RWTS files.</p>
+    <p>Now I can use Advanced Demuffin to convert the disk to a standard format. (It uses the disk's own RWTS to read the original, then a standard DOS 3.3- compatible RWTS to write out the data, sector by sector.)</p>
+    <div class="curses_input">
+      <code>[S6,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+]BRUN ADVANCED DEMUFFIN 1.1</code>
+    </div>
+    <p class="seen">--> LOAD NEW RWTS MODULE</p>
+    <p class="seen">At $B8, load "RWTS" from D1</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>--> FORMAT TARGET DISK</code>
+    </div>
+    <p class="seen">...grind grind grind...</p>
+    <div class="terminal_output">
+      <code>--> CONVERT DISK</code>
+    </div>
+    <p>This disk is 16 sectors, and the default options (copy the entire disk, all tracks, all sectors) don't need to be changed unless something goes horribly wrong.</p>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.1  - COPYRIGHT 1983
+WRITTEN BY THE STACK -CORRUPT COMPUTING
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:...................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:R............R.....................
+SC1:R..................................
+SC2:R..................................
+SC3:R..................................
+SC4:R..................................
+SC5:R..................................
+SC6:R..................................
+SC7:R..................................
+SC8:R..................................
+SC9:R..................................
+SCA:...................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:...................................
+=======================================
+16 SC $00,$00 TO $22,$0F BY $01 TO DRV2</code>
+    </div>
+    <p>Well, the disk's own RWTS can't read the boot1 code on track 0 (sectors 0-9), but that's OK. I captured that separately (in the "BOOT1" file), and I can replace it manually if I need to.</p>
+    <p>There is one read error on track $0D (repeatable, I tried this twice) which could be a glitch but is probably intentional, on the assumption that anything that makes a protected disk harder to copy is intentional.</p>
+    <p>Rebooting my work disk, I can see the disk catalog on the demuffin'd copy, despite the read errors.</p>
+    <div class="curses_input">
+      <code>[S5D1=my work disk]
+[S6D1=demuffin'd copy]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+]CATALOG,S6,D1</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+300 FREE</code>
+      <code> A 002 HELLO
+ B 017 RUNTIME
+ B 007 TURTLE
+ B 037 BANNER.SHP
+ B 128 LOGO A
+ B 005 PROGRAM</code>
+    </div>
+    <p>That looks pretty normal. (The custom catalog header is from my work disk, not the disk I just converted.) Let's see if it runs...</p>
+    <div class="line_editing">
+      <code>]RUN HELLO
+...</code>
+    </div>
+    <p>Indeed, it displays the animated title screen with a turtle pulling a Krell logo across the screen, then goes straight to the interactive Logo editor, just like the original disk.</p>
+    <p>That means there probably isn't any additional protection beyond the custom disk encoding. (There might have been a nibble check or some other nastiness hiding in the original DOS, but the program itself runs just fine from my work disk, so I don't really care.)</p>
+    <p>Finally, I need to get my copy to read itself. Since it's now in a standard disk format, that's pretty easy: put a standard DOS on it. Using Copy ][+'s "Copy DOS" option, I copy tracks 0-2 from a freshly initialized Pronto-DOS disk to the demuffin'd copy.</p>
+    <p>One more reboot reveals no surprises.</p>
+    <p>The disk boots up, auto-runs the HELLO program, and launches Krell's Logo.</p>
+    <p>What about that read error on T0D,S00?</p>
+    <p>It turns out the disk doesn't use that sector. In fact, Copy ][+'s "Track/</p>
+    <p>Sector Map" says it doesn't use that entire track. Tracks 0-2 are used (of course, to hold the RWTS and DOS), and track $11 for the disk catalog, but the actual files are all between tracks $16 and $22.</p>
+    <div class="terminal_output">
+      <code>   TRACK           1               2
+   0123456789ABCDEF0123456789ABCDEF012</code>
+      <code>S0 ***              *     FEEEEEEEEDDB
+E1 ***              *     EEEEEEEEDDDB
+C2 ***              *     EEEEEEEEDDDB
+T3 ***              *     EEEEEEEEDDDB
+O4 ***              *     EEEEEEEEDDDB
+R5 ***              *     EEEEEEEEDDDB
+ 6 ***              *     EEEEEEEEDDCB
+ 7 ***              *     EEEEEEEEDDCB
+ 8 ***              *     EEEEEEEEDDCB
+ 9 ***              *     EEEEEEEEDDCB
+ A ***              *     EEEEEEEEDDCB
+ B ***              *     EEEEEEEEDDCB
+ C ***              *    FEEEEEEEEDDCB
+ D ***              *    FEEEEEEEEDDBB
+ E ***              *    FEEEEEEEEDDBA
+ F ***              *    FEEEEEEEEDDBA</code>
+    </div>
+    <p>Was it a glitch? Or a vestige of some secondary copy protection that I unknowingly bypassed when I replaced the entire DOS? Possibly it was a remnant of some other copy protection routine from another disk by the same company? We may never know.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/029-addition-and-subtraction-1.html">Addition and Subtraction 1</a></p>
+</body></html>

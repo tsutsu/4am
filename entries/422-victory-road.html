@@ -1,0 +1,243 @@
+<!doctype html>
+<html><head>
+<title>Victory Road</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/421-sliding-block.html">Sliding Block</a></p>
+<section>
+
+    <p class="seen">Only side A is bootable, so I'll start there.</p>
+</section>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">no errors, but copy reboots endlessly</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">ditto</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">ditto</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">nothing unusual</p>
+    <p class="seen">Disk Fixer</p>
+    <p>T00 -> custom bootloader T11 -> DOS 3.3-style disk catalog</p>
+    <p class="seen">Why didn't any of my copies work?</p>
+    <p class="seen">probably a nibble check in early boot</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Boot trace</p>
+    <p>2. Find & disable nibble check</p>
+    <p class="seen">3. There is no step 3 (I hope)</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which Our Adventure Concludes Almost Before It Begins</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk (side A)]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0</code>
+      <code>]CALL -151
+*800<2800.28FFM
+*801L</code>
+    </div>
+    <div class="listing">
+      <code>0801-   4C 00 0A    JMP   $0A00</code>
+    </div>
+    <p>Huh?</p>
+    <div class="line_editing">
+      <code>*800</code>
+    </div>
+    <div class="listing">
+      <code>0800- 03</code>
+    </div>
+    <p>Oh, this disk takes advantage of a little-used feature of the Disk II ROM routine to load multiple sectors before jumping to $0801. It's so rare, I've never even bothered to update my auto- trace script to check for it. (Note to self: fix that someday.)</p>
+    <p>So let's trace this manually.</p>
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <code>96F8-   A0 00       LDY   #$00
+96FA-   B9 00 08    LDA   $0800,Y
+96FD-   99 00 28    STA   $2800,Y
+9700-   B9 00 09    LDA   $0900,Y
+9703-   99 00 29    STA   $2900,Y
+9706-   B9 00 0A    LDA   $0A00,Y
+9709-   99 00 2A    STA   $2A00,Y
+970C-   C8          INY
+970D-   D0 EB       BNE   $96FA
+970F-   AD E8 C0    LDA   $C0E8
+9712-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE,A$9600,L$115
+*9600G
+...reboots slot 6...
+...reboots slot 5...
+]BSAVE BOOT0 0800-0AFF,A$2800,L$300
+]CALL -151
+*800<2800.2AFFM
+*A00L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">world's simplest nibble check!</p>
+      <code>0A00-   EA          NOP
+0A01-   EA          NOP</code>
+      <p class="comment">hard-coded slot (x16)</p>
+      <code>0A02-   A2 60       LDX   #$60</code>
+      <p class="comment">death counters</p>
+      <code>0A04-   A9 56       LDA   #$56
+0A06-   85 FD       STA   $FD
+0A08-   A9 08       LDA   #$08
+0A0A-   C6 FC       DEC   $FC
+0A0C-   D0 04       BNE   $0A12
+0A0E-   C6 FD       DEC   $FD
+0A10-   F0 38       BEQ   $0A4A</code>
+      <p class="comment">look for "FB" nibble</p>
+      <code>0A12-   BC 8C C0    LDY   $C08C,X
+0A15-   10 FB       BPL   $0A12
+0A17-   C0 FB       CPY   #$FB
+0A19-   D0 ED       BNE   $0A08
+0A1B-   F0 00       BEQ   $0A1D</code>
+      <p class="comment">kill a few cycles (not pointless, because the disk spins independently of the CPU, so all of these low-level disk reads are highly time-sensitive)</p>
+      <code>0A1D-   EA          NOP
+0A1E-   EA          NOP</code>
+      <p class="comment">read data latch (note: no BPL loop here, we're just reading it once)</p>
+      <code>0A1F-   BC 8C C0    LDY   $C08C,X</code>
+      <p class="comment">do a compare to set or clear the carry bit (among other things, but it's the carry bit we care about)</p>
+      <code>0A22-   C0 08       CPY   #$08</code>
+      <p class="comment">rotate the carry into the low bit of the accumulator</p>
+      <code>0A24-   2A          ROL</code>
+      <p class="comment">if we just rolled a "1" bit out of the high bit of the accumulator, take this branch</p>
+      <code>0A25-   B0 0B       BCS   $0A32</code>
+      <p class="comment">next nibble needs to be $FF</p>
+      <code>0A27-   BC 8C C0    LDY   $C08C,X
+0A2A-   10 FB       BPL   $0A27</code>
+      <p class="comment">...otherwise we start over</p>
+      <code>0A2C-   C0 FF       CPY   #$FF
+0A2E-   D0 D8       BNE   $0A08</code>
+      <p class="comment">loop back to get next nibble</p>
+      <code>0A30-   F0 EB       BEQ   $0A1D</code>
+      <p class="comment">execution continues here (from $0A25) get another nibble</p>
+      <code>0A32-   BC 8C C0    LDY   $C08C,X
+0A35-   10 FB       BPL   $0A32</code>
+      <p class="comment">stash it in zero page</p>
+      <code>0A37-   84 FC       STY   $FC</code>
+      <p class="comment">if the accumulator is anything but %00001010, start over</p>
+      <code>0A39-   C9 0A       CMP   #$0A
+0A3B-   D0 CB       BNE   $0A08</code>
+    </div>
+    <p class="seen">I got lost several times trying to follow this routine. I think the easiest way to explain it is to show the difference between the original disk and my non-working copy.</p>
+    <p class="seen">Here is the original disk, as seen by the Copy II+ nibble editor. Nibbles with extra "0" bits (timing bits) after them are displayed in inverse on an original machine, marked here with a "+" after the nibble.</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK:     START: 1B1E  LENGTH: 17C1</code>
+      <code>1C70: 9F EB E5 FC D7 D7 D7 EE   VIEW
+1C78: FA E6 E6 FF FE F2 ED FD
+1C80: FF EF ED BA BB DD AF E6
+1C88: B7 A7 CB B7 DE AA EB FF
+1C90: FF FF FF FB+FF FF+FF FF+
+1C98: FD FF+FF+FF+FF+FF+FF+FF+
+1CA0: FF+FF+D5 AA 96 AA AB AA
+1CA8: AA AA AB AA AA DE AA EB+
+1CB0: FF+FF+FF+FF+FF+FF D5 AA
+---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">It's easy to understand why a simple sector copy failed. The sequence that this code is looking for starts at offset $1C93, which is between the end of one sector and the beginning of the next. (The data epilogue is at $1C8C; the next address prologue is at $1CA2.)</p>
+    <p class="seen">Sector copiers discard everything between those delimiters and rebuild the track with a default pattern of sync bytes. That pattern doesn't include an $FB nibble, so the nibble check fails.</p>
+    <p class="seen">But the EDD bit copy also failed. Here is the original disk's pattern at offset $1C93:</p>
+    <p class="seen">- $FB + timing bit - $FF - $FF + timing bit - $FF - $FF + timing bit</p>
+    <p class="seen">And here is what the same part of the track looks like on my failed EDD copy:</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK:     START: 1B1E  LENGTH: 17C1</code>
+      <code>1C70: 9F EB E5 FC D7 D7 D7 EE   VIEW
+1C78: FA E6 E6 FF FE F2 ED FD
+1C80: FF EF ED BA BB DD AF E6
+1C88: B7 A7 CB B7 DE AA EB FF
+1C90: FF FF FF FB+FF FF FF+FF+
+1C98: FD FF+FF+FF+FF+FF+FF+FF+
+1CA0: FF+FF+D5 AA 96 AA AB AA
+1CA8: AA AA AB AA AA DE AA EB+
+1CB0: FF+FF+FF+FF+FF+FF D5 AA
+---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">A subtle difference! The sequence at offset $1C93 now looks like this:</p>
+    <p class="seen">- $FB + timing bit - $FF - $FF - $FF + timing bit - $FF + timing bit</p>
+    <p class="seen">This code is looking for $FF bytes with an alternating pattern of timing bit, no timing bit, timing bit, no timing bit. It doesn't find that on the bit copy, so it knows it's not running on an original disk.</p>
+    <p class="seen">Continuing the code listing...</p>
+    <div class="listing">
+      <p class="comment">get a nibble</p>
+      <code>0A3D-   BD 8C C0    LDA   $C08C,X
+0A40-   10 FB       BPL   $0A3D</code>
+      <p class="comment">more bit twiddling</p>
+      <code>0A42-   38          SEC
+0A43-   2A          ROL</code>
+      <p class="comment">AND it with the previously stashed nibble</p>
+      <code>0A44-   25 FC       AND   $FC
+0A46-   49 FF       EOR   #$FF</code>
+      <p class="comment">success path branches over the next instruction...</p>
+      <code>0A48-   F0 03       BEQ   $0A4D</code>
+      <p class="comment">...which reboots</p>
+      <code>0A4A-   4C 00 C6    JMP   $C600</code>
+      <p class="comment">success path continues here -- set up zero page as if none of this ever happened</p>
+      <code>0A4D-   A9 60       LDA   #$60
+0A4F-   85 2B       STA   $2B
+0A51-   A9 09       LDA   #$09
+0A53-   85 27       STA   $27</code>
+      <p class="comment">restore the code that was supposed to be in T00,S00 in the first place</p>
+      <code>0A55-   A9 01       LDA   #$01
+0A57-   8D 00 08    STA   $0800
+0A5A-   A9 A5       LDA   #$A5
+0A5C-   8D 01 08    STA   $0801
+0A5F-   A9 27       LDA   #$27
+0A61-   8D 02 08    STA   $0802
+0A64-   A9 C9       LDA   #$C9
+0A66-   8D 03 08    STA   $0803
+0A69-   A9 09       LDA   #$09
+0A6B-   8D 04 08    STA   $0804</code>
+      <p class="comment">and jump back there to start the boot for real</p>
+      <code>0A6E-   4C 01 08    JMP   $0801</code>
+    </div>
+    <p>To bypass this, I can edit T00,S00 to put those 5 bytes into $0800..$0804.</p>
+    <p>T00,S00,$00 change "03 4C 00 0A EA"</p>
+    <p>to "01 A5 27 C9 09"</p>
+    <p>Side B is also COPYA-able and does not appear to have any further protection.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<section>
+  <h2>Changelog</h2>
+
+    <div class="terminal_output">
+      <code>2015-09-06</code>
+    </div>
+    <p class="seen">- Vastly improved explanation of the</p>
+    <p class="seen">actual protection routine. Thanks to qkumba for pointing out that my original explanation was inaccurate.</p>
+    <div class="terminal_output">
+      <code>2015-03-18</code>
+    </div>
+    <p class="seen">- initial release</p>
+</section>
+
+<p>Next: <a rel="next" href="output/423-microzine-23.html">Microzine 23</a></p>
+</body></html>

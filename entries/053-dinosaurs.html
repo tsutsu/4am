@@ -1,0 +1,320 @@
+<!doctype html>
+<html><head>
+<title>Dinosaurs</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/052-starting-with-phonics.html">Starting with Phonics</a></p>
+<section>
+
+    <p>"Dinosaurs" is a 1984 educational game programmed by Julie Harris and distributed by Advanced Ideas, Inc.</p>
+    <p>COPYA fails immediately with a disk read error. EDD 4 bit copy gives no errors, but the copy does not work. It loads several tracks (way more than enough for DOS), then fills the screen with garbage characters and reboots.</p>
+    <p class="seen">Turning to my trusty Copy ][+ sector editor, I press "P" to get to the</p>
+    <p class="seen">Sector Editor Patcher, and select "DOS</p>
+    <p>3.3 PATCHED". This option ignores checksum bytes and epilogue sequences -- as long as the address and data prologue are standard ("D5 AA 96" and "D5 AA AD", respectively), this will allow me to read each sector. And lo and behold, it works! I can read the data from every sector on every track.</p>
+    <p>Track 0 feels like a DOS 3.3 RWTS, but</p>
+    <p>I don't see a DOS 3.3 disk catalog on track $11 or anywhere else. The boot doesn't sound like it's loading a full DOS from tracks 2, 1, and 0. It swings out further than that and loads a bunch of tracks sequentially.</p>
+    <p class="seen">Based on my limited experience cracking other disks, I would guess that this disk has</p>
+    <p class="seen">- Standard prologue bytes before the</p>
+    <p class="seen">address and data fields [otherwise</p>
+    <p class="seen">Copy ][+ sector editor would give read errors, even with the "DOS 3.3 PATCHED" option]</p>
+    <p class="seen">- Non-standard epilogue bytes after the</p>
+    <p class="seen">address and data fields [otherwise COPYA would work]</p>
+    <p class="seen">- Some secondary protection [otherwise</p>
+    <p class="seen">the bit copy created with EDD 4 would work]</p>
+    <p>I would also guess that it uses direct RWTS calls to read (and maybe write to) the disk.</p>
+    <p class="seen">The easiest way to convert the disk to standard epilogue bytes is to use COPYA with a patched RWTS that accepts any epilogue bytes on read but includes standard epilogue bytes on write.</p>
+    <div class="curses_input">
+      <code>[S6,D1=DOS 3.3 master disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...</code>
+      <code>]CALL -151</code>
+      <code>*B942:18</code>
+      <code>*3D0G</code>
+      <code>]RUN COPYA</code>
+    </div>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]</code>
+    </div>
+    <p class="seen">...read read read... ...grind grind grind... ...write write write...</p>
+    <p class="seen">Now I have a copy of the game in a standard disk format that can be read by any tools. That is, I can copy the copy without patching the DOS 3.3 RWTS beforehand. I can sector edit the disk without messing with the Sector Editor</p>
+    <p class="seen">Patcher.</p>
+    <p class="seen">There are two problems with this copy:</p>
+    <p class="seen">1. Depending on how the original disk</p>
+    <p class="seen">was written, this copy may or may not be able to read itself. I may need to patch the disk's RWTS to deal with the fact that the disk is now in a standard format.</p>
+    <p class="seen">2. Even if it can read itself, it won't</p>
+    <p class="seen">run. The copies I tried to make -- even the bit copies -- just rebooted endlessly, which means there is some code being executed during boot to check if the disk is original. (Hint: it's not.)</p>
+    <p>Just by booting the copy, I can rule out problem #1. The disk seems to read itself just fine. It makes it exactly as far as the failed bit copy -- far enough to figure out that it's not an original disk, fill the screen with garbage, and reboot.</p>
+    <p class="seen">Time for boot tracing with AUTOTRACE.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+      <code>]BLOAD BOOT1,A$2600</code>
+      <code>]CALL -151</code>
+      <code>*B600<2600.2EFFM</code>
+      <code>*B700L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up RWTS parameter table in preparation for a multi-sector read</p>
+      <code>B700-   8E E9 B7    STX   $B7E9
+B703-   8E F7 B7    STX   $B7F7
+B706-   A9 01       LDA   #$01
+B708-   8D F8 B7    STA   $B7F8
+B70B-   8D EA B7    STA   $B7EA
+B70E-   AD E0 B7    LDA   $B7E0
+B711-   8D E1 B7    STA   $B7E1</code>
+      <p class="comment">starting at T09,S02</p>
+      <code>B714-   A9 09       LDA   #$09
+B716-   8D EC B7    STA   $B7EC
+B719-   A9 02       LDA   #$02
+B71B-   8D ED B7    STA   $B7ED
+B71E-   AC E7 B7    LDY   $B7E7
+B721-   88          DEY
+B722-   8C F1 B7    STY   $B7F1
+B725-   A9 01       LDA   #$01
+B727-   8D F4 B7    STA   $B7F4
+B72A-   8A          TXA
+B72B-   4A          LSR
+B72C-   4A          LSR
+B72D-   4A          LSR
+B72E-   4A          LSR
+B72F-   AA          TAX
+B730-   A9 00       LDA   #$00
+B732-   9D F8 04    STA   $04F8,X
+B735-   9D 78 04    STA   $0478,X</code>
+      <p class="comment">do the read</p>
+      <code>B738-   20 93 B7    JSR   $B793
+B73B-   A2 FF       LDX   #$FF
+B73D-   9A          TXS
+B73E-   8E EB B7    STX   $B7EB</code>
+      <p class="comment">hmm</p>
+      <code>B741-   4C 30 8A    JMP   $8A30</code>
+    </div>
+    <p>I need to know what's at $8A30. I'll need to interrupt the boot at $B741 and redirect it to a routine under my control.</p>
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up callback #1 (after boot1 is loaded)</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D 4A 08    STA   $084A
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D 4B 08    STA   $084B
+9702-   A9 97       LDA   #$97
+9704-   8D 4C 08    STA   $084C</code>
+      <p class="comment">start the boot process</p>
+      <code>9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">callback #1 is here -- set up callback #2 (after boot2 is loaded starting from T09,S02)</p>
+      <code>970A-   A9 4C       LDA   #$4C
+970C-   8D 41 B7    STA   $B741
+970F-   A9 1C       LDA   #$1C
+9711-   8D 42 B7    STA   $B742
+9714-   A9 97       LDA   #$97
+9716-   8D 43 B7    STA   $B743</code>
+      <p class="comment">continue the boot</p>
+      <code>9719-   4C 00 B7    JMP   $B700</code>
+      <p class="comment">callback #2 is here</p>
+      <code>971C-   4C 59 FF    JMP   $FF59</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE2,A$9600,L$11F</code>
+      <code>*9600G
+...reboots slot 6...
+<beep></code>
+      <code>*8A30L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">setting up the RWTS parameter table again for another sector read into $8B00</p>
+      <code>8A30-   A9 8B       LDA   #$8B
+8A32-   8D F1 B7    STA   $B7F1
+8A35-   A9 00       LDA   #$00
+8A37-   8D EB B7    STA   $B7EB
+8A3A-   A9 B7       LDA   #$B7
+8A3C-   A0 E8       LDY   #$E8</code>
+      <p class="comment">do the read</p>
+      <code>8A3E-   20 B5 B7    JSR   $B7B5</code>
+      <p class="comment">jump there immediately</p>
+      <code>8A41-   4C 00 8B    JMP   $8B00</code>
+    </div>
+    <p>Sigh. This means I need another level of boot tracing so I can interrupt the boot at $8A41 and see what's at $8B00.</p>
+    <div class="line_editing">
+      <code>*C500G
+...
+*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up callback #1 at $084A</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D 4A 08    STA   $084A
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D 4B 08    STA   $084B
+9702-   A9 97       LDA   #$97
+9704-   8D 4C 08    STA   $084C
+9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">set up callback #2 at $B741</p>
+      <code>970A-   A9 4C       LDA   #$4C
+970C-   8D 41 B7    STA   $B741
+970F-   A9 1C       LDA   #$1C
+9711-   8D 42 B7    STA   $B742
+9714-   A9 97       LDA   #$97
+9716-   8D 43 B7    STA   $B743
+9719-   4C 00 B7    JMP   $B700</code>
+      <p class="comment">set up callback #3 at $8A41</p>
+      <code>971C-   A9 4C       LDA   #$4C
+971E-   8D 41 8A    STA   $8A41
+9721-   A9 2E       LDA   #$2E
+9723-   8D 42 8A    STA   $8A42
+9726-   A9 97       LDA   #$97
+9728-   8D 43 8A    STA   $8A43
+972B-   4C 30 8A    JMP   $8A30</code>
+      <p class="comment">capture the page at $8B00 and reboot to my work disk so I can save it</p>
+      <code>972E-   A0 00       LDY   #$00
+9730-   B9 00 8B    LDA   $8B00,Y
+9733-   99 00 2B    STA   $2B00,Y
+9736-   C8          INY
+9737-   D0 F7       BNE   $9730
+9739-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE2A,A$9600,L$13C</code>
+      <code>*9600G
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]BSAVE BOOT2 8B00-8BFF,A$2B00,L$100</code>
+      <code>]BLOAD BOOT2 8B00-8BFF,A$8B00</code>
+      <code>]CALL -151</code>
+      <code>*8B00L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">well, well, well, what have we here?</p>
+      <p class="comment">I spy with my little eye... a nibble check!</p>
+      <code>8B00-   A9 0A       LDA   #$0A
+8B02-   85 2A       STA   $2A
+8B04-   AE E9 B7    LDX   $B7E9</code>
+      <p class="comment">turning on drive motor -- still suspicious after all these years</p>
+      <code>8B07-   BD 89 C0    LDA   $C089,X
+8B0A-   BD 8E C0    LDA   $C08E,X</code>
+      <p class="comment">some counters and stuff</p>
+      <code>8B0D-   A9 AE       LDA   #$AE
+8B0F-   85 48       STA   $48
+8B11-   A9 8B       LDA   #$8B
+8B13-   85 49       STA   $49
+8B15-   A9 80       LDA   #$80
+8B17-   85 2B       STA   $2B
+8B19-   C6 2B       DEC   $2B</code>
+      <p class="comment">if zero page $2B hits 0, it's off to</p>
+      <p class="comment">The Badlands with you</p>
+      <code>8B1B-   F0 5D       BEQ   $8B7A</code>
+      <p class="comment">read the address field</p>
+      <code>8B1D-   20 44 B9    JSR   $B944</code>
+      <p class="comment">can't read it? off to The Badlands</p>
+      <code>8B20-   B0 58       BCS   $8B7A
+8B22-   A5 2D       LDA   $2D
+8B24-   C9 02       CMP   #$02</code>
+      <p class="comment">wrong sector? try again</p>
+      <code>8B26-   D0 F1       BNE   $8B19</code>
+      <p class="comment">Search for a specific sequence of nibbles in the "dead zone" between the address field and data field.</p>
+      <p class="comment">This area is normally not important, so COPYA didn't copy it precisely because normal disks don't care. (Actually, it's even more evil than that, because the original disk is written with timing bits in specific non-standard places between the nibbles in the dead zone. This code not only requires the right nibbles in the right order, it reads them just slightly faster than normal. So the timing bits need to be in the right places too, or the disk will get out of sync and read the wrong nibble values. This will trip up even the best bit copiers. And you can forget about making a disk image for emulators -- those don't store timing bits at all.)</p>
+      <code>8B28-   A0 00       LDY   #$00
+8B2A-   BD 8C C0    LDA   $C08C,X
+8B2D-   10 FB       BPL   $8B2A
+8B2F-   88          DEY
+8B30-   F0 48       BEQ   $8B7A
+8B32-   C9 D5       CMP   #$D5
+8B34-   D0 F4       BNE   $8B2A
+8B36-   A0 00       LDY   #$00
+8B38-   BD 8C C0    LDA   $C08C,X
+8B3B-   10 FB       BPL   $8B38
+8B3D-   88          DEY
+8B3E-   F0 3A       BEQ   $8B7A
+8B40-   C9 E7       CMP   #$E7
+8B42-   D0 F4       BNE   $8B38
+8B44-   BD 8C C0    LDA   $C08C,X
+8B47-   10 FB       BPL   $8B44
+8B49-   C9 E7       CMP   #$E7
+8B4B-   D0 2D       BNE   $8B7A
+8B4D-   BD 8C C0    LDA   $C08C,X
+8B50-   10 FB       BPL   $8B4D
+8B52-   C9 E7       CMP   #$E7
+8B54-   D0 24       BNE   $8B7A
+8B56-   BD 8D C0    LDA   $C08D,X
+8B59-   A0 10       LDY   #$10
+8B5B-   24 06       BIT   $06
+8B5D-   BD 8C C0    LDA   $C08C,X
+8B60-   10 FB       BPL   $8B5D
+8B62-   88          DEY
+8B63-   F0 15       BEQ   $8B7A
+8B65-   C9 EE       CMP   #$EE
+8B67-   D0 F4       BNE   $8B5D
+8B69-   A0 07       LDY   #$07
+8B6B-   BD 8C C0    LDA   $C08C,X
+8B6E-   10 FB       BPL   $8B6B
+8B70-   D1 48       CMP   ($48),Y
+8B72-   D0 06       BNE   $8B7A
+8B74-   88          DEY
+8B75-   10 F4       BPL   $8B6B</code>
+      <p class="comment">all is well, jump to the success path</p>
+      <code>8B77-   4C B6 8B    JMP   $8BB6</code>
+      <p class="comment">The Badlands (from which there is no return) -- wipe memory and reboot</p>
+      <code>8B7A-   C6 2A       DEC   $2A
+8B7C-   D0 97       BNE   $8B15
+8B7E-   A2 22       LDX   #$22
+8B80-   BD 8B 8B    LDA   $8B8B,X
+8B83-   95 00       STA   $00,X
+8B85-   CA          DEX
+8B86-   10 F8       BPL   $8B80
+8B88-   4C 00 00    JMP   $0000
+8B8B-   A0 01       LDY   #$01
+8B8D-   84 4F       STY   $4F
+8B8F-   88          DEY
+8B90-   84 4E       STY   $4E
+8B92-   98          TYA
+8B93-   91 4E       STA   ($4E),Y
+8B95-   88          DEY
+8B96-   D0 FB       BNE   $8B93
+8B98-   E6 4F       INC   $4F
+8B9A-   F0 0C       BEQ   $8BA8
+8B9C-   A5 4F       LDA   $4F
+8B9E-   C9 C0       CMP   #$C0
+8BA0-   D0 F1       BNE   $8B93
+8BA2-   A9 D0       LDA   #$D0
+8BA4-   85 4F       STA   $4F
+8BA6-   D0 EB       BNE   $8B93
+8BA8-   AD 81 C0    LDA   $C081
+8BAB-   6C FC FF    JMP   ($FFFC)</code>
+      <code>8BAE-   FC EE EE FC ; data table
+8BB2-   E7 EE FC E7 ; for nibbles</code>
+      <p class="comment">success path is here turn off drive motor</p>
+      <code>8BB6-   BD 88 C0    LDA   $C088,X</code>
+      <p class="comment">restore normal JMP $BFD8 at $B741</p>
+      <code>8BB9-   A9 D8       LDA   #$D8
+8BBB-   8D 42 B7    STA   $B742
+8BBE-   A9 BF       LDA   #$BF
+8BC0-   8D 43 B7    STA   $B743</code>
+      <p class="comment">continue boot</p>
+      <code>8BC3-   4C 41 B7    JMP   $B741</code>
+    </div>
+    <p>OK, so there are no side effects to the nibble check (no flags set, no markers laid down, no code decrypted). The only thing it does is overwrite the instruction that called it (at $B741, where it had JMP $8A30) with the code that was supposed to be there in the first place (JMP $BFD8).</p>
+    <p>That means I should be able to just change that JMP at $B741 and bypass the entire copy protection routine.</p>
+    <p>T00,S01,$42 change "30 8A" to "D8 BF"</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/054-piece-of-cake.html">Piece of Cake</a></p>
+</body></html>

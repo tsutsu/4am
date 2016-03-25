@@ -1,0 +1,250 @@
+<!doctype html>
+<html><head>
+<title>Writer Rabbit 1.0</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/405-word-master.html">Word Master</a></p>
+<section>
+
+    <p class="seen">Only side A is bootable.</p>
+</section>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">no errors, but the copy boots to the graphical title screen then says "Fatal Disk Error" and hangs</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">ditto</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">ditto</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">nothing suspicious</p>
+    <p class="seen">Disk Fixer</p>
+    <p class="seen">T00 -> looks like ProDOS bootloader and ProDOS disk catalog</p>
+    <p class="seen">Why didn't any of my copies work?</p>
+    <p class="seen">Probably a nibble check in the startup program</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Search for error message, maybe we'll get lucky</p>
+    <p class="seen">2. Disable nibble check</p>
+    <p class="seen">3. There is no step 3 (I hope)</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Get Lucky</h3>
+
+    <p class="seen">Turning to my trusty Disk Fixer sector editor, I scanned for the ASCII string "Fatal"...</p>
+    <div class="curses_input">
+      <code>[S6,D1=non-working copy]</code>
+      <code>[Disk Fixer]
+  ["F"ind]
+    ["A"SCII]
+      "Fatal"</code>
+    </div>
+    <p class="seen">...but found nothing.</p>
+    <p class="seen">However, knowing that many Apple II programs use 7-bit ASCII, I scanned for the hex sequence "46 61 74 61 6C" ("Fatal" without the high bit set):</p>
+    <div class="curses_input">
+      <code>[Disk Fixer]
+  ["F"ind]
+    ["H"ex]
+      "46 61 74 61 6C"</code>
+    </div>
+    <p class="seen">Behold! Matches on T03,S0E and T10,S08.</p>
+    <p class="seen">T03,S0E is the second half of a ProDOS block; the first half is T03,S00. (See "Beneath Apple DOS", fig. 3-24, "Comparison of Sector Skewing". You can also set Disk Fixer to ProDOS ordering mode and sector $0E will appear as $01, but I find that confusing so I rarely use it.)</p>
+    <p class="seen">Anyway, the nibble check is on T03,S00, as seen through Disk Fixer's built-in disassembly mode:</p>
+    <div class="terminal_output">
+      <code>T03,S00
+----------- DISASSEMBLY MODE ----------</code>
+      <p class="comment">turn on drive motor manually</p>
+      <code>008B:BD 89 C0       LDA   $C089,X</code>
+      <p class="comment">some sort of Death Counter</p>
+      <code>008E:A9 56          LDA   #$56
+0090:85 08          STA   $08
+0092:A9 08          LDA   #$08
+0094:C6 07          DEC   $07
+0096:D0 04          BNE   $009C
+0098:C6 08          DEC   $08</code>
+      <p class="comment">If the Death Counter hits zero, that would be bad. Which part of "Death</p>
+      <p class="comment">Counter" sounded good to you, anyway?</p>
+      <code>009A:F0 3C          BEQ   $00D8</code>
+      <p class="comment">look for an $FB nibble</p>
+      <code>009C:BC 8C C0       LDY   $C08C,X
+009F:10 FB          BPL   $009C
+00A1:C0 FB          CPY   #$FB
+00A3:D0 ED          BNE   $0092
+00A5:F0 00          BEQ   $00A7</code>
+      <p class="comment">kill a few cycles (not pointless, because the disk spins independently of the CPU, so all of these low-level disk reads are highly time-sensitive)</p>
+      <code>00A7:EA             NOP
+00A8:EA             NOP</code>
+      <p class="comment">read data latch (note: no BPL loop here, we're just reading it once)</p>
+      <code>00A9:BC 8C C0       LDY   $C08C,X</code>
+      <p class="comment">do a compare to set or clear the carry bit (among other things, but it's the carry bit we care about)</p>
+      <code>00AC:C0 08          CPY   #$08</code>
+      <p class="comment">rotate the carry into the low bit of the accumulator</p>
+      <code>00AE:2A             ROL</code>
+      <p class="comment">if we just rolled a "1" bit out of the high bit of the accumulator, take this branch</p>
+      <code>00AF:B0 0B          BCS   $00BC</code>
+      <p class="comment">next nibble needs to be $FF</p>
+      <code>00B1:BC 8C C0       LDY   $C08C,X
+00B4:10 FB          BPL   $00B1</code>
+      <p class="comment">...otherwise we start over</p>
+      <code>00B6:C0 FF          CPY   #$FF
+00B8:D0 D8          BNE   $0092</code>
+      <p class="comment">loop back to get next nibble</p>
+      <code>00BA:F0 EB          BEQ   $00A7</code>
+      <p class="comment">execution continues here (from $00AF) get another nibble</p>
+      <code>00BC:BC 8C C0       LDY   $C08C,X
+00BF:10 FB          BPL   $00BC</code>
+      <p class="comment">stash it in zero page</p>
+      <code>00C1:84 07          STY   $07</code>
+      <p class="comment">if the accumulator is anything but %00001010, start over</p>
+      <code>00C3:C9 0A          CMP   #$0A
+00C5:D0 CB          BNE   $0092</code>
+      <p class="comment">get a nibble</p>
+      <code>00C7:BD 8C C0       LDA   $C08C,X
+00CA:10 FB          BPL   $00C7</code>
+      <p class="comment">more bit twiddling</p>
+      <code>00CC:38             SEC
+00CD:2A             ROL</code>
+      <p class="comment">AND it with the previously stashed nibble</p>
+      <code>00CE:25 07          AND   $07
+00D0:49 FF          EOR   #$FF</code>
+      <p class="comment">branch on failure</p>
+      <code>00D2:F0 04          BEQ   $00D8</code>
+    </div>
+    <p class="seen">I got lost several times trying to follow this routine. I think the easiest way to explain it is to show the difference between the original disk and my non-working copy.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Get Visual</h3>
+
+    <p class="seen">Here is the original disk, as seen by the Copy II+ nibble editor. Nibbles with extra "0" bits (timing bits) after them are displayed in inverse on an original machine, marked here with a "+" after the nibble.</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK: 00  START: 1B1E  LENGTH: 17C1</code>
+      <code>1C70: 9F EB E5 FC D7 D7 D7 EE   VIEW
+1C78: FA E6 E6 FF FE F2 ED FD
+1C80: FF EF ED BA BB DD AF E6
+1C88: B7 A7 CB B7 DE AA EB FF
+1C90: FF FF FF FB+FF FF+FF FF+
+1C98: FD FF+FF+FF+FF+FF+FF+FF+
+1CA0: FF+FF+D5 AA 96 AA AB AA
+1CA8: AA AA AB AA AA DE AA EB+
+1CB0: FF+FF+FF+FF+FF+FF D5 AA
+---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">It's easy to understand why a simple sector copy failed. The sequence that this code is looking for starts at offset $1C93, which is between the end of one sector and the beginning of the next. (The data epilogue is at $1C8C; the next address prologue is at $1CA2.)</p>
+    <p class="seen">Sector copiers discard everything between those delimiters and rebuild the track with a default pattern of sync bytes. That pattern doesn't include an $FB nibble, so the nibble check fails.</p>
+    <p class="seen">But the EDD bit copy also failed. Here is the original disk's pattern at offset $1C93:</p>
+    <p class="seen">- $FB + timing bit - $FF - $FF + timing bit - $FF - $FF + timing bit</p>
+    <p class="seen">And here is what the same part of the track looks like on my failed EDD copy:</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK: 00  START: 1B1E  LENGTH: 17C1</code>
+      <code>1C70: 9F EB E5 FC D7 D7 D7 EE   VIEW
+1C78: FA E6 E6 FF FE F2 ED FD
+1C80: FF EF ED BA BB DD AF E6
+1C88: B7 A7 CB B7 DE AA EB FF
+1C90: FF FF FF FB+FF FF FF+FF+
+1C98: FD FF+FF+FF+FF+FF+FF+FF+
+1CA0: FF+FF+D5 AA 96 AA AB AA
+1CA8: AA AA AB AA AA DE AA EB+
+1CB0: FF+FF+FF+FF+FF+FF D5 AA
+---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">A subtle difference! The sequence at offset $1C93 now looks like this:</p>
+    <p class="seen">- $FB + timing bit - $FF - $FF - $FF + timing bit - $FF + timing bit</p>
+    <p class="seen">This code is looking for $FF bytes with an alternating pattern of timing bit, no timing bit, timing bit, no timing bit. It doesn't find that on the bit copy, so it knows it's not running on an original disk.</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which We Wrap Up</h3>
+
+    <p class="seen">Continuing the code listing...</p>
+    <div class="terminal_output">
+      <p class="comment">success path falls through to here -- turn off the drive motor and return to the caller</p>
+      <code>00D4:DD 88 C0       CMP   $C088,X
+00D7:60             RTS</code>
+      <p class="comment">failure path (a.k.a. "The Badlands", from which there is no return)</p>
+      <code>00D8:DD 88 C0       CMP   $C088,X</code>
+      <p class="comment">I'm pretty sure this is the routine that prints the error message on the screen. A/X is low/high address of the coordinates or some parameters, followed by the error message itself (see below)</p>
+      <code>00DB:A9 10          LDA   #$10
+00DD:A2 8F          LDX   #$8F
+00DF:20 D4 8D       JSR   $8DD4
+00E2:38             SEC
+00E3:6E 69 56       ROR   $5669
+00E6:20 6E 56       JSR   $566E
+00E9:00 14 8F
+00EC:A9 A2          LDA   #$A2
+00EE:8D 85 8E       STA   $8E85
+00F1:A9 01          LDA   #$01
+00F3:8D 00 03       STA   $0300
+00F6:A9 7F          LDA   #$7F
+00F8:8D 87 40       STA   $4087
+00FB:A9 00          LDA   #$00
+00FD:8D 88 40       STA   $4088</code>
+      <code>T03,S0E
+----------- DISASSEMBLY MODE -----------
+0000:A9 FF          LDA   #$FF
+0002:8D 89 40       STA   $4089
+0005:A9 00          LDA   #$00
+0007:8D 8A 40       STA   $408A
+000A:20 8B 40       JSR   $408B</code>
+      <p class="comment">this jumps to a routine that wipes memory and hangs</p>
+      <code>000D:4C 7E 8E       JMP   $8E7E</code>
+    </div>
+    <p class="seen">; error message is here</p>
+    <p class="seen">0010:52 04 2E 20 0D 0012:"Fatal Disk Error"</p>
+    <div class="">
+      <code>There don't appear to be any side
+effects. The routine either returns
+gracefully or prints an error and never
+returns at all. I should be able to put
+an "RTS" at the beginning of it to
+bypass it entirely.</code>
+      <code>T03,S00,$8B change "BD" to "60"</code>
+      <code>There is an identical nibble check on
+track $10.</code>
+      <code>T10,S09,$DC change "BD" to "60"</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...works...</code>
+    </div>
+</section>
+
+<section>
+  <h2>Chapter 4</h2>
+  <h3>In Which It Doesn't Work</h3>
+
+    <p class="seen">...That is, until I select "Silly</p>
+    <p class="seen">Sentence Party", flip to side B, and select "Return to Main Menu". Then I get a "Fatal Disk Error" again.</p>
+    <p class="seen">The menu program is duplicated on both sides, and each one contains the same nibble check!</p>
+    <p class="seen">Luckily, the third nibble check (on side B) is identical to the ones on side A. I found it easily with a sector search for the same hex sequence (the error message with high bit off):</p>
+    <div class="curses_input">
+      <code>[Disk Fixer]
+  ["F"ind]
+    ["H"ex]
+      "46 61 74 61 6C"</code>
+    </div>
+    <p>Side B,T08,S03,$DC change "BD" to "60"</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/407-graphics-converter.html">Graphics Converter</a></p>
+</body></html>

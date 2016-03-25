@@ -1,0 +1,250 @@
+<!doctype html>
+<html><head>
+<title>The Great Computer GameWorks</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/514-library-magic.html">Library Magic</a></p>
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p>no read errors, but copy prints "SAVE ? DISK ERROR" in an infinite loop</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">ditto</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">ditto</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">nothing suspicious (standard prologue and epilogue on address and data fields)</p>
+    <p class="seen">Disk Fixer</p>
+    <p class="seen">can read every sector T00 sectors are in an odd order no sign of DOS or ProDOS no disk catalog on any track</p>
+    <p class="seen">Why don't my copies work?</p>
+    <p class="seen">I don't know. Maybe a nibble check that reads a decryption key (some</p>
+    <p class="seen">Epyx games) or a seed to calculate the proper track/sector to load next (some Activision games).</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Fail To Find A Nibble Check But Find Something Far More Interesting Instead</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+    </div>
+    <p class="seen">No nibble check auto-detected. Bummer.</p>
+    <div class="line_editing">
+      <code>]BLOAD BOOT1,A$2600
+]CALL -151</code>
+      <code>*FE89G FE93G     ; disconnect DOS</code>
+      <code>*B600<2600.2FFFM ; move RWTS into place</code>
+      <code>*B700L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">normal initialization stuff here, setting up the RWTS parameter table at $B7E8</p>
+      <code>B700-   8E E9 B7    STX   $B7E9
+B703-   8E F7 B7    STX   $B7F7
+B706-   A9 01       LDA   #$01
+B708-   8D F8 B7    STA   $B7F8
+B70B-   8D EA B7    STA   $B7EA
+B70E-   AD E0 B7    LDA   $B7E0
+B711-   8D E1 B7    STA   $B7E1
+B714-   A9 00       LDA   #$00
+B716-   8D EC B7    STA   $B7EC
+.
+.
+.
+B738-   20 00 BB    JSR   $BB00   ; hmm</code>
+    </div>
+    <div class="line_editing">
+      <code>*BB00L</code>
+    </div>
+    <div class="listing">
+      <code>BB00-   86 1B       STX   $1B</code>
+      <p class="comment">neat trick to get the high byte of the return address from the stack</p>
+      <code>BB02-   BA          TSX
+BB03-   BD 02 01    LDA   $0102,X</code>
+      <p class="comment">$B7 --> zero page $03</p>
+      <code>BB06-   85 03       STA   $03
+BB08-   18          CLC
+BB09-   69 04       ADC   #$04</code>
+      <p class="comment">$BB --> zero page $05</p>
+      <code>BB0B-   85 05       STA   $05
+BB0D-   A0 00       LDY   #$00
+BB0F-   84 02       STY   $02
+BB11-   A0 40       LDY   #$40
+BB13-   84 04       STY   $04
+BB15-   A0 39       LDY   #$39
+BB17-   A9 93       LDA   #$93</code>
+      <p class="comment">$93 --> $B739</p>
+      <code>BB19-   91 02       STA   ($02),Y
+BB1B-   C8          INY
+BB1C-   A5 03       LDA   $03</code>
+      <p class="comment">$B7 --> $B73A</p>
+      <code>BB1E-   91 02       STA   ($02),Y</code>
+      <p class="comment">$BB40..$BBBF --> $0800..$087F</p>
+      <code>BB20-   A0 7F       LDY   #$7F
+BB22-   B1 04       LDA   ($04),Y
+BB24-   99 00 08    STA   $0800,Y
+BB27-   88          DEY
+BB28-   10 F8       BPL   $BB22</code>
+      <p class="comment">restore X register and jump to relocated code</p>
+      <code>BB2A-   A6 1B       LDX   $1B
+BB2C-   4C 00 08    JMP   $0800</code>
+    </div>
+    <p class="seen">I need to know what ends up at $0800.</p>
+    <div class="line_editing">
+      <code>*BB2C:4C 59 FF     ; break into monitor
+*B738G
+<beep></code>
+      <code>*800L</code>
+    </div>
+    <div class="listing">
+      <code>0800-   A9 00       LDA   #$00
+0802-   A0 EC       LDY   #$EC</code>
+      <p class="comment">($02) points to $B700 at this point, so this looks like it's setting up the RWTS parameter table again. $B7EC holds the track number (0).</p>
+      <code>0804-   91 02       STA   ($02),Y
+0806-   C8          INY</code>
+      <p class="comment">$B7ED holds the sector number (0).</p>
+      <code>0807-   91 02       STA   ($02),Y
+0809-   A9 09       LDA   #$09
+080B-   A0 F1       LDY   #$F1</code>
+      <p class="comment">$B7F1 holds the destination address, so it looks like we're going to read a bunch of sectors from track 0 into $0900 and up.</p>
+      <code>080D-   91 02       STA   ($02),Y
+080F-   A9 08       LDA   #$08
+0811-   A0 E1       LDY   #$E1</code>
+      <p class="comment">$B7E1 holds the number of sectors to read (8).</p>
+      <code>0813-   91 02       STA   ($02),Y</code>
+      <p class="comment">set up a JMP instruction at $01 (WTF)</p>
+      <code>0815-   A9 4C       LDA   #$4C
+0817-   85 01       STA   $01
+0819-   A9 93       LDA   #$93
+081B-   85 02       STA   $02</code>
+      <p class="comment">call $B793 to read multiple sectors</p>
+      <code>081D-   20 01 00    JSR   $0001</code>
+    </div>
+    <p class="seen">Despite the odd indirection, this part isn't suspicious at all. It's using the standard multi-read routine at $B793 to read the rest of track 0 into memory.</p>
+    <p class="seen">But look what comes next:</p>
+    <div class="listing">
+      <code>0820-   A0 00       LDY   #$00
+0822-   84 02       STY   $02
+0824-   A5 1E       LDA   $1E
+0826-   85 08       STA   $08
+0828-   0A          ASL
+0829-   90 01       BCC   $082C
+082B-   C8          INY
+082C-   48          PHA
+082D-   68          PLA
+082E-   D0 F8       BNE   $0828
+0830-   C0 02       CPY   #$02
+0832-   69 FF       ADC   #$FF
+0834-   85 1F       STA   $1F</code>
+    </div>
+    <p class="seen">Wait a minute. The standard DOS 3.3 RWTS doesn't use zero page $1E, so at this point it should be uninitialized and essentially random. But this loop seems to be doing some bit math on it (specifically, counting how many bits are zero and storing that in the Y register), so either something is setting $1E or I'm hallucinating. Or possibly both.</p>
+    <p class="seen">Disk Fixer</p>
+    <p class="seen">--> [F]ind --> [H]ex --> "1E"</p>
+    <p class="seen">I found a few instances of $1E in track</p>
+    <p class="seen">0. The only one that looked like actual RWTS code was T00,S0F,$3F. After some manual cross-referencing, it appears that this sector is loaded at $B900 by the RWTS loader bootstrap in sector 0. (Remember, the sectors are in a weird order.) Here is the relevant code, which is supposed to be checking the data epilogue:</p>
+    <div class="line_editing">
+      <code>*B92FL</code>
+    </div>
+    <div class="listing">
+      <code>B92F-   BD 8C C0    LDA   $C08C,X
+B932-   10 FB       BPL   $B92F
+B934-   B8          CLV
+B935-   BD 8C C0    LDA   $C08C,X
+B938-   10 FB       BPL   $B935
+B93A-   B8          CLV
+B93B-   1E 8C C0    ASL   $C08C,X
+B93E-   26 1E       ROL   $1E
+B940-   50 5C       BVC   $B99E
+B942-   38          SEC
+B943-   60          RTS</code>
+    </div>
+    <p class="seen">Normally, this code would be checking for the nibble sequence "DE AA", the standard epilogue after the data field. But instead, this disk accepts any two nibbles, then does some bit math to twiddle zero page $1E based on the timing bits that follow. Since that relocated routine at $0800 reads 8 sectors, zero page $1E gets twiddled 8 times, giving it a fully defined value despite never being initialized.</p>
+    <p class="seen">Never a dull moment in the land of</p>
+    <p class="seen">Apple II copy protection.</p>
+    <p class="seen">Obviously the value in zero page $1E is important. Let's capture it.</p>
+    <div class="line_editing">
+      <code>]PR#5
+]CALL -151</code>
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up callback after boot0</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D 4A 08    STA   $084A
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D 4B 08    STA   $084B
+9702-   A9 97       LDA   #$97
+9704-   8D 4C 08    STA   $084C
+9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">set up callback after mystery routine at $BB00</p>
+      <code>970A-   A9 4C       LDA   #$4C
+970C-   8D 60 BB    STA   $BB60
+970F-   A9 1C       LDA   #$1C
+9711-   8D 61 BB    STA   $BB61
+9714-   A9 97       LDA   #$97
+9716-   8D 62 BB    STA   $BB62
+9719-   4C 00 B7    JMP   $B700</code>
+      <p class="comment">print value of zero page $1E</p>
+      <code>971C-   A5 1E       LDA   $1E
+971E-   20 DA FD    JSR   $FDDA</code>
+      <p class="comment">turn off disk motor and exit</p>
+      <code>9721-   AD E8 C0    LDA   $C0E8
+9724-   4C 59 FF    JMP   $FF59</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE CAPTURE 1E,A$9600,L$127</code>
+      <code>*9600G
+...
+F7
+<beep></code>
+    </div>
+    <p class="seen">This is repeatable; the original disk always ends up with $F7 in zero page $1E. If my theory is correct (that this is the crux of the copy protection), then running the same capture utility on my non-working copy should yield a different result.</p>
+    <div class="curses_input">
+      <code>[S6,D1=non-working copy]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+]BRUN CAPTURE 1E
+...
+00
+<beep></code>
+    </div>
+    <p class="seen">All my copies (even the EDD 4 bit copy) end up with $00 in zero page $1E.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Remove All Traces Of Copy Protection Using An Automated Tool That I Wrote For Just Such An Occasion</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=non-working copy]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+]BRUN PDP</code>
+    </div>
+    <p class="seen">T00,S03,$64 change A51E to A9F7</p>
+    <p class="seen">(The patch ignores the value of zero page $1E and always loads a hard-coded value of $F7 instead.)</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/516-first-start-writing-program.html">First Start Writing Program</a></p>
+</body></html>

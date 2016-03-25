@@ -1,0 +1,188 @@
+<!doctype html>
+<html><head>
+<title>Voyage of the Mimi</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/209-creature-creator.html">Creature Creator</a></p>
+<section>
+
+    <p>There are four independent games:</p>
+    <div class="curses_input">
+      <code>  [disk 1A] Pirate's Gold & Lost at Sea
+  [disk 1B] Hurricane
+  [disk 2]  Rescue Mission</code>
+    </div>
+    <p>I'll start with disk 1, side A.</p>
+</section>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p>disk read error about halfway through</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p>reads everything except track $11; copy boots DOS then reboots</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p>the suspiciously unreadable track $11 is full of sync bytes, no particular structure, no sector markers</p>
+    <p class="seen">Disk Fixer</p>
+    <p>no way to read track $11 T00-2 -> looks like DOS 3.3 T01,S09 -> startup program is "HELLO" T02,S04-08 -> possible disk catalog</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p>non-standard track $11</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p>probably a nibble check in the late- stage DOS or startup program that looks at track $11</p>
+    <p class="seen">Next steps:</p>
+    <p>1. try to interrupt boot with DOS in memory</p>
+    <p>2. trace startup program</p>
+    <p>3. find nibble check and disable it</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which Our Adventure Is Over Almost Before It Begins</h3>
+
+    <div class="line_editing">
+      <code>]PR#6
+<Ctrl-C></code>
+    </div>
+    <div class="terminal_output">
+      <code>BREAK
+]</code>
+    </div>
+    <p>That gets me to a prompt.</p>
+    <div class="line_editing">
+      <code>]CATALOG
+...hangs...</code>
+    </div>
+    <p><Ctrl-Reset> ...back to prompt...</p>
+    <div class="line_editing">
+      <code>]LIST</code>
+    </div>
+    <div class="terminal_output">
+      <code> 1  ONERR  GOTO 21000
+ 5  GOTO 100
+ 10  POKE 40206,0
+ 20  PRINT  CHR$ (4)"BRUN DDMOVER
+     "
+ 22  POKE 49281,0
+ 23  POKE 65532,192: POKE 65533,3</code>
+      <code> 24  POKE 49282,0
+ 25  PRINT  CHR$ (4);"BLOAD HR.UN
+     PACKER.B,A$300"
+ 26  POKE 230,32: CALL  - 3086
+ 27  POKE  - 16297,0: POKE  - 163
+     00,0: POKE  - 16302,0: POKE
+      - 16304,0
+ 30  PRINT  CHR$ (4);"BLOAD CREDI
+     TS.PG1.PIC"
+ 40  CALL 768
+ 50  PRINT  CHR$ (4);"BLOAD CREDI
+     TS.PG2.PIC"
+ 55  FOR T = 1 TO 2500: NEXT
+ 60  CALL 768
+ 65  REM FOR T= 1 TO 500: NEXT
+ 70  POKE 24576,0: POKE 103,1: POKE
+     104,96
+ 80  PRINT  CHR$ (4)"RUN PGSETUP"</code>
+      <code> 100  FOR T = 960 TO 965
+ 102  READ P: POKE T,P
+ 104  NEXT T
+ 110  DATA   173,130,192,108,252,
+     255
+ 120  POKE 49281,0
+ 130  POKE 65532,192: POKE 65533,
+     3
+ 140  POKE 49282,0
+ 150  POKE 1012, PEEK (1011)
+ 155  CALL 44331
+ 160  GOTO 10
+ 21000 ER =  PEEK (222)
+ 21010  IF ER = 255 THEN  RESUME</code>
+      <code> 21020  PRINT  CHR$ (16): VTAB 6:
+      HTAB 2: PRINT "PUT THE PIRA
+     TE'S GOLD/LOST AT SEA DISK":
+      VTAB 8: HTAB 6: PRINT "IN D
+     RIVE #1 AND CLOSE THE DOOR."
+     : VTAB 12: HTAB 10: PRINT "P
+     RESS RETURN TO GO ON."
+ 21030  POKE  - 16368,0: GET A$: IF
+     A$ <  >  CHR$ (13) THEN 2103
+     0
+ 21040  PR# 6</code>
+    </div>
+    <p>Line 155 calls 44331 ($AD2B), which is usually the DOS 3.3 DELETE function handler (c.f. "Beneath Apple DOS" p. 8-25). But I'm guessing that's not true on this disk.</p>
+    <div class="line_editing">
+      <code>]CALL -151</code>
+      <code>*AD2BL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">get RWTS parameter table address</p>
+      <code>AD2B-   20 E3 03    JSR   $03E3
+AD2E-   84 00       STY   $00
+AD30-   85 01       STA   $01</code>
+      <p class="comment">track $11</p>
+      <code>AD32-   A9 11       LDA   #$11
+AD34-   A0 04       LDY   #$04
+AD36-   91 00       STA   ($00),Y</code>
+      <p class="comment">seek command ($00)</p>
+      <code>AD38-   A9 00       LDA   #$00
+AD3A-   A0 0C       LDY   #$0C
+AD3C-   91 00       STA   ($00),Y</code>
+      <p class="comment">disk volume 0 (wildcard)</p>
+      <code>AD3E-   A9 00       LDA   #$00
+AD40-   A0 03       LDY   #$03
+AD42-   91 00       STA   ($00),Y</code>
+      <p class="comment">call RWTS</p>
+      <code>AD44-   20 E3 03    JSR   $03E3
+AD47-   20 D9 03    JSR   $03D9
+AD4A-   A9 00       LDA   #$00
+AD4C-   85 48       STA   $48</code>
+      <p class="comment">get slot number (x16) into X register</p>
+      <code>AD4E-   A0 01       LDY   #$01
+AD50-   B1 00       LDA   ($00),Y
+AD52-   AA          TAX</code>
+      <p class="comment">turn on drive motor manually</p>
+      <code>AD53-   BD 89 C0    LDA   $C089,X
+AD56-   BD 8E C0    LDA   $C08E,X</code>
+      <p class="comment">look for sequence of sync bytes followed by $95</p>
+      <code>AD59-   BD 8C C0    LDA   $C08C,X
+AD5C-   10 FB       BPL   $AD59
+AD5E-   C9 FF       CMP   #$FF
+AD60-   D0 F7       BNE   $AD59
+AD62-   BD 8C C0    LDA   $C08C,X
+AD65-   10 FB       BPL   $AD62
+AD67-   C9 FF       CMP   #$FF
+AD69-   D0 EE       BNE   $AD59
+AD6B-   BD 8C C0    LDA   $C08C,X
+AD6E-   10 FB       BPL   $AD6B
+AD70-   C9 FF       CMP   #$FF
+AD72-   F0 F7       BEQ   $AD6B
+AD74-   C9 95       CMP   #$95
+AD76-   D0 E1       BNE   $AD59</code>
+      <p class="comment">skip lots of nibbles</p>
+      <code>AD78-   A0 C0       LDY   #$C0
+AD7A-   BD 8C C0    LDA   $C08C,X
+AD7D-   10 FB       BPL   $AD7A
+AD7F-   88          DEY
+AD80-   D0 F8       BNE   $AD7A</code>
+      <p class="comment">check next nibble</p>
+      <code>AD82-   BD 8C C0    LDA   $C08C,X
+AD85-   10 FB       BPL   $AD82
+AD87-   C9 CA       CMP   #$CA</code>
+      <p class="comment">branch if found</p>
+      <code>AD89-   F0 03       BEQ   $AD8E</code>
+      <p class="comment">immediately reboot if not found</p>
+      <code>AD8B-   4C 00 C6    JMP   $C600</code>
+      <p class="comment">success path continues here -- turn off drive motor and exit</p>
+      <code>AD8E-   BD 88 C0    LDA   $C088,X
+AD91-   60          RTS</code>
+    </div>
+    <p>There are no side effects; I can put an RTS at $AD2B and bypass the entire copy protection.</p>
+    <p>T01,S0C,$2B change "20" to "60"</p>
+    <p>All sides use identical protection.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/211-ken-uston-s-professional-blackjack-v1-23.html">Ken Uston's Professional Blackjack v1.23</a></p>
+</body></html>

@@ -1,0 +1,298 @@
+<!doctype html>
+<html><head>
+<title>The Movie Monster Game</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/026-rampage.html">Rampage</a></p>
+<section>
+
+    <p>The Movie Monster Game is a 1986 arcade game distributed by Epyx, Inc.</p>
+    <p>Trying to copy the original disk with COPYA fails immediately with a disk read error. EDD 4 bit copy gives no read errors, but the copy it produces just reboots endlessly. Firing up my trusty Copy ][+ sector editor, I press "P" to get to the Sector Editor Patcher and selected "DOS 3.3 Patched." This option ignores the epilogue bytes after the address field and data field (normally "DE AA EB"). It doesn't work on every disk; lots of disks use non- standard prologue bytes as well, or don't use 16 sectors, or any one of a hundred different ways to deviate from the norm within the tolerance of the</p>
+    <p>Disk II hardware. But it works with this one! Ignoring epilogue bytes, the sector editor can whiz through the entire disk and read all the data from every sector on every track.</p>
+    <p>That means that the easiest way to copy this disk is to use COPYA (from the DOS</p>
+    <p>3.3 master disk), with one small modification: after booting, I'll go into the monitor and patch the DOS 3.3 RWTS to ignore epilogue bytes. This is similar to what the Copy ][+ Sector</p>
+    <p>Editor Patcher does, and in most cases the difference is immaterial.</p>
+    <div class="curses_input">
+      <code>[S6D1=DOS 3.3 master disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...
+]CALL -151
+*B942:18   <-- CLC to indicate no error
+               reading epilogue bytes
+               (was SEC, signifying an
+               error)
+*3D0G
+]RUN COPYA</code>
+    </div>
+    <div class="curses_input">
+      <code>[S6D1=original disk]
+[S6D2=blank disk]</code>
+    </div>
+    <p class="seen">...read read read... ...grind grind grind... ...write write write...</p>
+    <p>(I do this for both sides.)</p>
+    <p>OK, now I have two disks with standard prologue and epilogue bytes, which can be read by any standard tool (including COPYA without any RWTS patches).</p>
+    <p>Unfortunately, the copy does not work; it just reboots endlessly. There must be some additional code designed to detect that the disk is not original.</p>
+    <p>To find out where this code is, I'll need to trace the boot process until</p>
+    <p>I find the offending code, and remove it or bypass it somehow.</p>
+    <div class="curses_input">
+      <code>[S6D1=original disk]
+[S5D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0</code>
+    </div>
+    <p>OK, Now I have the very early boot code (colloquially called "boot0") which is loaded by the disk controller ROM from track 0, sector 0. This code's job is to load the next section of code, commonly called "boot1" (usually by re-using part of the disk controller ROM routine at $C600). Then "boot1" either loads the rest of the disk operating system, or (in many commercial games) simply loads the game code directly off the disk and jumps to it. There are variations (of course), but that's the basic idea. Booting a disk is a cumulative process; each step builds on the previous steps.</p>
+    <p>My work disk automatically runs a program called AUTOTRACE1, which interrupts the boot process immediately after the disk controller ROM routine loads the code from track 0, sector</p>
+    <p>0. It relocates this code (up to 256 bytes worth) to address $2800, then reboots and saves it to a file called BOOT0.</p>
+    <p>I've seen a lot of boot0 code from different copy-protected (and not copy-protected) disks, so I've kind of developed a sense of what a "normal" boot looks like. I can look at almost-but-not-quite normal boot0 code and hone in pretty quickly on the part that's unusual. Maybe it calls a subroutine that isn't normally called, or it does things in a strange order, or it jumps to an unusual place after loading the boot1 code.</p>
+    <div class="line_editing">
+      <code>]CALL -151
+*800<2800.28FFM
+*801L
+...</code>
+    </div>
+    <p>Everything here looks pretty normal (i.e. just like an unprotected DOS 3.3 disk), until it goes to jump to the boot1 code. Usually that happens with an indirect JMP ($08FD), which, in a normal boot0, will end up continuing execution at $B700 which is stored in track 0, sector 1. But in this case, I see:</p>
+    <div class="listing">
+      <code>084A-   4C 00 BB    JMP   $BB00</code>
+    </div>
+    <p>Highly suspect. I definitely want to see what evil lurks at $BB00. That area of memory is normally reserved for the denibblizing process when reading data from a sector. It's scratch space, essentially. It's overwritten every time the disk reads itself (after boot1 is loaded).</p>
+    <p>But $BB00 isn't loaded yet, because I interrupted the boot process before it could be loaded. So now I need to trace the boot again, but a little bit further -- far enough for boot0 to load boot1 (including the suspicious code at $BB00), but no further.</p>
+    <p>My work disk has another program, unimaginatively named AUTOTRACE1, which does just that. It loads track 0, sector 0, then patches the boot0 code at $084A to call back to a routine under my control (instead of jumping to the original disk's boot1 code).</p>
+    <div class="line_editing">
+      <code>]BRUN AUTOTRACE1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1</code>
+    </div>
+    <p>Let's see what we have.</p>
+    <div class="line_editing">
+      <code>]CALL -151
+*B600<2000.29FFM
+*BB00L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">initialize some zero page addresses</p>
+      <code>BB00-   A9 00       LDA   #$00
+BB02-   A2 F0       LDX   #$F0
+BB04-   9A          TXS
+BB05-   95 00       STA   $00,X
+BB07-   E8          INX
+BB08-   D0 FB       BNE   $BB05
+BB0A-   A9 0A       LDA   #$0A
+BB0C-   85 FC       STA   $FC</code>
+      <p class="comment">Turn on the disk motor. Zero page $2B contains the slot number x 16. This is the standard way to access low- level disk commands.</p>
+      <code>BB0E-   A6 2B       LDX   $2B
+BB10-   BD 89 C0    LDA   $C089,X
+BB13-   BD 8E C0    LDA   $C08E,X</code>
+      <p class="comment">a counter of some kind</p>
+      <code>BB16-   A9 80       LDA   #$80
+BB18-   85 FD       STA   $FD
+BB1A-   C6 FD       DEC   $FD</code>
+      <p class="comment">$BB98 is what I call "The Badlands" i.e. the code from which there is no return. Skipping ahead, I can see that $BB98 is one branch away from tweaking the reset vector and rebooting the computer. Which is, you know, not what we want.</p>
+      <code>BB1C-   F0 7A       BEQ   $BB98</code>
+      <p class="comment">$BBA5 looks for the standard address prologue, as a setup for the real test which comes next.</p>
+      <code>BB1E-   20 A5 BB    JSR   $BBA5</code>
+      <p class="comment">If, for some reason, that doesn't work, off to The Badlands with you.</p>
+      <code>BB21-   B0 75       BCS   $BB98</code>
+      <p class="comment">Search for a specific sequence of nibbles in the "dead zone" between the address field and data field.</p>
+      <p class="comment">This area is normally not important, so COPYA didn't copy it precisely because normal disks don't care. (Actually, it's even more evil than that, because the original disk is written with timing bits in specific non-standard places between the nibbles in the dead zone. This code not only requires the right nibbles in the right order, it reads them just slightly faster than normal. So the timing bits need to be in the right places too, or the disk will get out of sync and read the wrong nibble values. This will trip up even the best bit copiers. And you can forget about making a disk image for emulators -- those don't store timing bits at all.)</p>
+      <code>BB23-   A5 F9       LDA   $F9
+BB25-   C9 08       CMP   #$08
+BB27-   D0 F1       BNE   $BB1A
+BB29-   A0 00       LDY   #$00
+BB2B-   BD 8C C0    LDA   $C08C,X
+BB2E-   10 FB       BPL   $BB2B
+BB30-   88          DEY
+BB31-   F0 65       BEQ   $BB98
+BB33-   C9 D5       CMP   #$D5
+BB35-   D0 F4       BNE   $BB2B
+BB37-   A0 00       LDY   #$00
+BB39-   BD 8C C0    LDA   $C08C,X
+BB3C-   10 FB       BPL   $BB39
+BB3E-   88          DEY
+BB3F-   F0 57       BEQ   $BB98
+BB41-   C9 E7       CMP   #$E7
+BB43-   D0 F4       BNE   $BB39
+BB45-   BD 8C C0    LDA   $C08C,X
+BB48-   10 FB       BPL   $BB45
+BB4A-   C9 E7       CMP   #$E7
+BB4C-   D0 4A       BNE   $BB98
+BB4E-   BD 8C C0    LDA   $C08C,X
+BB51-   10 FB       BPL   $BB4E
+BB53-   C9 E7       CMP   #$E7
+BB55-   D0 41       BNE   $BB98
+BB57-   BD 8D C0    LDA   $C08D,X
+BB5A-   A0 10       LDY   #$10
+BB5C-   24 80       BIT   $80
+BB5E-   BD 8C C0    LDA   $C08C,X
+BB61-   10 FB       BPL   $BB5E
+BB63-   88          DEY
+BB64-   F0 32       BEQ   $BB98
+BB66-   C9 EE       CMP   #$EE
+BB68-   D0 F4       BNE   $BB5E
+BB6A-   EA          NOP
+BB6B-   EA          NOP
+BB6C-   A0 07       LDY   #$07
+BB6E-   BD 8C C0    LDA   $C08C,X
+BB71-   10 FB       BPL   $BB6E
+BB73-   99 F0 00    STA   $00F0,Y
+BB76-   EA          NOP
+BB77-   88          DEY
+BB78-   10 F4       BPL   $BB6E</code>
+      <p class="comment">Wait, it gets better -- this disk actually uses the raw nibble data it stores in this "dead zone" AS THE DECRYPTION KEY FOR THE REST OF BOOT1</p>
+      <code>BB7A-   A2 03       LDX   #$03
+BB7C-   A9 00       LDA   #$00
+BB7E-   A8          TAY
+BB7F-   85 F8       STA   $F8
+BB81-   A9 B7       LDA   #$B7
+BB83-   85 F9       STA   $F9
+BB85-   B5 F0       LDA   $F0,X
+BB87-   51 F8       EOR   ($F8),Y
+BB89-   91 F8       STA   ($F8),Y
+BB8B-   88          DEY
+BB8C-   D0 F7       BNE   $BB85
+BB8E-   E6 F9       INC   $F9
+BB90-   CA          DEX
+BB91-   10 F2       BPL   $BB85</code>
+      <p class="comment">now that the boot1 code is decrypted, jump to it as normal</p>
+      <code>BB93-   A6 2B       LDX   $2B
+BB95-   6C FD 08    JMP   ($08FD)</code>
+      <p class="comment">The Badlands</p>
+      <code>BB98-   C6 FC       DEC   $FC
+BB9A-   F0 03       BEQ   $BB9F
+BB9C-   4C 16 BB    JMP   $BB16
+BB9F-   EE F4 03    INC   $03F4
+BBA2-   6C FC FF    JMP   ($FFFC)</code>
+      <p class="comment">subroutine (called from $BB1E) to find the next address prologue and skip over the address field to position the drive head to read the special nibbles in the dead zone</p>
+      <code>BBA5-   A0 FD       LDY   #$FD
+BBA7-   84 F0       STY   $F0
+BBA9-   C8          INY
+BBAA-   D0 04       BNE   $BBB0
+BBAC-   E6 F0       INC   $F0
+BBAE-   F0 3D       BEQ   $BBED
+BBB0-   BD 8C C0    LDA   $C08C,X
+BBB3-   10 FB       BPL   $BBB0
+BBB5-   C9 D5       CMP   #$D5
+BBB7-   D0 F0       BNE   $BBA9
+BBB9-   EA          NOP
+BBBA-   BD 8C C0    LDA   $C08C,X
+BBBD-   10 FB       BPL   $BBBA
+BBBF-   C9 AA       CMP   #$AA
+BBC1-   D0 F2       BNE   $BBB5
+BBC3-   A0 03       LDY   #$03
+BBC5-   BD 8C C0    LDA   $C08C,X
+BBC8-   10 FB       BPL   $BBC5
+BBCA-   C9 96       CMP   #$96
+BBCC-   D0 E7       BNE   $BBB5
+BBCE-   A9 00       LDA   #$00
+BBD0-   85 F1       STA   $F1
+BBD2-   BD 8C C0    LDA   $C08C,X
+BBD5-   10 FB       BPL   $BBD2
+BBD7-   2A          ROL
+BBD8-   85 F0       STA   $F0
+BBDA-   BD 8C C0    LDA   $C08C,X
+BBDD-   10 FB       BPL   $BBDA
+BBDF-   25 F0       AND   $F0
+BBE1-   99 F8 00    STA   $00F8,Y
+BBE4-   45 F1       EOR   $F1
+BBE6-   88          DEY
+BBE7-   10 E7       BPL   $BBD0
+BBE9-   A8          TAY
+BBEA-   EA          NOP
+BBEB-   18          CLC
+BBEC-   60          RTS
+BBED-   38          SEC
+BBEE-   60          RTS</code>
+    </div>
+    <p>Because the next stage of the boot is encrypted, I can't simply bypass this copy protection routine. I need to let it run at least once, from the original disk, so that it can decrypt the rest of the code. The decryption happens at $BB7A..$BB92, then at $BB95 it does an indirect jump to ($08FD) to continue execution at the start of boot1 ($B700, just like a normal DOS 3.3 disk).</p>
+    <p>TRACE1A will let this copy protection run (off the original disk), then interrupt the boot process immediately after the decryption loop, by setting $8FD/$8FE to point to a routine under my control.</p>
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up callback #1 (after boot0 but before copy protection runs)</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D 4A 08    STA   $084A
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D 4B 08    STA   $084B
+9702-   A9 97       LDA   #$97
+9704-   8D 4C 08    STA   $084C</code>
+      <p class="comment">start the boot</p>
+      <code>9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">callback #1 starts here set up callback #2 (after copy protection runs but before it jumps to the decrypted boot1 code)</p>
+      <code>970A-   A9 17       LDA   #$17
+970C-   8D FD 08    STA   $08FD
+970F-   A9 97       LDA   #$97
+9711-   8D FE 08    STA   $08FE</code>
+      <p class="comment">continue the boot (run the copy protection)</p>
+      <code>9714-   4C 00 BB    JMP   $BB00</code>
+      <p class="comment">callback #2 starts here turn off the disk motor and capture the entire boot1 code, which has now been decrypted</p>
+      <code>9717-   AD E8 C0    LDA   $C0E8
+971A-   A2 0A       LDX   #$0A
+971C-   B9 00 B6    LDA   $B600,Y
+971F-   99 00 26    STA   $2600,Y
+9722-   C8          INY
+9723-   D0 F7       BNE   $971C
+9725-   EE 1E 97    INC   $971E
+9728-   EE 21 97    INC   $9721
+972B-   CA          DEX
+972C-   D0 EE       BNE   $971C</code>
+      <p class="comment">reboot to my work sidk</p>
+      <code>972E-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE1A,A$9600,L$131
+*9600G
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]BSAVE BOOT1 DECRYPTED,A$2600,L$A00</code>
+    </div>
+    <p>Now I have a copy of the decrypted boot1 code. If I write this decrypted code to track 0 of my (currently non-working) copy, I can safely bypass the copy protection routine completely.</p>
+    <p>It's no longer needed to decrypt boot1 code, and its only other purpose is to prevent my copy from working. Which is, you know, bad for me.</p>
+    <div class="curses_input">
+      <code>[S6D1=non-working copy]
+[S5D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]CALL -151</code>
+      <p class="comment">patch to skip nibble check</p>
+      <code>*264A:6C FD 08</code>
+    </div>
+    <p>This is a short program to write the decrypted boot1 code (currently in memory at $2600..$2FFF) to track 0, overwriting the original sectors 0-9.</p>
+    <p>It uses a custom RWTS parameter table that assumes that the target disk is in slot 6, drive 1. There is no error checking, so don't f--- this up.</p>
+    <p>It reuses the multi-sector read/write routine at $B793, which uses $B7E1 as a sector counter and operates on sectors and memory pages in reverse order. So the RWTS parameter table here is set up to write $2F00..$2FFF to T00,S09, then decrement once and write $2E00..$2EFF to T00,S08, and so on until the sector counter decrements to 0.</p>
+    <div class="listing">
+      <code>08C0-   A0 E0       LDY   #$E0
+08C2-   B9 00 08    LDA   $0800,Y
+08C5-   99 00 B7    STA   $B700,Y
+08C8-   C8          INY
+08C9-   D0 F7       BNE   $08C2
+08CB-   4C 93 B7    JMP   $B793</code>
+      <code>08E0- 17 0A 0A 1B E8 B7 00 B4
+         ^^
+         ++-- write 10 sectors (0-9)</code>
+      <code>08E8- 01 60 01 00 00 09 FB 08
+                  ^^ ^^
+       start on --++ ++-- start on
+       track 0            sector 9</code>
+      <code>08F0- 00 2F 00 00 02 00 FE 60
+      ^^^^^
+      +++++-- start at address $2F00</code>
+      <code>08F8- 01 00 00 00 01 EF D8 00</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE WRITE BOOT1 DECRYPTED,A$8C0,L$40
+*8C0G
+*C600G</code>
+    </div>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/028-krell-s-logo.html">Krell's Logo</a></p>
+</body></html>

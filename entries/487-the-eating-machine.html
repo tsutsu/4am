@@ -1,0 +1,318 @@
+<!doctype html>
+<html><head>
+<title>The Eating Machine</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/486-game-frame-one.html">Game Frame One</a></p>
+<section>
+
+    <p class="seen">Disk 1 is protected but bootable.</p>
+    <p class="seen">Disk 2 is unprotected but unbootable.</p>
+    <p class="seen">Life is like that.</p>
+    <p class="seen">This has not been a haiku.</p>
+</section>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p>immediate disk read error, but it earns a participation medal just for showing up</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p>can read some of track $00 (not S08 or S0F), all of tracks $01 and $02, nothing else</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">works</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p>tracks $03+ use modified address prologue "D5 DA 96", data prologue "D5 DA AD", data epilogue "DE DA AB"</p>
+    <p class="seen">Disk Fixer</p>
+    <p>["O" -> "Input/Output Control"] set Address Prologue to "D5 DA 96" set Data Prologue to "D5 DA 96" set Data Epilogue to "D5 DA 96"</p>
+    <p>Success! Tracks 3+ readable!</p>
+    <p>But they look a little bit weird...</p>
+    <p>Possibly a modified nibble translate table?</p>
+    <div class="curses">
+      <code>-------------- DISK EDIT --------------
+TRACK $11/SECTOR $0F/VOLUME $01/BYTE$00
+---------------------------------------
+$00:>00<11 0E 00 00 00 00 00   @QN@@@@@
+$08: 00 00 00 03 0F A6 EC E1   @@@CO&la
+$10: E8 E8 EB 84 84 84 84 84   hhk.....
+$18: 84 84 84 84 84 84 84 84   ........
+$20: 84 84 84 84 84 84 84 84   ........
+$28: 84 84 84 84 2F 00 05 00   ..../@E@
+$30: 82 C1 C3 A2 A2 A2 A2 A2   .AC"""""
+$38: A2 A2 A2 A2 A2 A2 A2 A2   """"""""
+$40: A2 A2 A2 A2 A2 A2 A2 A2   """"""""
+$48: A2 A2 A2 A2 A2 A2 A2 54   """""""T
+$50: 02 09 08 00 C4 CD A0 A0   BIH@DM
+$58: A0 A0 A0 A0 A0 A0 A0 A0
+$60: A0 A0 A0 A0 A0 A0 A0 A0
+$68: A0 A0 A0 A0 A0 A0 A0 A0
+$70: A0 A0 3F 00 0F 0B A0 E1     ?@OK a
+$78: E5 F0 F4 ED FC 84 84 84   eptm|...
+---------------------------------------
+BUFFER 0/SLOT 6/DRIVE 1/MASK OFF/NORMAL</code>
+    </div>
+    <div class="terminal_output">
+      <code>---------------------------------------
+COMMAND :</code>
+    </div>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p>modified prologues and epilogues</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">modified prologues and epilogues</p>
+    <p class="seen">EDD worked. What does that tell us?</p>
+    <p class="seen">no half or quarter tracks almost certainly no nibble check (just structural changes to epilogue)</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. capture RWTS with AUTOTRACE</p>
+    <p class="seen">2. convert disk to standard format with Advanced Demuffin</p>
+    <p class="seen">3. patch RWTS to read standard format</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Attempt To Use The Original Disk As A Weapon Against Itself And It Does Not Go At All Well</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+      <code>]BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>["5" to switch to slot 5]</code>
+      <code>["R" to load a new RWTS module]
+  --> At $B8, load "RWTS" from drive 1</code>
+      <code>["6" to switch to slot 6]</code>
+      <code>["C" to convert disk]</code>
+      <code>[<Return> to start conversion]</code>
+    </div>
+    <p class="seen">...Advanced Demuffin crashes...</p>
+    <p class="seen">Wait, what?</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Muse On The Pluralization Of Made-Up Words</h3>
+
+    <div class="line_editing">
+      <code>]PR#5
+...hold down <Esc> key during boot so
+   Diversi-DOS doesn't relocate to the
+   language card...</code>
+    </div>
+    <p>I'll leave the standard RWTS (on my work disk) at $B800 and load the original disk's RWTS at $3800. Then I can use standard monitor commands to compare them.</p>
+    <div class="line_editing">
+      <code>]BLOAD RWTS,A$3800
+]CALL -151</code>
+    </div>
+    <p>The entry point that Advanced Demuffin calls is $BD00, so let's start there.</p>
+    <div class="line_editing">
+      <code>*3D00<BD00.BDFFV</code>
+    </div>
+    <div class="terminal_output">
+      <code>BD95-5A (E7)
+BD96-BE (BC)
+BDA4-4E (46)
+BDBD-30 (7F)</code>
+    </div>
+    <p>Aha! Four differences, just in the $BD00..$BDFF range alone.</p>
+    <div class="line_editing">
+      <code>*3D90L</code>
+    </div>
+    <div class="listing">
+      <code>3D90-   A0 04       LDY   #$04
+3D92-   B1 48       LDA   ($48),Y
+3D94-   20 E7 BC    JSR   $BCE7   <-- ?
+3D97-   28          PLP
+3D98-   D0 11       BNE   $3DAB</code>
+    </div>
+    <p>According to "Beneath Apple DOS," this code (normally at $BD90) will "get destination track and go to it using MYSEEK subroutine at $BE5A." [p. 8-38]</p>
+    <p>But instead of $BE5A, we're calling $BCE7 instead, which is normally unused space.</p>
+    <div class="line_editing">
+      <code>*3CE7L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">save track number (in accumulator)</p>
+      <code>3CE7-   48          PHA</code>
+      <p class="comment">track > 3?</p>
+      <code>3CE8-   C9 03       CMP   #$03</code>
+      <p class="comment">yes, branch</p>
+      <code>3CEA-   B0 04       BCS   $3CF0</code>
+      <p class="comment">no, track is 0-2</p>
+      <code>3CEC-   A9 AA       LDA   #$AA
+3CEE-   D0 02       BNE   $3CF2
+3CF0-   A9 DA       LDA   #$DA</code>
+      <p class="comment">uh oh</p>
+      <code>3CF2-   20 B6 B6    JSR   $B6B6
+3CF5-   A9 0E       LDA   #$0E
+3CF7-   8D 55 B6    STA   $B655
+3CFA-   68          PLA
+3CFB-   4C 5A BE    JMP   $BE5A</code>
+    </div>
+    <p>Without even investigating the routine at $B6B6 (which I will, don't worry),</p>
+    <p>I can tell you why Advanced Demuffin crashed. This RWTS is calling a custom routine outside the $B800..$BFFF range.</p>
+    <p>It's not self-contained like most RWTSs are(*). If you boot the original disk, T00,S00 is reloaded at $B600, so it's available for whatever. (Even later versions of DOS 3.3 use it for code patches.)</p>
+    <p>(*) Almost 500 write-ups and I still</p>
+    <p>don't know how to pluralize "RWTS"</p>
+    <p>I have the code at $B600; it's in the "BOOT1" file that my AUTOTRACE script saved to my work disk.</p>
+    <div class="line_editing">
+      <code>*BLOAD BOOT1,A$3600
+*36B6L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">make a bunch of adjustments to the prologues and epilogues</p>
+      <code>36B6-   8D 58 B8    STA   $B858
+36B9-   8D A3 B8    STA   $B8A3
+36BC-   8D F1 B8    STA   $B8F1
+36BF-   8D 3F B9    STA   $B93F
+36C2-   8D 5F B9    STA   $B95F
+36C5-   8D 7F BC    STA   $BC7F</code>
+      <p class="comment">and an adjustment to the nibble translate table</p>
+      <code>36C8-   49 70       EOR   #$70
+36CA-   8D 4C BA    STA   $BA4C
+36CD-   60          RTS</code>
+    </div>
+    <p>The solution is simple: use the "BOOT1" file instead of the "RWTS" file in</p>
+    <p class="seen">Advanced Demuffin.</p>
+    <div class="line_editing">
+      <code>*BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>["5" to switch to slot 5]</code>
+      <code>["R" to load a new RWTS module]
+  --> At $B6, load "BOOT1" from drive 1</code>
+      <code>["6" to switch to slot 6]</code>
+      <code>["C" to convert disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:R..................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:...................................
+SC1:...................................
+SC2:...................................
+SC3:...................................
+SC4:...................................
+SC5:...................................
+SC6:...................................
+SC7:...................................
+SC8:R..................................
+SC9:...................................
+SCA:...................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:R..................................
+=======================================
+16SC $00,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <p>Oh what fresh hell is this.</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which We Briefly Investigate What Fresh Hell This Is</h3>
+
+    <div class="line_editing">
+      <code>]PR#5
+]CATALOG,S6,D2</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR C#254</code>
+    </div>
+    <div class="line_editing">
+      <code>*A 047 HELLO
+*A 086 AC
+ A 063 FM
+*B 034 EATPIX
+*B 002 RV
+ T 002 OT
+ T 002 SG</code>
+      <code>]RUN HELLO
+...works...</code>
+    </div>
+    <p>OK, my copy does not appear to use the two sectors I can't read. That's good.</p>
+    <p>That narrows the scope considerably.</p>
+    <div class="line_editing">
+      <code>]PR#5
+]BLOAD BOOT0,A$800
+]CALL -151
+.
+. poke, poke, poke...
+.</code>
+    </div>
+    <p>Aha! Here's the problem.</p>
+    <div class="line_editing">
+      <code>*84D.85C</code>
+    </div>
+    <div class="listing">
+      <code>084D-                00 0D 0B
+0850- 09 07 05 03 01 02 0C 0A
+0858- 08 06 04 02 0F</code>
+    </div>
+    <p>This is the mapping of physical to logical sectors. It's used by boot0 to load boot1 from sectors 9 through 0.</p>
+    <p>Notice anything odd? $02 is listed twice!</p>
+    <p>Turning to my trusty Disk Fixer sector editor and looking at track 0 of the original disk, I see that the code I would expect to see on sector 8 (which is loaded into $BE00..$BEFF) is actually on sector $0E! Because of the duplicate $02 in the physical/logical sector mapping in boot0, the original disk ignores logical sector 8 and instead loads that code from logical sector $0E.</p>
+    <p>But what about sector $0F? Surely that is used to hold part of boot2. On a standard DOS 3.3 disk, DOS is loaded backwards from T02,S04 down to T00,S0D, so T00,S0F would be loaded at $9F00.</p>
+    <p>But on this disk, it is not. Why?</p>
+    <div class="line_editing">
+      <code>]PR#5
+]BLOAD BOOT1,A$2600
+]CALL -151
+*B700<2700.27FFM
+*B700L</code>
+    </div>
+    <div class="listing">
+      <code>B700-   8E E9 B7    STX   $B7E9
+B703-   8E F7 B7    STX   $B7F7
+B706-   A9 01       LDA   #$01
+B708-   8D F8 B7    STA   $B7F8
+B70B-   8D EA B7    STA   $B7EA
+B70E-   AD E0 B7    LDA   $B7E0
+B711-   8D E1 B7    STA   $B7E1
+B714-   A9 02       LDA   #$02
+B716-   8D EC B7    STA   $B7EC
+B719-   A9 0A       LDA   #$0A    <-- !
+B71B-   8D ED B7    STA   $B7ED
+B71E-   AC E7 B7    LDY   $B7E7
+B721-   88          DEY
+B722-   8C F1 B7    STY   $B7F1</code>
+    </div>
+    <p>Aha! DOS is loaded starting from T02,S0A (instead of T02,S04). So it never gets as far as T00,S0F, so the fact that that sector doesn't exist does not pose any existential threat.</p>
+    <p>Some days, I wish it were enough just to bypass the protection instead of so meticulously understanding it.</p>
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...loads DOS then grinds and exits with
+   an I/O error...</code>
+    </div>
+    <p>Of course, the converted disk can't read itself, because it still has that RWTS swapping code at $B6B6. Let's neuter that.</p>
+    <p>T00,S00,$B6 change 8D to 60</p>
+    <div class="line_editing">
+      <code>]PR#6
+...works...</code>
+    </div>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/488-h-e-r-o.html">H.E.R.O.</a></p>
+</body></html>

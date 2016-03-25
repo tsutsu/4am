@@ -1,0 +1,380 @@
+<!doctype html>
+<html><head>
+<title>The Quarter Mile 4.1</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/433-maniac-mansion.html">Maniac Mansion</a></p>
+<section>
+
+    <p class="seen">Side A is protected but bootable.</p>
+    <p class="seen">Side B is unprotected but unbootable.</p>
+    <p>Each disk is like that.</p>
+    <p class="seen">Life is like that.</p>
+    <p>This is not a poem.</p>
+    <p>The disks I have are labeled "disk 2 of 5" and "disk 3 of 5," which implies that I do not have the entire series.</p>
+    <p>Side A of each disk is bootable, and each disk appears to function independently.</p>
+    <p>The physical label on each disk claims this is version 4.1, published in 1995.</p>
+    <p>The graphical title screen and the main menu say version 4.0 and 1992. The disk catalog contains many files timestamped</p>
+    <p>August 17, 1995.</p>
+</section>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p>unable to read T01-T22 (T00 is OK)</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">no errors, but copy grinds on boot</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">T00 -> standard prologues T01+ -> modified address prologue ("AB BF D5") also modified address epilogue (not sure what exactly, not consistent?)</p>
+    <p class="seen">Disk Fixer</p>
+    <p>T00 looks like ProDOS, including a ProDOS disk catalog ["O" -> "Input/Output Control"] set Address Prologue to "AB BF D5" turn off epilogue checking other tracks readable</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p class="seen">modified prologue and epilogue</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">modified prologue and epilogue</p>
+    <p class="seen">Why didn't my EDD copy work?</p>
+    <p class="seen">I don't know. Maybe a nibble check during boot?</p>
+    <p class="seen">Converting the disk to a standard format will be tricky. Super Demuffin doesn't have an option to ignore epilogue bytes entirely. (I would feel uncomfortable doing that anyway -- what if the original disk had a legitimate bad sector?) Advanced Demuffin requires a DOS 3.3-shaped RWTS, but this disk uses ProDOS. The automated tools I've built don't work well on ProDOS. (Note to self: fix that someday.)</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Boot trace the original disk to capture the PRODOS file in memory</p>
+    <p class="seen">2. Use the RWTS inside the PRODOS file to build a DOS-shaped RWTS that can read the original disk</p>
+    <p class="seen">3. Use Advanced Demuffin to convert the disk to a standard format</p>
+    <p class="seen">4. Patch the bootloader and/or the PRODOS file to be able to read a standard format disk</p>
+    <p class="seen">5. Find and disable the nibble check</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Ponder Whether Two Heads Are Better Than One</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0</code>
+      <code>]BLOAD BOOT0,A$800
+]CALL -151
+*801L
+.
+. nothing suspicious, which is, in and
+. of itself, quite suspicious
+.</code>
+    </div>
+    <div class="listing">
+      <p class="comment">jump to PRODOS file once loaded</p>
+      <code>08FC-   4C 00 20    JMP   $2000</code>
+    </div>
+    <p class="seen">OK, let's interrupt the boot there.</p>
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">ProDOS boot0 is sensitive to the value of the accumulator, so don't clobber it</p>
+      <code>96F8-   48          PHA</code>
+      <p class="comment">set up callback to my own routine instead of executing PRODOS file</p>
+      <code>96F9-   A9 07       LDA   #$07
+96FB-   8D FD 08    STA   $08FD
+96FE-   A9 97       LDA   #$97
+9700-   8D FE 08    STA   $08FE</code>
+      <p class="comment">restore accumulator</p>
+      <code>9703-   68          PLA</code>
+      <p class="comment">start the boot</p>
+      <code>9704-   4C 01 08    JMP   $0801</code>
+      <p class="comment">callback is here -- just turn off the slot 6 drive motor and reboot to my work disk</p>
+      <code>9707-   AD E8 C0    LDA   $C0E8
+970A-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE.PRODOS,A$9600,L$10D</code>
+    </div>
+    <p class="seen">The only thing I don't know is exactly how big the PRODOS file is. Different versions are different sizes, and of course many protected disks add their own special code. So I'm going to clear main memory with a special pattern so I can see which pages are overwritten after PRODOS is loaded.</p>
+    <div class="line_editing">
+      <code>*800:FD N 801<800.BEFEM</code>
+      <code>*BRUN TRACE.PRODOS
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]CALL -151</code>
+    </div>
+    <div class="curses_input">
+      <code>[perusing memory, starting at $2000]</code>
+    </div>
+    <p class="seen">It looks like $5E00 is the first page that still has repeated $FD bytes.</p>
+    <div class="line_editing">
+      <code>*5E-20
+=3E
+*BSAVE BOOT1.PRODOS,A$2000,L$3E00</code>
+    </div>
+    <p class="seen">Scanning through memory again, I found the RWTS code at $5598.</p>
+    <div class="line_editing">
+      <code>*5598L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">ProDOS only uses the bootloader RWTS to load the PRODOS file, which then has its own fuller, more robust RWTS.</p>
+      <p class="comment">This code, which is later relocated to $D398 in the language card, checks the address prologue.</p>
+      <code>5598-   A9 00       LDA   #$00
+559A-   8D 6C D3    STA   $D36C
+559D-   A0 FC       LDY   #$FC
+559F-   8C 6B D3    STY   $D36B
+55A2-   78          SEI
+55A3-   C8          INY
+55A4-   D0 05       BNE   $55AB
+55A6-   EE 6B D3    INC   $D36B
+55A9-   F0 50       BEQ   $55FB</code>
+      <p class="comment">find prologue byte #1</p>
+      <code>55AB-   BD 8C C0    LDA   $C08C,X
+55AE-   10 FB       BPL   $55AB
+55B0-   C9 D5       CMP   #$D5    <-- ?
+55B2-   D0 EF       BNE   $55A3
+55B4-   EA          NOP</code>
+    </div>
+    <p class="seen">I could have sworn the original disk's address prologue was "AB BF D5".</p>
+    <div class="listing">
+      <p class="comment">and again?</p>
+      <code>55B5-   BD 8C C0    LDA   $C08C,X</code>
+      <p class="comment">Wait, no BPL loop here! It only reads the data latch once.</p>
+      <code>55B8-   C9 D5       CMP   #$D5</code>
+      <p class="comment">if data latch is (still) $D5, jump right to address field logic</p>
+      <code>55BA-   F0 12       BEQ   $55CE</code>
+      <p class="comment">otherwise continue and... look for the (standard) prologue nibble #2</p>
+      <code>55BC-   BD 8C C0    LDA   $C08C,X
+55BF-   10 FB       BPL   $55BC
+55C1-   C9 AA       CMP   #$AA
+55C3-   D0 DE       BNE   $55A3</code>
+      <p class="comment">and the standard prologue nibble #3</p>
+      <code>55C5-   BD 8C C0    LDA   $C08C,X
+55C8-   10 FB       BPL   $55C5
+55CA-   C9 96       CMP   #$96
+55CC-   D0 D5       BNE   $55A3</code>
+      <p class="comment">decode address field (standard)</p>
+      <code>55CE-   A0 03       LDY   #$03
+55D0-   BD 8C C0    LDA   $C08C,X
+55D3-   10 FB       BPL   $55D0
+55D5-   2A          ROL
+55D6-   8D 6B D3    STA   $D36B
+55D9-   BD 8C C0    LDA   $C08C,X
+55DC-   10 FB       BPL   $55D9
+55DE-   2D 6B D3    AND   $D36B
+55E1-   99 6D D3    STA   $D36D,Y
+55E4-   4D 6C D3    EOR   $D36C
+55E7-   8D 6C D3    STA   $D36C
+55EA-   88          DEY
+55EB-   10 E3       BPL   $55D0
+55ED-   A8          TAY
+55EE-   D0 0B       BNE   $55FB</code>
+      <p class="comment">immediately exit -- no epilogue checking at all</p>
+      <code>55F0-   18          CLC
+55F1-   60          RTS
+55F2-   00          BRK   | These are
+55F3-   00          BRK   | really on
+55F4-   00          BRK   | the disk,
+55F5-   00          BRK   | just taking
+55F6-   00          BRK   | up space,
+55F7-   00          BRK   | like this
+55F8-   00          BRK   | comment.
+55F9-   18          CLC
+55FA-   60          RTS
+55FB-   38          SEC
+55FC-   60          RTS</code>
+    </div>
+    <p>This RWTS will accept two different address prologues. If it finds a $D5 followed by a timing bit, that's it; that's the entire address prologue. (The presence of the timing bit causes the $D5 nibble to be held in the data latch for an extra 8 CPU cycles, which is why the second non-looped "LDA" at $55B5 still returns $D5.) Without the timing bit, it looks for the rest of a standard prologue, which allows it to read the unprotected track 0 and all of side B.</p>
+    <p class="seen">Turning back to the Copy ][+ nibble editor, I see the crucial detail that I missed the first time. The "D5" that I thought was the third nibble in the address prologue is actually the first, and it is displayed in inverse, meaning it has timing bits after it. (Sorry that doesn't show up in text.)</p>
+    <p class="seen">The disk does happen to have a 3-nibble address prologue on every sector, but it only uses the one of them (plus a timing bit). I'm guessing that this accidental consistency is a side effect of the original mastering process.</p>
+    <p class="seen">With this information, I can build a flexible DOS 3.3-shaped RWTS that can read this disk.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Build An RWTS</h3>
+
+    <div class="line_editing">
+      <code>]PR#5
+[press "Esc" during boot so Diversi-DOS
+ stays in main memory and doesn't
+ relocate to the language card]
+...
+]CALL -151
+*1800<B800.BFFFM</code>
+    </div>
+    <p class="seen">OK, I have a copy of a standard DOS 3.3 shaped RWTS.</p>
+    <p class="seen">ProDOS uses addresses in the language card RAM bank (specifically $D36C for the address field checksum and $D36B for the death counter), so I'm not able to copy the code directly. But I was able to rebuild the same logic in the shape of a DOS 3.3 RWTS.</p>
+    <div class="listing">
+      <p class="comment">normal</p>
+      <code>1944-   A0 FC       LDY   #$FC
+1946-   84 26       STY   $26
+1948-   C8          INY
+1949-   D0 04       BNE   $194F
+194B-   E6 26       INC   $26
+194D-   F0 F3       BEQ   $1942</code>
+      <p class="comment">look for $D5, first address prologue</p>
+      <code>194F-   BD 8C C0    LDA   $C08C,X
+1952-   10 FB       BPL   $194F
+1954-   C9 D5       CMP   #$D5
+1956-   D0 F0       BNE   $1948
+1958-   EA          NOP</code>
+      <p class="comment">look for $D5 again (will still be in data latch if timing bit is present)</p>
+      <code>1959-   BD 8C C0    LDA   $C08C,X
+195C-   C9 D5       CMP   #$D5</code>
+      <p class="comment">if found, we're done -- branch over other prologue bytes</p>
+      <code>195E-   F0 12       BEQ   $1972</code>
+      <p class="comment">look for $AA, second address prologue</p>
+      <code>1960-   BD 8C C0    LDA   $C08C,X
+1963-   10 FB       BPL   $1960
+1965-   C9 AA       CMP   #$AA
+1967-   D0 DF       BNE   $1948</code>
+      <p class="comment">look for $96, third address prologue</p>
+      <code>1969-   BD 8C C0    LDA   $C08C,X
+196C-   10 FB       BPL   $1969
+196E-   C9 96       CMP   #$96
+1970-   D0 D6       BNE   $1948</code>
+      <p class="comment">verify address field (normal, but shifted from standard DOS 3.3 by $10 bytes due to extra prologue checker)</p>
+      <code>1972-   A0 03       LDY   #$03
+1974-   A9 00       LDA   #$00
+1976-   85 27       STA   $27
+1978-   BD 8C C0    LDA   $C08C,X
+197B-   10 FB       BPL   $1978
+197D-   2A          ROL
+197E-   85 26       STA   $26
+1980-   BD 8C C0    LDA   $C08C,X
+1983-   10 FB       BPL   $1980
+1985-   25 26       AND   $26
+1987-   99 2C 00    STA   $002C,Y
+198A-   45 27       EOR   $27
+198C-   88          DEY
+198D-   10 E7       BPL   $1976
+198F-   A8          TAY</code>
+      <p class="comment">if the address field checksum fails, that's still an error -- set the carry and exit</p>
+      <code>1990-   D0 02       BNE   $1994</code>
+      <p class="comment">otherwise clear carry and exit</p>
+      <code>1992-   18          CLC
+1993-   60          RTS
+1994-   38          SEC
+1995-   60          RTS</code>
+    </div>
+    <p class="seen">Now I have a DOS 3.3-shaped RWTS that can read this disk.</p>
+    <div class="line_editing">
+      <code>*BSAVE RWTS LIKE PRODOS,A$1800,L$800</code>
+    </div>
+    <div class="curses_input">
+      <code>[S6,D1=original disk, side A]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>*BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>["5" to switch to slot 5]</code>
+      <code>["R" to load a new RWTS module]
+  --> At $B8, load "RWTS LIKE PRODOS"
+      from drive 1</code>
+      <code>["6" to switch to slot 6]</code>
+      <code>["C" to convert disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:...................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:...................................
+SC1:...................................
+SC2:...................................
+SC3:...................................
+SC4:...................................
+SC5:...................................
+SC6:...................................
+SC7:...................................
+SC8:...................................
+SC9:...................................
+SCA:...................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:...................................
+=======================================
+16SC $00,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <div class="curses_input">
+      <code>[S7,D1=ProDOS hard drive]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#7
+]CAT,S6,D2</code>
+      <code>/ADDITION.</code>
+    </div>
+    <div class="terminal_output">
+      <code> NAME           TYPE  BLOCKS  MODIFIED</code>
+      <code> PRODOS          SYS      32  22-MAR-89
+ COM.SYSTEM      SYS       5   1-MAY-95
+ TP              BIN      17  15-APR-92
+ PROGA           BIN      32   5-MAY-95
+ P               BIN      39   5-MAY-95
+ TOPICS.S        TXT       1  29-APR-95
+ X               DIR       2  17-AUG-95
+ ZA1000          DIR       1  17-AUG-95
+ ZA1001          DIR       1  17-AUG-95
+ ZA1002          DIR       1  17-AUG-95
+ ZA1003          DIR       1  17-AUG-95
+ ZA1004          DIR       1  17-AUG-95
+ ZA1005          DIR       1  17-AUG-95
+ ZA1006          DIR       1  17-AUG-95
+ ZA1007          DIR       1  17-AUG-95
+ ZA1008          DIR       1  17-AUG-95
+ ZA1009          DIR       1  17-AUG-95
+ ZA1010          DIR       1  17-AUG-95
+ ZA1101          DIR       1  17-AUG-95
+ ZA1102          DIR       1  17-AUG-95
+ ZA1103          DIR       1  17-AUG-95
+ ZA1104          DIR       1  17-AUG-95
+ ZA1105          DIR       1  17-AUG-95
+ ZA1106          DIR       1  17-AUG-95
+ ZA1107          DIR       1  17-AUG-95
+ ZA1108          DIR       1  17-AUG-95
+ ZA1109          DIR       1  <NO DATE>
+ ZA1110          DIR       1  <NO DATE>
+ ZA1120          DIR       1  17-AUG-95
+ ZA1200          DIR       1  17-AUG-95</code>
+      <code>BLOCKS FREE:   55     BLOCKS USED:  225</code>
+    </div>
+    <div class="line_editing">
+      <code>]PREFIX /ADDITION.
+]-COM.SYSTEM
+...works...</code>
+    </div>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which Our Adventure Comes To A Sudden But Satisfying Conclusion</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...program boots and runs...</code>
+    </div>
+    <p class="seen">Wait, what?</p>
+    <p class="seen">Why did the demuffin'd copy work?</p>
+    <p class="seen">Advanced Demuffin wrote out the data from each sector onto a standard disk that uses "D5 AA 96" prologue and "DE AA EB" epilogue. The RWTS finds the first $D5, doesn't find a timing bit, but it finds the remaining standard prologue (AA 96) and decides that it found a valid address field. Thus, no RWTS patches are necessary.</p>
+    <p class="seen">But then why didn't the EDD copy work?</p>
+    <p class="seen">EDD preserved the original address prologue but not the timing bits.</p>
+    <p class="seen">The prologue checker finds the $D5 (at $55B0) but no timing bit after it (at $55B8), so the disk can't read itself. There was never any separate nibble check; the structure of the disk itself is designed to foil bit copiers.</p>
+    <p>Side A of the second disk has identical protection. Side B of each disk is unprotected.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/435-pirate-s-treasure.html">Pirate's Treasure</a></p>
+</body></html>

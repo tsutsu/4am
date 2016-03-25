@@ -1,0 +1,493 @@
+<!doctype html>
+<html><head>
+<title>Curious George in Outer Space</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/175-design-your-own-home.html">Design Your Own Home</a></p>
+<section>
+
+    <p class="seen">_________________________</p>
+    <p>{ } { "Insanity is repeating } { the same mistakes and } { expecting different } { results." } { } { variously attributed } {_________________________}</p>
+</section>
+
+<section>
+  <h2>CHAPTER 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p>no errors on either side, but copy boots to ProDOS and displays an error "I/O ERROR # 070. FILE: L55"</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p>same results as COPYA</p>
+    <p>Is there a file named L55?</p>
+    <p>No. Booting from a ProDOS hard drive,</p>
+    <p>I see a standard disk catalog with several L* files, but no L55.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S7,D1=my ProDOS hard drive]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#7
+...
+]CAT,S6,D1</code>
+      <code>/GEO1</code>
+    </div>
+    <div class="terminal_output">
+      <code> NAME           TYPE  BLOCKS  MODIFIED</code>
+      <code> PRODOS          SYS      32  17-APR-87
+ START.SYSTEM    SYS       3  11-AUG-88
+ INTREN          BIN      13  25-JUL-88
+ L00             BIN       6  11-AUG-88
+ L01             BIN       6  27-JUL-88
+ L15             BIN       7  28-JUL-88
+ L16             BIN       7  28-JUL-88
+ L17             BIN       7   4-AUG-88
+ L18             BIN       6  28-JUL-88
+ L19             BIN       6  29-JUL-88
+ L20             BIN       6   8-AUG-88
+ L21             BIN       7  29-JUL-88
+ L22             BIN       7  29-JUL-88
+ L23             BIN       7   4-AUG-88
+ L24             BIN       8  29-JUL-88
+ L25             BIN       7  29-JUL-88
+ L26             BIN       7   8-AUG-88
+ PATCHES         BIN      52  27-JUL-88
+ STICKONS        BIN      47  25-JUL-88
+ FONTS           BIN      11  25-JUL-88
+ S00.0           BIN       7   6-MAY-88
+ ACTCOM          BIN       5  27-JUL-88</code>
+      <code>BLOCKS FREE:    9     BLOCKS USED:  271</code>
+    </div>
+    <p>Why doesn't the copy work?</p>
+    <p>Probably a nibble check during boot.</p>
+    <p>Based on the amount of disk activity before the error message, I'd guess the nibble check is in the autostart program, START.SYSTEM (first .SYSTEM file in the root directory).</p>
+    <p class="seen">Next steps:</p>
+    <p>1. BLOAD START.SYSTEM</p>
+    <p>2. find the nibble check & bypass it</p>
+    <p>3. there is no step 3</p>
+</section>
+
+<section>
+  <h2>CHAPTER 1</h2>
+  <h3>In Which We Go Code Spelunking And Find Something Unexpected</h3>
+
+    <div class="line_editing">
+      <code>]PREFIX /GEO1
+]BLOAD START.SYSTEM,A$2000,TSYS
+]CALL -151</code>
+      <code>*2000L</code>
+    </div>
+    <div class="listing">
+      <code>2000-   4C 51 20    JMP   $2051</code>
+    </div>
+    <div class="line_editing">
+      <code>*2051L</code>
+    </div>
+    <div class="listing">
+      <code>2051-   D8          CLD
+2052-   A2 FF       LDX   #$FF
+2054-   9A          TXS
+2055-   A2 96       LDX   #$96
+2057-   A0 1A       LDY   #$1A</code>
+      <p class="comment">subroutine just sets reset vector</p>
+      <code>2059-   20 62 21    JSR   $2162
+205C-   A2 1C       LDX   #$1C
+205E-   BD 0A F1    LDA   $F10A,X
+2061-   95 B0       STA   $B0,X
+2063-   CA          DEX
+2064-   D0 F8       BNE   $205E
+2066-   20 19 21    JSR   $2119
+2069-   90 03       BCC   $206E   ; hmm
+206B-   4C B2 20    JMP   $20B2</code>
+    </div>
+    <div class="line_editing">
+      <code>*20B2L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">quit (via ProDOS MLI)</p>
+      <code>20B2-   20 00 BF    JSR   $BF00
+20B5-   65 B9 20</code>
+    </div>
+    <p>That is *not* the error behavior I saw on my non-working copy. I don't think this is the copy protection routine, but I'll trace it anyway.</p>
+    <div class="line_editing">
+      <code>*2119L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">open file (via ProDOS MLI)</p>
+      <code>2119-   20 00 BF    JSR   $BF00
+211C-   C8 4B 21
+211F-   90 03       BCC   $2124
+2121-   4C 4A 21    JMP   $214A
+2124-   AD 50 21    LDA   $2150
+2127-   8D 52 21    STA   $2152</code>
+      <p class="comment">read file (via ProDOS MLI)</p>
+      <code>212A-   20 00 BF    JSR   $BF00
+212D-   CA 51 21
+2130-   90 06       BCC   $2138
+2132-   20 38 21    JSR   $2138
+2135-   38          SEC
+2136-   B0 12       BCS   $214A
+2138-   AD 50 21    LDA   $2150
+213B-   8D 5A 21    STA   $215A
+213E-   AD 51 21    LDA   $2151
+2141-   8D 5B 21    STA   $215B</code>
+      <p class="comment">close file (via ProDOS MLI)</p>
+      <code>2144-   20 00 BF    JSR   $BF00
+2147-   CC 59 21    CPY   $2159
+214A-   60          RTS</code>
+    </div>
+    <p>This is a dead end. Backing up to $2066 and continuing at $206E.</p>
+    <div class="line_editing">
+      <code>*2066L</code>
+    </div>
+    <div class="listing">
+      <code>2066-   20 19 21    JSR   $2119   ; MLI
+2069-   90 03       BCC   $206E
+206B-   4C B2 20    JMP   $20B2</code>
+      <p class="comment">subroutine reads another file (same pattern as $2119)</p>
+      <code>206E-   20 D1 20    JSR   $20D1
+2071-   90 03       BCC   $2076
+2073-   4C B2 20    JMP   $20B2</code>
+      <code>2076-   A9 00       LDA   #$00
+2078-   8D 80 1F    STA   $1F80
+207B-   A9 00       LDA   #$00
+207D-   8D 82 1F    STA   $1F82
+2080-   A9 00       LDA   #$00
+2082-   8D 83 1F    STA   $1F83
+2085-   A9 05       LDA   #$05</code>
+      <p class="comment">must be from a file loaded earlier</p>
+      <code>2087-   20 EC 08    JSR   $08EC</code>
+    </div>
+    <div class="line_editing">
+      <code>*2087:4C 59 FF
+*2000G
+...program quits (via ProDOS MLI)...</code>
+    </div>
+    <p>That's unexpected. This is the original disk (not my non-working copy).</p>
+    <div class="line_editing">
+      <code>]PR#7
+...
+]PREFIX /GEO1
+]-START.SYSTEM
+...program loads...</code>
+      <code>]PR#7
+...
+]PREFIX /GEO1
+]BLOAD START.SYSTEM,A$2000,TSYS
+]CALL -151
+*2000G
+...program quits...</code>
+    </div>
+    <div class="curses_input">
+      <code>[scrounge up a copy of ProDOS 1.4 (used
+ by the original disk), boot it, then
+ PREFIX /GEO1 and repeat the procedure]</code>
+      <code>[get the same result]</code>
+      <code>[copy the exact PRODOS file from the
+ original disk onto a blank floppy with
+ the BASIC.SYSTEM from my hard drive,
+ boot ProDOS 1.4 off that floppy, then
+ PREFIX /GEO1 and repeat the procedure]</code>
+      <code>[get the same result]</code>
+      <code>[try each variation again with no
+ additional changes]</code>
+      <code>[get the same results]</code>
+      <code>[realize I have gone insane]</code>
+    </div>
+</section>
+
+<section>
+  <h2>CHAPTER 2</h2>
+  <h3>The Persistence of Memory</h3>
+
+    <div class="line_editing">
+      <code>]PR#7
+...
+]PREFIX /GEO1
+]BLOAD START.SYSTEM,A$2000,TSYS
+]CALL -151
+*2000L</code>
+    </div>
+    <div class="listing">
+      <code>2000-   4C 51 20    JMP   $2051</code>
+    </div>
+    <div class="line_editing">
+      <code>*2051L</code>
+    </div>
+    <div class="listing">
+      <code>2051-   D8          CLD
+2052-   A2 FF       LDX   #$FF
+2054-   9A          TXS
+2055-   A2 96       LDX   #$96
+2057-   A0 1A       LDY   #$1A
+2059-   20 62 21    JSR   $2162
+205C-   A2 1C       LDX   #$1C
+205E-   BD 0A F1    LDA   $F10A,X
+2061-   95 B0       STA   $B0,X
+2063-   CA          DEX
+2064-   D0 F8       BNE   $205E
+2066-   20 19 21    JSR   $2119
+2069-   90 03       BCC   $206E
+206B-   4C B2 20    JMP   $20B2</code>
+    </div>
+    <div class="line_editing">
+      <code>*206B:4C 2D FF   ; beep and print "ERR"
+*2000G
+<beep>ERR</code>
+    </div>
+    <p>Routine at $2119 is failing.</p>
+    <div class="line_editing">
+      <code>*206B:4C B2 20   ; restore original JMP
+*2119L</code>
+    </div>
+    <div class="listing">
+      <code>2119-   20 00 BF    JSR   $BF00
+211C-   C8 4B 21
+211F-   90 03       BCC   $2124
+2121-   4C 4A 21    JMP   $214A</code>
+    </div>
+    <div class="line_editing">
+      <code>*2121:20 2D FF   ; beep and print "ERR"
+*2124:4C 69 FF   ; break to monitor
+*2000G
+<beep>ERR</code>
+    </div>
+    <p>The very first MLI call is failing. The return code is in the accumulator, but</p>
+    <p>I'm not capturing it.</p>
+    <div class="line_editing">
+      <code>*2121:20 DA FD   ; print A as hex value
+*2000G
+56</code>
+    </div>
+    <p>"Beneath Apple ProDOS" p. 6-43 says a return value of $56 means "bad buffer address (check system memory bit map)."</p>
+    <p>The MLI command (at $211C) is "open file". The parameter table (pointed to by the word at $211D) is $214B.</p>
+    <div class="line_editing">
+      <code>*214B.214F</code>
+    </div>
+    <div class="listing">
+      <code>214B- 03 5B 21 00 BB</code>
+    </div>
+    <p>"Beneath Apple ProDOS" p. 6-42 says the parameter table has three input fields:</p>
+    <p>214B: 03 ; constant 214C: 5B 21 ; address of filename 214E: 00 BB ; address of file buffer</p>
+    <p>ProDOS uses a 1024-byte file buffer as scratch space while a file is open. It can be anywhere in main memory; the parameter table tells ProDOS where the program can spare 1024 bytes. This says the file buffer starts at $BB00.</p>
+    <p>That's the problem. Unlike DOS 3.3, ProDOS keeps track of which pages are in use. When BASIC.SYSTEM is in memory, $BB00 is marked as used. BLOADing a file and running it from the monitor keeps BASIC.SYSTEM in memory, so $BB00 is still "in use," so MLI call that attempts to use $BB00 has a file buffer fails because ProDOS refuses to clobber an in-use page of memory.</p>
+    <p>Booting the disk directly, ProDOS executes START.SYSTEM without ever loading BASIC.SYSTEM, so there's no problem.</p>
+    <p>Booting my hard drive, running BASIC. SYSTEM, then executing another system file via the "-START.SYSTEM" command is also not a problem, because ProDOS unloads BASIC.SYSTEM before running the next thing.</p>
+    <p>None of this has anything to do with the copy protection on this disk. It was a garden path brought about by a subtle difference between the original disk's environment and my debugging environment: the persistence of BASIC. SYSTEM in memory.</p>
+</section>
+
+<section>
+  <h2>CHAPTER 3</h2>
+  <h3>In Which We Finally Find What We Were Looking For And It Was Within Us The Whole Time Or Some Such Bullsh*t</h3>
+
+    <p>Because START.SYSTEM relies on memory normally used by BASIC.SYSTEM, I can't easily make changes in memory and test their results. So, I'll save changes to my non-working copy and test those instead.</p>
+    <div class="curses_input">
+      <code>[S6,D1=non-working copy]
+[S7,D1=my ProDOS hard drive]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#7
+...
+]PREFIX /GEO1
+]BLOAD START.SYSTEM,A$2000,TSYS
+]CALL -151</code>
+    </div>
+    <p>Continuing where I left off (at $2087, which called a subroutine at $08EC)...</p>
+    <div class="line_editing">
+      <code>*2087:4C 59 FF
+*BSAVE START.SYSTEM,A$2000,TSYS</code>
+    </div>
+    <p>(ProDOS remembers the BLOAD length.)</p>
+    <div class="line_editing">
+      <code>*C600G
+...reboots slot 6...
+...loads ProDOS...
+<beep></code>
+      <code>*8ECL</code>
+    </div>
+    <div class="listing">
+      <code>08EC-   8D 07 09    STA   $0907
+08EF-   A2 01       LDX   #$01</code>
+      <p class="comment">inside Applesoft RND function (to generate a random number)</p>
+      <code>08F1-   20 B4 EF    JSR   $EFB4
+08F4-   AD 07 09    LDA   $0907</code>
+      <p class="comment">also inside the RND function</p>
+      <code>08F7-   20 93 EB    JSR   $EB93
+08FA-   A9 C9       LDA   #$C9
+08FC-   A0 00       LDY   #$00</code>
+      <p class="comment">Applesoft FMULT function (multiplies two floating point numbers)</p>
+      <code>08FE-   20 7F E9    JSR   $E97F</code>
+      <p class="comment">Applesoft QINT function (converts a floating point number to an integer)</p>
+      <code>0901-   20 F2 EB    JSR   $EBF2
+0904-   A6 A1       LDX   $A1
+0906-   60          RTS</code>
+    </div>
+    <p>That's an interesting way to get a random number, but it's not the copy protection.</p>
+    <p>Backing up and continuing with the disassembly of START.SYSTEM...</p>
+    <div class="line_editing">
+      <code>*208AL</code>
+    </div>
+    <div class="listing">
+      <code>208A-   20 CA 21    JSR   $21CA
+208D-   90 05       BCC   $2094   ; hmm
+208F-   A9 FF       LDA   #$FF
+2091-   8D 82 1F    STA   $1F82</code>
+    </div>
+    <p>The value at $1F82 was initialized with zero earlier (at $207D). What's $21CA?</p>
+    <div class="line_editing">
+      <code>*21CAL</code>
+    </div>
+    <div class="listing">
+      <code>21CA-   A9 60       LDA   #$60
+21CC-   8D A3 22    STA   $22A3
+21CF-   A9 05       LDA   #$05
+21D1-   8D A4 22    STA   $22A4
+21D4-   AE A3 22    LDX   $22A3</code>
+      <p class="comment">turning on drive motor manually (still crazy after all these years)</p>
+      <code>21D7-   BD 8E C0    LDA   $C08E,X
+21DA-   BD 89 C0    LDA   $C089,X</code>
+      <p class="comment">wait loop while drive spins up</p>
+      <code>21DD-   A9 00       LDA   #$00
+21DF-   8D A5 22    STA   $22A5
+21E2-   A0 00       LDY   #$00
+21E4-   C8          INY
+21E5-   D0 FD       BNE   $21E4
+21E7-   EE A5 22    INC   $22A5
+21EA-   D0 F6       BNE   $21E2</code>
+      <p class="comment">initialize death counter</p>
+      <code>21EC-   A9 00       LDA   #$00
+21EE-   8C A5 22    STY   $22A5</code>
+      <p class="comment">subroutine at $2297 gets a nibble via data latch ($C08C,X)</p>
+      <code>21F1-   20 97 22    JSR   $2297
+21F4-   C8          INY</code>
+      <p class="comment">if death counter hits 0, fail @ $2292</p>
+      <code>21F5-   D0 08       BNE   $21FF
+21F7-   EE A5 22    INC   $22A5
+21FA-   D0 03       BNE   $21FF
+21FC-   4C 92 22    JMP   $2292</code>
+      <p class="comment">execution continues here -- look for a specific nibble sequence "D5 AA BB"</p>
+      <code>21FF-   C9 D5       CMP   #$D5
+2201-   D0 EE       BNE   $21F1
+2203-   20 97 22    JSR   $2297
+2206-   C9 AA       CMP   #$AA
+2208-   D0 F5       BNE   $21FF
+220A-   20 97 22    JSR   $2297
+220D-   C9 BB       CMP   #$BB
+220F-   D0 EE       BNE   $21FF</code>
+      <p class="comment">capture several 4-4 encoded values (like an address field)</p>
+      <code>2211-   A0 00       LDY   #$00
+2213-   20 97 22    JSR   $2297
+2216-   38          SEC
+2217-   2A          ROL
+2218-   8D A5 22    STA   $22A5
+221B-   20 97 22    JSR   $2297
+221E-   2D A5 22    AND   $22A5
+2221-   99 A6 22    STA   $22A6,Y
+2224-   C8          INY
+2225-   C0 02       CPY   #$02
+2227-   D0 EA       BNE   $2213</code>
+      <p class="comment">skip over several nibbles</p>
+      <code>2229-   A0 00       LDY   #$00
+222B-   20 97 22    JSR   $2297
+222E-   C8          INY
+222F-   C0 04       CPY   #$04
+2231-   D0 F8       BNE   $222B</code>
+      <p class="comment">skip over sync bytes</p>
+      <code>2233-   BD 8C C0    LDA   $C08C,X
+2236-   10 FB       BPL   $2233
+2238-   C9 FF       CMP   #$FF
+223A-   D0 4E       BNE   $228A</code>
+      <p class="comment">kill some time to get out of sync with the "proper" start of nibbles)</p>
+      <code>223C-   BD 8D C0    LDA   $C08D,X
+223F-   A0 10       LDY   #$10
+2241-   A5 09       LDA   $09
+2243-   BD 8C C0    LDA   $C08C,X
+2246-   10 FB       BPL   $2243
+2248-   88          DEY
+2249-   F0 3F       BEQ   $228A</code>
+      <p class="comment">now start looking for nibbles that don't really exist (except they do, because we're out of sync and reading timing bits as data)</p>
+      <code>224B-   C9 EE       CMP   #$EE
+224D-   D0 F4       BNE   $2243</code>
+      <p class="comment">store out-of-sync nibbles</p>
+      <code>224F-   A0 00       LDY   #$00
+2251-   BD 8C C0    LDA   $C08C,X
+2254-   10 FB       BPL   $2251
+2256-   99 A8 22    STA   $22A8,Y
+2259-   C8          INY
+225A-   C0 04       CPY   #$04
+225C-   D0 F3       BNE   $2251</code>
+      <p class="comment">check address field values that were captured earlier</p>
+      <code>225E-   AD A6 22    LDA   $22A6
+2261-   CD 9D 22    CMP   $229D
+2264-   D0 24       BNE   $228A
+2266-   AD A7 22    LDA   $22A7
+2269-   CD 9E 22    CMP   $229E
+226C-   D0 1C       BNE   $228A</code>
+      <p class="comment">check out-of-sync nibbles that were captured earlier</p>
+      <code>226E-   A0 00       LDY   #$00
+2270-   B9 A8 22    LDA   $22A8,Y
+2273-   49 87       EOR   #$87
+2275-   38          SEC
+2276-   E9 01       SBC   #$01
+2278-   D9 9F 22    CMP   $229F,Y
+227B-   D0 0D       BNE   $228A
+227D-   99 A8 22    STA   $22A8,Y
+2280-   C8          INY
+2281-   C0 04       CPY   #$04
+2283-   D0 EB       BNE   $2270</code>
+      <p class="comment">if everything checks out, execution falls through to here -- turn off the drive motor, clear the carry bit, and exit gracefully</p>
+      <code>2285-   BD 88 C0    LDA   $C088,X
+2288-   18          CLC
+2289-   60          RTS</code>
+      <p class="comment">any failures end up here -- decrement the death counter and eventually give up (@ $2292)</p>
+      <code>228A-   CE A4 22    DEC   $22A4
+228D-   F0 03       BEQ   $2292
+228F-   4C EC 21    JMP   $21EC</code>
+      <p class="comment">final failure path -- turn off drive motor, set carry bit, and exit</p>
+      <code>2292-   BD 88 C0    LDA   $C088,X
+2295-   38          SEC
+2296-   60          RTS
+2297-   BD 8C C0    LDA   $C08C,X
+229A-   10 FB       BPL   $2297
+229C-   60          RTS</code>
+    </div>
+    <p>Whichever track the drive head ends up on after loading the initial files, it has a fake address field with a non- standard prologue, followed by a magic sequence of nibbles and timing bits.</p>
+    <p>If any of that isn't found or isn't exactly right, the check fails (sets carry bit on exit).</p>
+    <p>Why didn't my initial copies work?</p>
+    <p>EDD didn't preserve the timing bits. (It could probably be made to, with the "nibble count" option.)</p>
+    <p>COPYA didn't preserve any of this data. It exists somewhere outside the sector data of a track, so COPYA just ignored it. The sectors themselves were all in a standard format, so no read errors. Clever!</p>
+    <p>The caller only cares about the carry bit, so let's just clear the carry bit and exit.</p>
+    <div class="line_editing">
+      <code>*21CA:18 60      ; clear carry and exit
+*2087:20 EC 08   ; restore original JSR
+                 ; prior to debugging</code>
+      <code>*BSAVE START.SYSTEM,A$2000,TSYS</code>
+    </div>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<section>
+  <h2>EPILOGUE</h2>
+
+    <div class="line_editing">
+      <code>]PREFIX /GEO1
+]BLOAD START.SYSTEM,A$2000,TSYS
+]CALL -151</code>
+    </div>
+    <div class="listing">
+      <code>0300-   AD 03 20    LDA   $2003
+0303-   F0 08       BEQ   $030D
+0305-   20 ED FD    JSR   $FDED
+0308-   EE 01 03    INC   $0301
+030B-   D0 F3       BNE   $0300
+030D-   60          RTS</code>
+    </div>
+    <div class="line_editing">
+      <code>*300G
+COPYRIGHT 1988  DLM INC ALL RIGHTS RESE
+RVED ABANDON HOPE ALL YE WHO ENTER HERE</code>
+    </div>
+</section>
+
+<p>Next: <a rel="next" href="output/177-the-geometric-supposer-quadrilaterals.html">The Geometric Supposer - Quadrilaterals</a></p>
+</body></html>

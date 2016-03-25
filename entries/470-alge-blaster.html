@@ -1,0 +1,166 @@
+<!doctype html>
+<html><head>
+<title>Alge-Blaster</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/469-word-attack-plus-spanish-800k.html">Word Attack Plus Spanish 800K</a></p>
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">Copy ][+ 9.1 ("COPY" > "DISK")</p>
+    <p>read error on block $0308; copy loads then prints "Insert master disk and press <return>."</p>
+    <p class="seen">CFFA 3000 import</p>
+    <p>read error on block 776 (= $0308); booting the disk image in an emulator exhibits the same behavior as the backup I made with Copy ][+ disk copy</p>
+    <p>The original disk boots without complaint, so either this bad block is part of the protection check, or it's unrelated and I got incredibly lucky.</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Trace the startup program</p>
+    <p class="seen">2. Find and disable the protection check</p>
+    <p class="seen">3. Declare victory(*)</p>
+    <p class="seen">(*) Take a nap</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which Things Do Not Go As Planned</h3>
+
+    <div class="curses_input">
+      <code>[S7,D1=my ProDOS hard drive]
+[S5,D1=original disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#7
+...
+]CAT,S5,D1</code>
+      <code>/ALGEBLASTER</code>
+    </div>
+    <div class="terminal_output">
+      <code> NAME           TYPE  BLOCKS  MODIFIED</code>
+      <code> PRODOS          SYS      30  10-JUN-86
+ JNK             TXT       1   4-MAR-46
+ ALGEBLASTER     $F8      78   2-JAN-88
+ FLOW.SET        BIN       3   6-AUG-87
+ SMALL.SET       BIN       3   6-AUG-87
+ BIG.FONT        BIN       6   6-AUG-87
+ EDIT            $F8      50   2-JAN-88
+ SHELL.SYSTEM    SYS      54   6-OCT-87
+ PROFILE         TXT       1   3-OCT-87
+ TITLE           $F8      36   6-OCT-87
+*DATA            DIR       7   6-JAN-88
+ DESKTOP         $00       3  17-SEP-56</code>
+      <code>BLOCKS FREE: 1002     BLOCKS USED:  598</code>
+    </div>
+    <p>"SHELL.SYSTEM" is the Aztec C Shell (it says so on boot). It's possible that it has been modified to include a nibble check, but I have a hunch the action is elsewhere -- either in "ALGEBLASTER" or "TITLE" (both of type "$F8" -- a custom type). Call it cracker's intuition.</p>
+    <div class="line_editing">
+      <code>]PREFIX /ALGEBLASTER
+]BLOAD ALGEBLASTER</code>
+    </div>
+    <div class="terminal_output">
+      <code>FILE TYPE MISMATCH</code>
+    </div>
+    <div class="line_editing">
+      <code>]BLOAD ALGEBLASTER,T$F8</code>
+    </div>
+    <div class="terminal_output">
+      <code>INVALID PARAMETER</code>
+    </div>
+    <p>!@#$% ProDOS and its unloadable types.</p>
+    <div class="line_editing">
+      <code>]PR#7
+...</code>
+    </div>
+    <div class="curses_input">
+      <code>[Block Warden]
+  ["C"hange device -> S5,D1]
+  ["F"ollow file]
+    ["ALGEBLASTER"]
+  ["L"]ist from offset 0]</code>
+    </div>
+    <div class="curses">
+      <code>Block: $0026 (38)
+Prefix: /ALGEBLASTER/
+Following: ALGEBLASTER, Type LNK,
+Rel block 1, Byte $000000</code>
+    </div>
+    <div class="terminal_output">
+      <code>1000: 4C 78 75    JMP  $7578</code>
+    </div>
+    <p>Well that looks like executable code, at least. But now what?</p>
+    <p>I have an idea. Other Davidson titles use the ProDOS MLI to check that a particular block is unreadable. Calling the MLI has a distinct signature: it's always JSR $BF00, followed by the MLI command (one byte). The command for a raw block read is $80.</p>
+    <div class="curses_input">
+      <code>[Block Warden]
+  ["E"dit mode]
+  ["Ctrl-S" to search]
+    ["$20 00 BF 80"]</code>
+    </div>
+    <p>Bingo! Here's Block Warden's custom disassembly of the relevant portion of code in the ALGEBLASTER file (with added comments):</p>
+    <div class="curses">
+      <code>Block: $0055 (85)
+Prefix: /ALGEBLASTER/</code>
+    </div>
+    <div class="terminal_output">
+      <p class="comment">set block $110 (used for 5.25-inch disks)</p>
+      <code>100D: A9 10       LDA  #$10       ).
+100F: 8D 04 08    STA  $0804      ...
+1012: A9 01       LDA  #$01       ).
+1014: 8D 05 08    STA  $0805      ...</code>
+    </div>
+    <div class="curses">
+      <p class="comment">unconditional jump</p>
+      <code>1017: D0 0C       BNE  $1025      P.
+1019: F0 0A       BEQ  $1025      p.</code>
+    </div>
+    <div class="terminal_output">
+      <p class="comment">set block $308 (used by 3.5-inch disks)</p>
+      <code>101B: A9 08       LDA  #$08       ).
+101D: 8D 04 08    STA  $0804      ...
+1020: A9 03       LDA  #$03       ).
+1022: 8D 05 08    STA  $0805      ...</code>
+      <p class="comment">execution continues here -- set unit number</p>
+      <code>1025: AD 30 BF    LDA  $BF30      -0?
+1028: 8D 01 08    STA  $0801      ...</code>
+      <p class="comment">number of parameters</p>
+      <code>102B: A9 03       LDA  #$03       ).
+102D: 8D 00 08    STA  $0800      ...
+1030: A9 0A       LDA  #$0A       ).
+1032: 8D 02 08    STA  $0802      ...
+1035: A9 08       LDA  #$08       ).
+1037: 8D 03 08    STA  $0803      ...</code>
+    </div>
+    <div class="curses">
+      <p class="comment">call ProDOS MLI with MLI command $80</p>
+      <code>103A: 20 00 BF    JSR  $BF00       .?
+103D: 80       (read block)       .
+103E: 00 08                       ..</code>
+    </div>
+    <div class="terminal_output">
+      <p class="comment">if no error, branch forward</p>
+      <code>1040: 90 0A       BCC  $104C      ..</code>
+      <p class="comment">if MLI error is not "I/O ERROR", branch forward</p>
+      <code>1042: C9 27       CMP  #$27       I'
+1044: D0 06       BNE  $104C      P.</code>
+      <p class="comment">original disks end up here (because the specified block is bad ($110 for</p>
+      <p class="comment">5.25-inch disks, $308 for 3.5-inch) and the MLI returns an I/O error)</p>
+      <code>1046: A9 01       LDA  #$01       ).
+1048: 85 08       STA  $08        ..
+104A: D0 04       BNE  $1050      P.</code>
+      <p class="comment">copies end up here (because the specified block is *not* bad)</p>
+      <code>104C: A9 00       LDA  #$00       )
+104E: 85 08       STA  $08        ..</code>
+    </div>
+    <p>That's the side effect that triggers the "Insert master disk" error later: whether zero page $08 is $01 or $00.</p>
+    <p>To fix this, I should be able to change the code at offset $4C from "LDA #$00" to "LDA #$01" (to match the code at offset $46 in the success path).</p>
+    <div class="curses_input">
+      <code>[S5,D1=non-working copy]</code>
+    </div>
+    <p>Block $0055, offset $4D change 00 to 01</p>
+    <div class="line_editing">
+      <code>]PR#5
+...works...</code>
+    </div>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/471-math-blaster-mystery-800k-v1-3.html">Math Blaster Mystery 800K v1.3</a></p>
+</body></html>

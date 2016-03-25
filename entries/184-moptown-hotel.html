@@ -1,0 +1,313 @@
+<!doctype html>
+<html><head>
+<title>Moptown Hotel</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/183-fraction-tutorial.html">Fraction Tutorial</a></p>
+<section>
+
+    <p>- Xevious (Mindscape)</p>
+    <p>- The Notable Phantom (DesignWare)</p>
+    <p>- Animal Kingdom, Race Car 'Rithmetic,</p>
+    <p>Magical Myths (Unicorn Software)</p>
+    <p>- Pitstop II (Epyx)</p>
+    <p>- Microzine issues 12, 13, 17, and 18</p>
+    <p>(Scholastic)</p>
+    <p class="seen">Somebody been sellin' copy protection.</p>
+</section>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">unable to read any track</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">no errors, but copy fills screen with garbage and reboots</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">all tracks use standard prologues (address: D5 AA 96, data: D5 AA AD) but modified epilogues (address: FF FF FF, data: FF FF FF)</p>
+    <p class="seen">Disk Fixer</p>
+    <p class="seen">["O" -> "Input/Output Control"] set Address Epilogue to "FF FF FF" set Data Epilogue to "FF FF FF"</p>
+    <p class="seen">Success! All tracks readable! T00 -> looks like a DOS 3.3 RWTS T11 -> DOS 3.3 disk catalog T01,S07 -> startup program is "HELLO" (probably a Pronto-DOS variant)</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">Why didn't my EDD copy work?</p>
+    <p class="seen">probably a nibble check during boot</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. capture RWTS with AUTOTRACE</p>
+    <p class="seen">2. convert disk to standard format with Advanced Demuffin</p>
+    <p class="seen">3. find nibble check and bypass it</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Attempt To Use The Original Disk As A Weapon Against Itself</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+/!\ BOOT0 JUMPS TO $08C0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS
+/!\ NIBBLE CHECK AT $BB00</code>
+      <code>]BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>["5" to switch to slot 5]</code>
+      <code>["R" to load a new RWTS module]
+  --> At $B8, load "RWTS" from drive 1</code>
+      <code>["6" to switch to slot 6]</code>
+      <code>["C" to convert disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:..............................RRRRR
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:..............................RRRRR
+SC1:..............................RRRRR
+SC2:..............................RRRRR
+SC3:..............................RRRRR
+SC4:..............................RRRRR
+SC5:..............................RRRRR
+SC6:..............................RRRRR
+SC7:..............................RRRRR
+SC8:..............................RRRRR
+SC9:..............................RRRRR
+SCA:..............................RRRRR
+SCB:..............................RRRRR
+SCC:..............................RRRRR
+SCD:..............................RRRRR
+SCE:..............................RRRRR
+SCF:..............................RRRRR
+=======================================
+16SC $00,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <p>Hmm. Tracks $1E-$22 are unreadable. The</p>
+    <p>Copy ][+ nibble editor can't make heads or tails of them. They're probably unformatted.</p>
+    <div class="line_editing">
+      <code>]PR#5
+]CATALOG,S6,D2</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+000 FREE</code>
+      <code> A 011 HELLO
+ A 033 CHANGE ME
+ A 020 SECRET PAL
+ A 036 MOPTOWN HOTEL
+ B 006 WHOSE BIRTHDAY?.LPIC
+ B 034 PIC.MAP
+ B 034 PIC.HOTEL
+ A 030 MOPTOWN MAP
+ A 028 WHOSE BIRTHDAY?
+ A 032 WHO'S NEXT DOOR?
+ A 033 SPOT ME
+ B 063 HOTELDATA
+ B 051 RAMLOADER
+ B 002 MUSICRESETMOVESHAPE
+ B 004 MOPTOWN 1.1 ERROR SRT.O
+ A 014 MENU</code>
+    </div>
+    <div class="line_editing">
+      <code>]RUN HELLO
+...works...</code>
+    </div>
+    <p>I'm still curious about those high- numbered tracks.</p>
+    <p>Copy ][+ 5.5</p>
+    <p>--> TRACK/SECTOR MAP</p>
+    <div class="terminal_output">
+      <code>   TRACK           1               2
+   0123456789ABCDEF0123456789ABCDEF012</code>
+      <code>S0 ...DFGHIJKLLLMMPM PBCDPFGHIJKL.....
+E1 ..BDFGHIJKLLLMMPM OBCDPFGHIJKL.....
+C2 ..BDFGGIJKLLLMMPM OBCDPFGHIJKL.....
+T3 ..BDFGGIJKLLLMMNM OBCDPFGHIJKL.....
+O4 ..BDFFGHJKLLLMMNM OBCDPFGHIJKL.....
+R5 ..BDFFGHJKLLLMMMM ABCDPFGHIJKL.....
+ 6 ..BDDFGHJKLLLMMMM ABCDPFGHIJKL.....
+ 7 ..BDDFGHJKKLLMMMM ABCDPFGHIJKL.....
+ 8 ..BDDFGHIJKLLLMMM ABCDPFGHIJKL.....
+ 9 ..BDDFGHIJKLLLMMM ABCDPFGHIJKL.....
+ A ..BCDFGHIJKLLLMMM ABCDEFGHIJKL.....
+ B ..BCDFGHIJKLLLMMM ABCDEFGHIJKL.....
+ C ..BCDFGHIJKLLLMMM ABCDEFGHIJKL.....
+ D ..BCDFGHIJKLLLMMM ABCDEFGHIJKL.....
+ E ..BBDFGHIJKLLLMMM ABCDEFGHIJKL.....
+ F ..BBDFGHIJKLLLMMM ABCDEFGHIJKL.....</code>
+    </div>
+    <p>Confirmed: tracks $1E-$22 are unused.</p>
+    <div class="line_editing">
+      <code>]PR#6
+...fills screen with garbage, reboots
+endlessly...</code>
+    </div>
+    <p class="seen">Let's go find that nibble check.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>Drop The Bit, Start The Music</h3>
+
+    <div class="curses_input">
+      <code>[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+]BLOAD BOOT0,A$800
+]CALL -151</code>
+      <code>*801L
+.
+. all normal until...
+.
+084A-   4C C0 08    JMP   $08C0</code>
+      <code>*8C0L</code>
+    </div>
+    <div class="listing">
+      <code>08C0-   8E E9 B7    STX   $B7E9
+08C3-   6C FD 08    JMP   ($08FD)</code>
+    </div>
+    <div class="line_editing">
+      <code>*BLOAD BOOT1,A$2600</code>
+      <code>*FE89G FE93G     ; disconnect DOS</code>
+      <code>*B600<2600.2FFFM ; move RWTS into place</code>
+      <code>*B700L</code>
+    </div>
+    <div class="listing">
+      <code>B700-   20 00 BB    JSR   $BB00</code>
+    </div>
+    <div class="line_editing">
+      <code>*BB00L</code>
+    </div>
+    <div class="listing">
+      <code>BB00-   A0 00       LDY   #$00
+BB02-   B9 00 BB    LDA   $BB00,Y
+BB05-   99 00 02    STA   $0200,Y
+BB08-   88          DEY
+BB09-   D0 F7       BNE   $2B02
+BB0B-   60          RTS</code>
+    </div>
+    <div class="line_editing">
+      <code>*20C<BB0C.BBFFM</code>
+      <code>*20CL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">this subroutine seeks to track $11 and sets the reset vector to something unfriendly</p>
+      <code>020C-   20 CF 02    JSR   $02CF
+020F-   A9 0A       LDA   #$0A
+0211-   85 2A       STA   $2A</code>
+      <p class="comment">initialize disk motor (highly suspicious)</p>
+      <code>0213-   AE E9 B7    LDX   $B7E9
+0216-   BD 89 C0    LDA   $C089,X
+0219-   BD 8E C0    LDA   $C08E,X</code>
+      <p class="comment">set up an address pointer</p>
+      <code>021C-   A9 C7       LDA   #$C7
+021E-   85 48       STA   $48
+0220-   A9 02       LDA   #$02
+0222-   85 49       STA   $49</code>
+      <p class="comment">set up the Death Counter</p>
+      <code>0224-   A9 80       LDA   #$80
+0226-   85 29       STA   $29
+0228-   C6 29       DEC   $29</code>
+      <p class="comment">if the Death Counter hits zero, fail</p>
+      <code>022A-   F0 67       BEQ   $0293</code>
+      <p class="comment">get next address field</p>
+      <code>022C-   20 44 B9    JSR   $B944
+022F-   B0 62       BCS   $0293  ; fail</code>
+      <p class="comment">loop until we find sector $0D (in zero page $2D after routine at $B944)</p>
+      <code>0231-   A5 2D       LDA   $2D
+0233-   C9 0D       CMP   #$0D
+0235-   D0 F1       BNE   $0228</code>
+      <p class="comment">here we go</p>
+      <code>0237-   A0 00       LDY   #$00
+0239-   BD 8C C0    LDA   $C08C,X
+023C-   10 FB       BPL   $0239
+023E-   88          DEY
+023F-   F0 52       BEQ   $0293  ; fail</code>
+      <p class="comment">Search for a specific sequence of nibbles in the "dead zone" between the address field and data field.</p>
+      <p class="comment">This area is normally not important, so COPYA didn't copy it precisely because normal disks don't care. (Actually, it's even more evil than that, because the original disk is written with timing bits in specific non-standard places between the nibbles in the dead zone. This code not only requires the right nibbles in the right order, it reads them just slightly slower than normal. So the timing bits need to be in the right places too, or else this code will read the wrong nibble values while it's out of sync. This will trip up even the best bit copiers.</p>
+      <p class="comment">And you can forget about making a disk image for emulators -- those don't store timing bits at all.)</p>
+      <code>0241-   C9 D5       CMP   #$D5
+0243-   D0 F4       BNE   $0239
+0245-   A0 00       LDY   #$00
+0247-   BD 8C C0    LDA   $C08C,X
+024A-   10 FB       BPL   $0247
+024C-   88          DEY
+024D-   F0 44       BEQ   $0293  ; fail
+024F-   C9 E7       CMP   #$E7
+0251-   D0 F4       BNE   $0247
+0253-   BD 8C C0    LDA   $C08C,X
+0256-   10 FB       BPL   $0253
+0258-   C9 E7       CMP   #$E7
+025A-   D0 37       BNE   $0293  ; fail
+025C-   BD 8C C0    LDA   $C08C,X
+025F-   10 FB       BPL   $025C
+0261-   C9 E7       CMP   #$E7
+0263-   D0 2E       BNE   $0293  ; fail</code>
+      <p class="comment">kill some time to get out of sync with the "proper" start of nibbles)</p>
+      <code>0265-   BD 8D C0    LDA   $C08D,X
+0268-   A0 10       LDY   #$10
+026A-   24 06       BIT   $06</code>
+      <p class="comment">now start looking for nibbles that don't really exist (except they do, because we're out of sync and reading timing bits as data)</p>
+      <code>026C-   BD 8C C0    LDA   $C08C,X
+026F-   10 FB       BPL   $026C
+0271-   88          DEY
+0272-   F0 1F       BEQ   $0293  ; fail
+0274-   C9 EE       CMP   #$EE
+0276-   D0 F4       BNE   $026C</code>
+      <p class="comment">check for nibble sequence stored in reverse order at $2C7</p>
+      <code>0278-   A0 07       LDY   #$07
+027A-   BD 8C C0    LDA   $C08C,X
+027D-   10 FB       BPL   $027A
+027F-   D1 48       CMP   ($48),Y
+0281-   D0 10       BNE   $0293
+0283-   88          DEY
+0284-   10 F4       BPL   $027A</code>
+      <p class="comment">success path falls through to here</p>
+      <code>0286-   A9 80       LDA   #$80
+0288-   8D 4E 9E    STA   $9E4E
+028B-   A9 A1       LDA   #$A1
+028D-   8D 4F 9E    STA   $9E4F
+0290-   4C 4D 9E    JMP   $9E4D</code>
+    </div>
+    <p class="seen">That last section at $0286..$0290 is interesting. After the nibble check passes, it replaces two bytes at $9E4E and $9E4F, then immediately jumps to $9E4D. That implies that this nibble check is called from $9E4D via an unconditional jump (not a JSR). With my trusty Disk Fixer sector editor, I searched the disk for "4C 0C 02" and lo and behold! Track $00, sector $0B, byte $4D contains a "JMP $020C".</p>
+    <p class="seen">I should be able to change that JMP back to its original target ($A180) and bypass the nibble check altogether.</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which We Remove All Traces Of Copy Protection Using An Automated Tool That I Wrote For Just Such An Occasion</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+]BRUN PDP</code>
+    </div>
+    <p class="seen">T00,S0B,$4E change 0C02 to 80A1</p>
+    <p class="seen">(It turns out the RWTS is flexible enough to read disks in a standard format, so no RWTS patches necessary.)</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/185-math-blaster-mystery.html">Math Blaster Mystery</a></p>
+</body></html>

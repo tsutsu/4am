@@ -1,0 +1,376 @@
+<!doctype html>
+<html><head>
+<title>Winnie the Pooh in the Hundred Acre Wood</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/093-piece-of-cake-math.html">Piece of Cake Math</a></p>
+<section>
+
+    <p>"Winnie the Pooh in the Hundred Acre</p>
+    <p>Wood" is a 1984 graphical adventure game by Walt Disney Company and distributed by Sierra On-Line, Inc.</p>
+    <p>The original comes on a double-sided disk and uses both sides. COPYA copies both sides, but the copy does not work.</p>
+    <p>Immediately after booting side A, it gives this error message:</p>
+    <div class="terminal_output">
+      <code>    PLEASE PLACE THE WINNIE THE POOH</code>
+      <code>          DISK INTO THE DRIVE.</code>
+      <code>
+      PRESS 'RETURN' TO CONTINUE.</code>
+    </div>
+    <p>The disk does have a readable catalog.</p>
+    <p>Let's see if I can load it from the DOS</p>
+    <p>3.3 master disk.</p>
+    <div class="curses_input">
+      <code>[S6,D1=DOS 3.3 master disk]
+[S6,D2=original disk, side A]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...
+]CATALOG,D2</code>
+    </div>
+    <div class="terminal_output">
+      <code>DISK VOLUME 100</code>
+      <code> A 002 HELLO
+*A 002 WINNIE-THE-POOH 2/10/85 SIDE A
+*B 004 WINNIE HELLO
+*B 034 LOGO.PIC
+*B 034 TITLE.PIC
+*B 007 SOUND.OBJ
+*B 023 GAME.OBJ
+*B 013 PICDRAW
+ B 002 RND
+*B 002 OBJECT1.OBJ
+*B 004 OBJECT2.OBJ
+*B 003 OBJECT3.OBJ
+*B 004 OBJECT4.OBJ
+*B 003 OBJECT5.OBJ
+*B 003 OBJECT6.OBJ
+*B 004 OBJECT7.OBJ
+*B 004 OBJECT8.OBJ
+*B 005 OBJECT9.OBJ
+*B 003 OBJECT10.OBJ
+*B 003 OBJECT11.OBJ
+*B 005 OBJECT12.OBJ
+*B 003 OBJECT13.OBJ
+*B 003 OBJECT14.OBJ
+*B 004 OBJECT15.OBJ
+*B 003 OBJECT16.OBJ
+*B 004 OBJECT17.OBJ
+*B 005 OBJECT18.OBJ
+*B 005 OBJECT19.OBJ
+*B 004 OBJECT20.OBJ
+*B 003 OBJECT21.OBJ
+*B 005 OBJECT22.OBJ
+*B 005 OBJECT23.OBJ
+*B 003 OBJECT24.OBJ
+*B 004 OBJECT25.OBJ
+*B 003 OBJECT26.OBJ
+*B 004 OBJECT27.OBJ
+*B 004 OBJECT28.OBJ
+*B 004 OBJECT29.OBJ
+*B 004 OBJECT30.OBJ
+*B 005 OBJECT31.OBJ
+*B 004 OBJECT32.OBJ
+*B 004 OBJECT33.OBJ
+*B 005 OBJECT34.OBJ
+*B 004 OBJECT35.OBJ
+*B 006 OBJECT36.OBJ
+*B 004 OBJECT37.OBJ
+*B 003 OBJECT38.OBJ
+*B 004 OBJECT39.OBJ
+*B 004 OBJECT40.OBJ</code>
+    </div>
+    <div class="line_editing">
+      <code>]RUN HELLO</code>
+    </div>
+    <p>Success! The game loads and runs with no complaint. Whatever is causing the error message to display at boot, I can bypass it by booting a standard DOS.</p>
+    <p class="seen">Using Copy ][+, I can "copy DOS" from a freshly initialized DOS 3.3 disk onto the demuffin'd copy. This function of</p>
+    <p class="seen">Copy ][+ just sector-copies tracks 0-2 from one disk to another, but it's easier than setting that up manually in some other copy program.</p>
+    <p class="seen">Copy ][+</p>
+    <p class="seen">--> COPY --> DOS --> from slot 6, drive 2 --> to slot 6, drive 1</p>
+    <div class="curses_input">
+      <code>[S6,D1=non-working copy]
+[S6,D2=newly formatted DOS 3.3 disk]</code>
+    </div>
+    <p class="seen">...read read read... ...write write write...</p>
+    <p>So what *is* causing the message? Don't even care.</p>
+    <p>OK, OK, I care a little. Let's do a little boot tracing just for fun.(*)</p>
+    <p class="seen">(*)not guaranteed, actual fun may vary</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk, side A]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0</code>
+    </div>
+    <p>For those of you just tuning in, my work disk uses a custom program that I affectionately call "AUTOTRACE" to automate the process of boot tracing as far as possible. For some disks (like this one, apparently), it just captures track 0, sector 0 (saved in a file called "BOOT0") and stops.</p>
+    <div class="line_editing">
+      <code>]CALL -151</code>
+      <code>*800<2800.28FFM</code>
+      <code>*801L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">totally custom boot0 code here</p>
+      <code>0801-   85 FC       STA   $FC
+0803-   86 FD       STX   $FD
+0805-   84 FE       STY   $FE
+0807-   A2 FF       LDX   #$FF
+0809-   9A          TXS</code>
+      <p class="comment">set up ($003E) to point to the read sector routine in the disk controller ROM</p>
+      <code>080A-   A5 2B       LDA   $2B
+080C-   AA          TAX
+080D-   4A          LSR
+080E-   4A          LSR
+080F-   4A          LSR
+0810-   4A          LSR
+0811-   09 C0       ORA   #$C0
+0813-   85 3F       STA   $3F
+0815-   A9 5C       LDA   #$5C
+0817-   85 3E       STA   $3E</code>
+      <p class="comment">put an "RTS" at $801 (which is where the disk controller ROM read routine jumps to when it's done -- so now we can JSR to read a sector and exit)</p>
+      <code>0819-   A9 60       LDA   #$60
+081B-   8D 01 08    STA   $0801</code>
+      <p class="comment">Read a particular sector (based on physical sector index) into $0900 (because the target address is auto- incremented after each read, and we just read this sector into $0800)</p>
+      <code>081E-   A9 0A       LDA   #$0A
+0820-   85 3D       STA   $3D
+0822-   20 2F 08    JSR   $082F</code>
+      <p class="comment">read another sector (into $0A00)</p>
+      <code>0825-   A9 08       LDA   #$08
+0827-   85 3D       STA   $3D
+0829-   20 2F 08    JSR   $082F</code>
+      <p class="comment">jump to next phase</p>
+      <code>082C-   4C 32 08    JMP   $0832
+082F-   6C 3E 00    JMP   ($003E)</code>
+    </div>
+    <p>That's where I need to interrupt the boot process.</p>
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <code>96F8-   48          PHA
+96F9-   08          PHP
+96FA-   A9 09       LDA   #$09
+96FC-   8D 2D 08    STA   $082D
+96FF-   A9 97       LDA   #$97
+9701-   8D 2E 08    STA   $082E
+9704-   28          PLP
+9705-   68          PLA
+9706-   4C 01 08    JMP   $0801
+9709-   A0 00       LDY   #$00
+970B-   B9 00 09    LDA   $0900,Y
+970E-   99 00 29    STA   $2900,Y
+9711-   B9 00 0A    LDA   $0A00,Y
+9714-   99 00 2A    STA   $2A00,Y
+9717-   C8          INY
+9718-   D0 F1       BNE   $970B
+971A-   AD E8 C0    LDA   $C0E8
+971D-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE1,A$9600,L$120</code>
+      <code>*9600G
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]BSAVE BOOT1 0900-0AFF,A$2900,L$200
+]BLOAD BOOT0,A$800
+]BLOAD BOOT1 0900-0AFF,A$900
+]CALL -151</code>
+    </div>
+    <p>Now all the code (that I know about so far) is in memory as it would be during boot. Continuing where I left off...</p>
+    <div class="line_editing">
+      <code>*832L</code>
+    </div>
+    <div class="listing">
+      <code>0832-   A9 08       LDA   #$08
+0834-   85 F9       STA   $F9
+0836-   A0 F0       LDY   #$F0
+0838-   84 F8       STY   $F8</code>
+      <p class="comment">don't know what this does yet</p>
+      <code>083A-   20 52 08    JSR   $0852</code>
+      <p class="comment">but it's probably important because it checks the carry bit on exit</p>
+      <code>083D-   90 10       BCC   $084F
+083F-   A0 F0       LDY   #$F0
+0841-   84 F8       STY   $F8</code>
+      <p class="comment">don't know what this does yet</p>
+      <code>0843-   20 92 08    JSR   $0892</code>
+      <p class="comment">but suspiciously, it also checks the carry bit and may branch to the same place</p>
+      <code>0846-   90 07       BCC   $084F</code>
+      <p class="comment">try this 8 times</p>
+      <code>0848-   C6 F9       DEC   $F9
+084A-   D0 EA       BNE   $0836</code>
+      <p class="comment">appears to be the failure path (the counter, zero page $F9, is exhausted)</p>
+      <code>084C-   4C 36 09    JMP   $0936</code>
+      <p class="comment">appears to be the success path</p>
+      <code>084F-   4C 1A 09    JMP   $091A</code>
+    </div>
+    <p>At a high level, this has the structure of a copy protection routine. Do a check (JSR $0852); if it worked, then continue with the program (JMP $091A).</p>
+    <p>Otherwise, try to re-set-up or re-prep for the check (JSR $0892) and try it again. But after a few tries ($F9), just give up (JMP $0936).</p>
+    <p>If I'm right, this should be the check:</p>
+    <div class="line_editing">
+      <code>*852L</code>
+    </div>
+    <div class="listing">
+      <code>0852-   20 D4 08    JSR   $08D4</code>
+    </div>
+    <div class="line_editing">
+      <code>*8D4L</code>
+    </div>
+    <div class="listing">
+      <code>08D4-   18          CLC
+08D5-   A5 2B       LDA   $2B
+08D7-   69 8C       ADC   #$8C</code>
+      <p class="comment">Zero page $2B is the slot number x16, so adding $8C to it will give you the exact address for getting a nibble from disk disk. Usually this is done with the slot-x-16 in the X register, then doing "LDA $C08C,X" in a tight loop, but that's just a convention (DOS 3.3 does it that way).</p>
+      <code>08D9-   8D E7 08    STA   $08E7
+08DC-   8D 15 09    STA   $0915
+08DF-   C8          INY
+08E0-   D0 04       BNE   $08E6
+08E2-   E6 F8       INC   $F8
+08E4-   F0 2A       BEQ   $0910</code>
+      <p class="comment">check for a specific nibble sequence (appears to be the address prologue and part of the address field)</p>
+      <code>08E6-   AD EC C0    LDA   $C0EC
+08E9-   10 FB       BPL   $08E6
+08EB-   C9 D5       CMP   #$D5
+08ED-   D0 F0       BNE   $08DF
+08EF-   20 14 09    JSR   $0914
+08F2-   C9 AA       CMP   #$AA
+08F4-   D0 F5       BNE   $08EB
+08F6-   20 14 09    JSR   $0914
+08F9-   C9 96       CMP   #$96
+08FB-   D0 EE       BNE   $08EB</code>
+      <p class="comment">skip two nibbles</p>
+      <code>08FD-   20 14 09    JSR   $0914
+0900-   20 14 09    JSR   $0914</code>
+      <p class="comment">four $AA nibbles in a row</p>
+      <code>0903-   A2 03       LDX   #$03
+0905-   20 14 09    JSR   $0914
+0908-   C9 AA       CMP   #$AA
+090A-   D0 D3       BNE   $08DF
+090C-   CA          DEX
+090D-   10 F6       BPL   $0905
+090F-   60          RTS</code>
+      <p class="comment">failure path (from $08E4) -- pop the return address and set the carry flag</p>
+      <code>0910-   68          PLA
+0911-   68          PLA
+0912-   38          SEC
+0913-   60          RTS
+0914-   AD EC C0    LDA   $C0EC
+0917-   10 FB       BPL   $0914
+0919-   60          RTS</code>
+    </div>
+    <p>Popping the stack...</p>
+    <div class="listing">
+      <code>0855-   A9 10       LDA   #$10
+0857-   85 FB       STA   $FB
+0859-   A6 2B       LDX   $2B</code>
+      <p class="comment">search for modified address prologue "DE AA BB"</p>
+      <code>085B-   BD 8C C0    LDA   $C08C,X
+085E-   10 FB       BPL   $085B
+0860-   C9 DE       CMP   #$DE
+0862-   F0 06       BEQ   $086A
+0864-   C6 FB       DEC   $FB
+0866-   D0 F3       BNE   $085B
+0868-   F0 E8       BEQ   $0852
+086A-   BD 8C C0    LDA   $C08C,X
+086D-   10 FB       BPL   $086A
+086F-   C9 AA       CMP   #$AA
+0871-   D0 DF       BNE   $0852
+0873-   A0 02       LDY   #$02
+0875-   BD 8D C0    LDA   $C08D,X
+0878-   BD 8C C0    LDA   $C08C,X
+087B-   10 FB       BPL   $0878
+087D-   C9 BB       CMP   #$BB</code>
+      <p class="comment">found it, break out of loop</p>
+      <code>087F-   F0 06       BEQ   $0887</code>
+      <p class="comment">if can't find the modified address prologue, try a few more times then give up</p>
+      <code>0881-   88          DEY
+0882-   10 F4       BPL   $0878
+0884-   4C 52 08    JMP   $0852</code>
+      <p class="comment">We're now in the "dead zone" between the address field and the data field.</p>
+      <p class="comment">Standard sector copiers will not preserve this area. The next nibble needs to be $F9, but on a copy, it almost certainly won't be.</p>
+      <code>0887-   BD 8C C0    LDA   $C08C,X
+088A-   10 FB       BPL   $0887
+088C-   C9 F9       CMP   #$F9
+088E-   D0 C2       BNE   $0852
+0890-   18          CLC
+0891-   60          RTS</code>
+    </div>
+    <p>The routine at $0892 (not shown) is similar -- looking for a specific nibble in the dead zone.</p>
+    <p>If either routine ($0852 and $0892) fails and sets the carry bit on exit, we end up jumping to $0936.</p>
+    <div class="line_editing">
+      <code>*936L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">munge the reset vector</p>
+      <code>0936-   AD F3 03    LDA   $03F3
+0939-   8D F4 03    STA   $03F4</code>
+      <p class="comment">turn off the drive motor</p>
+      <code>093C-   A6 2B       LDX   $2B
+093E-   BD 88 C0    LDA   $C088,X</code>
+      <p class="comment">wipe the boot0 code from memory</p>
+      <code>0941-   A0 00       LDY   #$00
+0943-   98          TYA
+0944-   99 00 08    STA   $0800,Y
+0947-   88          DEY
+0948-   D0 FA       BNE   $0944</code>
+      <p class="comment">clear the screen and display the error message</p>
+      <code>094A-   20 58 FC    JSR   $FC58
+094D-   A2 12       LDX   #$12
+094F-   86 F8       STX   $F8
+0951-   A9 8D       LDA   #$8D
+0953-   20 ED FD    JSR   $FDED
+0956-   C6 F8       DEC   $F8
+0958-   D0 F7       BNE   $0951
+095A-   A6 F8       LDX   $F8
+095C-   E6 F8       INC   $F8
+095E-   BD 7E 09    LDA   $097E,X
+0961-   F0 06       BEQ   $0969
+0963-   20 ED FD    JSR   $FDED
+0966-   4C 5A 09    JMP   $095A</code>
+      <p class="comment">wait for a keypress</p>
+      <code>0969-   2C 10 C0    BIT   $C010
+096C-   AD 00 C0    LDA   $C000
+096F-   10 FB       BPL   $096C
+0971-   AD 10 C0    LDA   $C010</code>
+      <p class="comment">jump to the reset vector</p>
+      <code>0974-   6C FC FF    JMP   ($FFFC)</code>
+    </div>
+    <p>This matches the behavior that I saw on my non-working copy.</p>
+    <p>Meanwhile, this is what the success path ($091A) looks like:</p>
+    <div class="line_editing">
+      <code>*91AL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">move $0A00..$0AFF to $0800..$08FF (this was the second sector that the boot0 code manually read)</p>
+      <code>091A-   A0 00       LDY   #$00
+091C-   B9 00 0A    LDA   $0A00,Y
+091F-   99 00 08    STA   $0800,Y
+0922-   C8          INY
+0923-   D0 F7       BNE   $091C</code>
+      <p class="comment">reset some zero page locations</p>
+      <code>0925-   A9 01       LDA   #$01
+0927-   85 3D       STA   $3D
+0929-   A9 09       LDA   #$09
+092B-   85 27       STA   $27
+092D-   A5 FC       LDA   $FC
+092F-   A6 FD       LDX   $FD
+0931-   A4 FE       LDY   $FE</code>
+      <p class="comment">jump to the real boot0 code that we just moved into place</p>
+      <code>0933-   4C 01 08    JMP   $0801</code>
+    </div>
+    <p>In other words, this copy protection takes over boot0 completely. It loads the rest of its own protection routine and the real boot0 sector. If the copy protection passes, it moves the real boot0 code into place, patches up zero page, and jumps to $0801 as if nothing ever happened.</p>
+    <p>There are two ways I could go here.</p>
+    <p>Well, actually three ways. I already verified that I can run the game if I boot from another disk first, so that tells me I could just replace the entire DOS (with Copy ][+'s "COPY DOS" command or similar).</p>
+    <p>Option 2: in a sector editor, read the real boot0 sector and write it to track 0, sector 0. That's essentially what the copy protection does (in memory).</p>
+    <p>Option 3: patch the copy protection routine to jump directly to the success path. I like this just because it preserves (but bypasses) the copy protection code on disk. I can actually go all the way back at $082C and patch it right after it loads the two sectors and breaks out of the boot loop.</p>
+    <p>Instead of jumping to $0832, I'll jump to $084F.</p>
+    <p>T00,S00,$2D change "32" to "4F"</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/095-band-saw-and-shaper-safety.html">Band Saw and Shaper Safety</a></p>
+</body></html>

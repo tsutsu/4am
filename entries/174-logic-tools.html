@@ -1,0 +1,227 @@
+<!doctype html>
+<html><head>
+<title>Logic Tools</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/173-the-quarter-mile.html">The Quarter Mile</a></p>
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p>COPYA</p>
+    <p>immediate disk read error</p>
+    <p>Locksmith Fast Disk Backup</p>
+    <p>unable to read any track</p>
+    <p>EDD 4 bit copy (no sync, no count)</p>
+    <p>no errors, but copy hangs on boot</p>
+    <p>Copy ][+ nibble editor</p>
+    <p>all tracks use standard prologues (address: D5 AA 96, data: D5 AA AD) but modified epilogues (address: FF FF FF, data: FF FF FF)</p>
+    <p>Disk Fixer</p>
+    <p>["O" -> "Input/Output Control"] set Address Epilogue to "FF FF FF" set Data Epilogue to "FF FF FF"</p>
+    <p>Success! All tracks readable! T00 -> looks like a DOS 3.3 RWTS T11 -> DOS 3.3 disk catalog T01,S09 -> startup program is "HELLO"</p>
+    <p>Why didn't COPYA work?</p>
+    <p>modified epilogue bytes (every track)</p>
+    <p>Why didn't Locksmith FDB work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p>Why didn't my EDD copy work?</p>
+    <p>probably a nibble check during boot</p>
+    <p>Next steps:</p>
+    <p>1. capture RWTS with AUTOTRACE</p>
+    <p>2. convert disk to standard format with Advanced Demuffin</p>
+    <p>3. find nibble check and bypass it</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Attempt To Use The Original Disk As A Weapon Against Itself</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+/!\ BOOT0 JUMPS TO ($BBFE)
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+      <code>]BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>["5" to switch to slot 5]</code>
+      <code>["R" to load a new RWTS module]
+  --> At $B8, load "RWTS" from drive 1</code>
+      <code>["6" to switch to slot 6]</code>
+      <code>["C" to convert disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:...................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:...................................
+SC1:...................................
+SC2:...................................
+SC3:...................................
+SC4:...................................
+SC5:...................................
+SC6:...................................
+SC7:...................................
+SC8:...................................
+SC9:...................................
+SCA:...................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:...................................
+=======================================
+16SC $00,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+]CATALOG,S6,D2</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+191 FREE</code>
+      <code> A 014 HELLO
+*B 002 MUSICRESETMOVE
+ A 007 MENU
+*B 051 RAMLOADER
+ B 042 ADV #105 WITHOUT TX
+ B 040 NEW HOOK AND ARROW WORLD
+ B 004 MAP&TURNGAME.O
+ B 003 NSF TURNLOAD.O
+ B 009 PUZZLES19A.O
+ B 008 PUZZLES20B.O
+ B 004 PUZZLES20D.O
+ B 009 PUZZLES18C.O
+ B 007 PUZZLEDATA
+ B 003 NSF PUZZLELOAD.O
+ B 040 PUZZLE WORLD @ $6000
+ B 040 GATE WORLD
+ B 010 GATES WALK.O
+ B 007 GATES SIM.O
+ B 003 NSF GATELOAD.O
+ B 002 CLEAR AND REBOOT.O</code>
+    </div>
+    <div class="line_editing">
+      <code>]RUN HELLO</code>
+    </div>
+    <p>Success! Program loads and runs!</p>
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...still hangs on boot...</code>
+      <code>]PR#5
+...
+]BLOAD BOOT0,A$800
+]CALL -151
+*801L
+.
+.
+.
+084A-   6C FE BB    JMP   ($BBFE)</code>
+      <code>*BLOAD BOOT1,A$2600
+*FE89G FE93G     ; disconnect DOS
+*B600<2600.2FFFM ; move RWTS into place</code>
+      <code>*BBFE.BBFF</code>
+    </div>
+    <div class="listing">
+      <code>BBFE- 00 BB</code>
+    </div>
+    <div class="line_editing">
+      <code>*BB00L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">RUN flag</p>
+      <code>BB00-   A9 00       LDA   #$00
+BB02-   85 D6       STA   $D6</code>
+      <p class="comment">check if disk is write-protected</p>
+      <code>BB04-   BD 8D C0    LDA   $C08D,X
+BB07-   BD 8E C0    LDA   $C08E,X</code>
+      <p class="comment">continue if write-protected</p>
+      <code>BB0A-   30 03       BMI   $BB0F</code>
+      <p class="comment">loop forever if not write-protected</p>
+      <code>BB0C-   4C 0A BB    JMP   $BB0A</code>
+      <p class="comment">check low-level reset vector</p>
+      <code>BB0F-   AD FD FF    LDA   $FFFD
+BB12-   C9 FA       CMP   #$FA</code>
+      <p class="comment">loop forever if it's been modified</p>
+      <code>BB14-   D0 FE       BNE   $BB14</code>
+      <p class="comment">try forever to find a non-standard nibble sequence on track 0</p>
+      <code>BB16-   BD 8C C0    LDA   $C08C,X
+BB19-   A9 00       LDA   #$00
+BB1B-   8D 00 02    STA   $0200
+BB1E-   BD 8C C0    LDA   $C08C,X
+BB21-   10 FB       BPL   $BB1E
+BB23-   C9 EB       CMP   #$EB
+BB25-   D0 F7       BNE   $BB1E
+BB27-   BD 8C C0    LDA   $C08C,X
+BB2A-   10 FB       BPL   $BB27
+BB2C-   C9 D5       CMP   #$D5
+BB2E-   D0 EE       BNE   $BB1E
+BB30-   BD 8C C0    LDA   $C08C,X
+BB33-   10 FB       BPL   $BB30
+BB35-   C9 AA       CMP   #$AA
+BB37-   D0 E5       BNE   $BB1E</code>
+      <p class="comment">wipe most of main memory</p>
+      <code>BB39-   A9 4C       LDA   #$4C
+BB3B-   A0 00       LDY   #$00
+BB3D-   99 00 95    STA   $9500,Y
+BB40-   88          DEY
+BB41-   D0 FA       BNE   $BB3D
+BB43-   CE 3F BB    DEC   $BB3F
+BB46-   AD 3F BB    LDA   $BB3F
+BB49-   C9 07       CMP   #$07
+BB4B-   D0 EC       BNE   $BB39</code>
+      <p class="comment">continue to boot1</p>
+      <code>BB4D-   4C 00 B7    JMP   $B700</code>
+    </div>
+    <p class="seen">Why didn't my EDD copy work?</p>
+    <p>it wasn't write-protected</p>
+    <p>Does it boot if I write-protect it?</p>
+    <p>yes</p>
+    <p>Could I release this as a .nib file and just tell everyone to mount it as a write-protected disk image in their favorite emulator?</p>
+    <p class="seen">yes</p>
+    <p>Am I going to do that?</p>
+    <p>no</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Remove All Traces Of Copy Protection Using An Automated Tool That Was Written For Just Such An Occasion</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+      <code>]BRUN PDP</code>
+    </div>
+    <p>; fix epilogue byte checking in RWTS</p>
+    <p>T00,S03,$91 change FF to DE T00,S03,$9B change FF to AA T00,S03,$35 change FF to DE T00,S03,$3F change FF to AA T00,S02,$9E change FF to DE T00,S02,$A3 change FF to AA T00,S02,$A8 change FF to EB</p>
+    <p>; bypass nibble check after boot0</p>
+    <p>T00,S00,$4B change FEBB to FD08</p>
+    <p>; fix nibble table (ooh, I didn't see ; this in my investigation -- hooray ; for automation)</p>
+    <p>T00,S04,$29 change AA to 96</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/175-design-your-own-home.html">Design Your Own Home</a></p>
+</body></html>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html><head>
+<title>Addition (Prescription Learning)</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/323-mathematics-today.html">Mathematics Today</a></p>
+<section>
+
+    <p class="seen">All 8 disks are bootable and appear to be independent of each other. I'll start with disk 1.</p>
+</section>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">reads everything except T00,S00</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">works</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">T00,S00 uses data epilogue "ED AA EB" everything else is normal</p>
+    <p class="seen">Disk Fixer</p>
+    <p class="seen">["O" -> "Input/Output Control"] set Data Epilogue to "ED AA EB"</p>
+    <p class="seen">Success! T00,S00 readable! looks like a standard Pascal boot0</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p class="seen">modified data epilogue on T00,S00</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">ditto</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Copy T00,S00 manually with a sector editor</p>
+    <p class="seen">2. Maybe nothing? (EDD bit copy works so probably no nibble check)</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Find The Least We Can Do</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk (#1)]
+[S6,D2=partial Locksmith FDB copy]</code>
+      <code>[Disk Fixer]
+  ["O" -> "Input/Output Control"]
+    set "CHECKSUM ENABLED" to "NO"
+  ["R"ead track $00, sector $00]
+  ["C"opy sector to drive 2]</code>
+      <code>[S6,D1=Locksmith FDB copy]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...works...</code>
+    </div>
+    <p class="seen">The same procedure works for the other 7 disks.</p>
+    <p class="seen">I almost didn't write this up, but I just love this protection scheme. They changed one epilogue byte on the one sector where it's ignored anyway (since it's read by the disk controller ROM routine, which doesn't verify epilogue bytes). So they didn't need to make any changes to the rest of the disk. It's literally the least they could do.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/325-subtraction-prescription-learning.html">Subtraction (Prescription Learning)</a></p>
+</body></html>

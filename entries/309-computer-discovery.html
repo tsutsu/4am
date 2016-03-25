@@ -1,0 +1,276 @@
+<!doctype html>
+<html><head>
+<title>Computer Discovery</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/308-microzine-3.html">Microzine 3</a></p>
+<section>
+
+    <p>Both disks are bootable. I'll start with disk 1.</p>
+</section>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p>no read errors, but the copy displays a DOS prompt, executes HGR to clear the graphics screen, then switches back to text mode and displays the message "ERROR CODE 593 -- CALL SRA FOR ASSISTANCE"</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">ditto</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">ditto</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">nothing suspicious</p>
+    <p class="seen">Disk Fixer</p>
+    <p>T00 -> DOS 3.3 loaded in low memory T11 -> DOS 3.3 disk catalog T01,S09 -> startup program is "COMPUTER DISCOVERY 1"</p>
+    <p>Why didn't any copies work?</p>
+    <p>given how far my non-working copy gets -- loading DOS, executing HGR -- there's probably a nibble check in the startup program</p>
+    <p class="seen">Next steps:</p>
+    <p>1. Trace startup program</p>
+    <p class="seen">2. Find nibble check and disable it</p>
+    <p class="seen">3. There is no step 3 (I hope)</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which Things Get Off To A Promising Start</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...<Ctrl-C> gets me a working prompt...</code>
+      <code>]LIST</code>
+    </div>
+    <div class="terminal_output">
+      <code> 1  REM --COMPUTER DISCOVERY
+ 2  POKE 1011,0
+ 10  PRINT : PRINT  CHR$ (4);"BLO
+     AD LOCKED DESIGNWARE 4000.OB
+     J,A$4000"
+ 11  POKE 232,0: POKE 233,0
+ 12  PRINT  CHR$ (4);"MAXFILES 1"</code>
+      <code> 18  HGR : HCOLOR= 0
+ 19  CALL 16402: CALL 16405
+ 20  PRINT : PRINT  CHR$ (4);"RUN
+      MENU"</code>
+    </div>
+    <p>Line 19 calls $4012, then $4015.</p>
+    <div class="line_editing">
+      <code>]BLOAD LOCKED DESIGNWARE 4000.OBJ,
+ A$4000
+]CALL -151</code>
+      <code>*4012L</code>
+    </div>
+    <div class="listing">
+      <code>4012-   4C 18 40    JMP   $4018
+4015-   4C E3 41    JMP   $41E3
+4018-   20 01 42    JSR   $4201
+401B-   20 FD 42    JSR   $42FD
+401E-   60          RTS</code>
+    </div>
+    <p>$4201 (called from $4018) saves the input and output vectors at ($36) and ($38) then sets them to unfriendly things to prevent you from breaking into the monitor. $41E3 (called from $4015) restores the vectors. So I'm only interested in the code at $42FD (called from $401B).</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which Things Are Made As Difficult As Possible</h3>
+
+    <div class="line_editing">
+      <code>*42FDL</code>
+    </div>
+    <div class="listing">
+      <code>42FD-   20 B3 43    JSR   $43B3</code>
+    </div>
+    <div class="line_editing">
+      <code>*43B3L</code>
+    </div>
+    <div class="listing">
+      <code>43B3-   A2 76       LDX   #$76
+43B5-   3E FF 42    ROL   $42FF,X
+43B8-   CA          DEX
+43B9-   D0 FA       BNE   $43B5
+43BB-   60          RTS</code>
+    </div>
+    <p>Ah, a decryption loop. It's self- contained. Let's run it.</p>
+    <div class="line_editing">
+      <code>*43B3G</code>
+    </div>
+    <p>Execution continues at $4300, which (not coincidentally) is the code we just decrypted.</p>
+    <div class="line_editing">
+      <code>*4300L</code>
+    </div>
+    <div class="listing">
+      <code>4300-   A9 00       LDA   #$00
+4302-   48          PHA
+4303-   28          PLP
+4304-   D0 01       BNE   $4307
+4306-   4C 20 E3    JMP   $E320
+4309-   03          ???</code>
+    </div>
+    <p>Hey, that's not code! Oh wait, I see the problem: the branch at $4304 jumps to the middle of the next instruction.</p>
+    <p>There is no jump to $E320. That never happens. Execution continues at $4307, which is obscured in a disassembly listing to deter, well, people like me.</p>
+    <div class="line_editing">
+      <code>*4306:EA</code>
+      <code>*4300L</code>
+    </div>
+    <div class="listing">
+      <code>4300-   A9 00       LDA   #$00
+4302-   48          PHA
+4303-   28          PLP
+4304-   D0 01       BNE   $4307
+4306-   EA          NOP
+4307-   20 E3 03    JSR   $03E3
+430A-   85 01       STA   $01
+430C-   84 00       STY   $00
+430E-   A0 01       LDY   #$01
+4310-   D0 01       BNE   $4313
+4312-   D0 B1       BNE   $42C5
+4314-   00          BRK</code>
+    </div>
+    <p>Another fake out: $4310 branches to $4313, which is obscured by the (never executed) branch to $42C5.</p>
+    <div class="line_editing">
+      <code>*4312:EA</code>
+    </div>
+    <p>This goes on for quite a while.</p>
+    <div class="line_editing">
+      <code>*4318:EA
+*4322:EA
+*4328:EA
+*4331:EA</code>
+    </div>
+    <p class="seen">Seriously.</p>
+    <div class="line_editing">
+      <code>*4339:EA
+*4343:EA
+*434D:EA
+*4355:EA</code>
+    </div>
+    <p>A long while.</p>
+    <div class="line_editing">
+      <code>*435C:EA
+*4364:EA
+*436B:EA</code>
+    </div>
+    <p>So not kidding.</p>
+    <div class="line_editing">
+      <code>*4375:EA</code>
+    </div>
+    <div class="terminal_output">
+      <code>OK.</code>
+    </div>
+    <div class="line_editing">
+      <code>*4300L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">clear all processor flags</p>
+      <code>4300-   A9 00       LDA   #$00
+4302-   48          PHA
+4303-   28          PLP
+4304-   D0 01       BNE   $4307
+4306-   EA          NOP</code>
+      <p class="comment">get RWTS parameter table address</p>
+      <code>4307-   20 E3 03    JSR   $03E3
+430A-   85 01       STA   $01
+430C-   84 00       STY   $00
+430E-   A0 01       LDY   #$01
+4310-   D0 01       BNE   $4313
+4312-   EA          NOP</code>
+      <p class="comment">get slot number (x16)</p>
+      <code>4313-   B1 00       LDA   ($00),Y
+4315-   AA          TAX
+4316-   D0 01       BNE   $4319
+4318-   EA          NOP</code>
+      <p class="comment">turn on drive motor manually (always suspicious)</p>
+      <code>4319-   BD 89 C0    LDA   $C089,X</code>
+      <p class="comment">initialize Death Counter</p>
+      <code>431C-   A9 56       LDA   #$56
+431E-   85 00       STA   $00
+4320-   D0 01       BNE   $4323
+4322-   EA          NOP
+4323-   88          DEY
+4324-   D0 0C       BNE   $4332
+4326-   F0 01       BEQ   $4329
+4328-   EA          NOP
+4329-   C6 00       DEC   $00
+432B-   D0 05       BNE   $4332</code>
+      <p class="comment">if Death Counter hits zero, give up</p>
+      <code>432D-   A9 00       LDA   #$00
+432F-   F0 3B       BEQ   $436C
+4331-   EA          NOP</code>
+      <p class="comment">look for a nibble</p>
+      <code>4332-   BD 8C C0    LDA   $C08C,X
+4335-   10 FB       BPL   $4332
+4337-   D0 01       BNE   $433A
+4339-   EA          NOP
+433A-   C9 BF       CMP   #$BF
+433C-   F0 03       BEQ   $4341
+433E-   D0 E3       BNE   $4323
+4340-   EA          NOP
+4341-   F0 01       BEQ   $4344
+4343-   EA          NOP</code>
+      <p class="comment">look for a timing bit after it (note: no BPL loop here, we only check the data latch once before starting over completely)</p>
+      <code>4344-   BD 8C C0    LDA   $C08C,X
+4347-   C9 08       CMP   #$08
+4349-   B0 D8       BCS   $4323
+434B-   D0 01       BNE   $434E
+434D-   EA          NOP</code>
+      <p class="comment">match "D5 AA AA" nibble sequence</p>
+      <code>434E-   BD 8C C0    LDA   $C08C,X
+4351-   10 FB       BPL   $434E
+4353-   D0 01       BNE   $4356
+4355-   EA          NOP
+4356-   C9 D5       CMP   #$D5
+4358-   F0 03       BEQ   $435D
+435A-   D0 C7       BNE   $4323
+435C-   EA          NOP
+435D-   BD 8C C0    LDA   $C08C,X
+4360-   10 FB       BPL   $435D
+4362-   D0 01       BNE   $4365
+4364-   EA          NOP
+4365-   C9 AA       CMP   #$AA
+4367-   F0 03       BEQ   $436C
+4369-   D0 B8       BNE   $4323
+436B-   EA          NOP</code>
+      <p class="comment">all paths lead here, but accumulator is $AA if nibble check passed and $00 if it failed turn off drive motor</p>
+      <code>436C-   DD 88 C0    CMP   $C088,X
+436F-   C9 AA       CMP   #$AA</code>
+      <p class="comment">branch to The Badlands on failure</p>
+      <code>4371-   D0 0D       BNE   $4380</code>
+      <p class="comment">continue on success</p>
+      <code>4373-   F0 01       BEQ   $4376
+4375-   EA          NOP</code>
+      <p class="comment">re-encrypt this routine in memory (not shown)</p>
+      <code>4376-   20 AA 43    JSR   $43AA</code>
+      <p class="comment">put an "RTS" at the caller so this routine is never called again until reboot</p>
+      <code>4379-   AD 7F 43    LDA   $437F
+437C-   8D FD 42    STA   $42FD
+437F-   60          RTS</code>
+    </div>
+    <p>The Badlands is at $4380. Just for fun, let's run it.</p>
+    <div class="line_editing">
+      <code>*4380G
+...prints the error message I saw...</code>
+    </div>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which, When In Rome, We Do As The Romans Did When They Were Cracking Disks, Or Something</h3>
+
+    <p>Literally the only side effect of this nibble check is to disable any further calls to the nibble check (by putting an "RTS" at $42FD). So, let's do that permanently.</p>
+    <div class="curses_input">
+      <code>[Disk Fixer]
+  ["D"irectory mode]
+  [select "LOCKED DESIGNWARE 4000.OBJ"]</code>
+    </div>
+    <p>Disk 1,T0D,S0B,$01 change "20" to "60"</p>
+    <p>The other disk has the same protection.</p>
+    <p>Disk 2,T15,S03,$01 change "20" to "60"</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/310-widespread.html">Widespread</a></p>
+</body></html>

@@ -1,0 +1,359 @@
+<!doctype html>
+<html><head>
+<title>The Math Busters</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/258-snooper-troops-2.html">Snooper Troops 2</a></p>
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p>no errors, but copy displays a series of text title screens, then hangs</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">ditto</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">ditto</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">nothing unusual</p>
+    <p class="seen">Disk Fixer</p>
+    <p>T00-T02 -> looks like DOS 3.3 T01,S09 -> startup program is "HELLO" T11 -> disk catalog</p>
+    <p class="seen">Why didn't any of my copies work?</p>
+    <p>I don't know. Maybe a nibble check called from the HELLO program?</p>
+    <p class="seen">Next steps:</p>
+    <p>1. Trace HELLO</p>
+    <p class="seen">2. Find nibble check and disable it</p>
+    <p class="seen">3. There is no step 3 (I hope)</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Quickly Descend Into A Hellish Nightmare Of Encryption And Obfuscation</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+<Ctrl-C> gets me a working prompt</code>
+      <code>]CATALOG</code>
+    </div>
+    <div class="terminal_output">
+      <code>DISK VOLUME 254</code>
+      <code> B 066 IIC.DA2
+ B 026 IIC.DA3
+ B 066 IIC.OB1
+ B 032 IIC.DA1
+ B 026 IIC.OB2
+ B 039 IIC.DA4
+ B 003 MOVE8000.IIC
+ B 003 DOWNLOAD.IIC
+ B 018 SPRITPKG.IIC
+ B 010 UPLOADMON.IIC
+ A 002 V
+ B 004 BOOTER.OBJ
+ A 003 HELLO
+ B 066 IIE.OB1
+ B 032 IIE.OB2
+ B 033 IIE.OB3
+ B 002 DOWNLOAD.IIE
+ B 015 SPRITPKG.IIE</code>
+    </div>
+    <div class="line_editing">
+      <code>]LIST</code>
+    </div>
+    <div class="terminal_output">
+      <code> 10  REM ** THE MATH BUSTERS **
+ 20  PRINT  CHR$ (13) CHR$ (4)"PR
+     #0"
+ 30  SPEED= 255
+ 40  HOME
+ 45  FOR X = 1 TO 2000: NEXT
+ 50  VTAB 12: HTAB 8
+ 60  PRINT "SPINNAKER SOFTWARE CO
+     RP."
+ 70  VTAB 14: HTAB 15
+ 80  PRINT "PRESENTS"
+ 90  FOR X = 0 TO 4000: NEXT
+ 100  HOME
+ 110  FOR X = 1 TO 2000: NEXT
+ 120  VTAB 13: HTAB 12
+ 130  PRINT "THE MATH BUSTERS"
+ 140  FOR X = 0 TO 4000: NEXT
+ 150  HOME
+ 160  FOR X = 1 TO 2000: NEXT
+ 170  VTAB 11: HTAB 15
+ 180  PRINT "CREATED BY"
+ 190  VTAB 12: HTAB 9
+ 200  PRINT "TOM SNYDER PRODUCTIO
+     NS"
+ 210  VTAB 14: HTAB 1
+ 220  PRINT "COPYRIGHT 1984  SPIN
+     NAKER SOFTWARE CORP."
+ 230  VTAB 15: HTAB 10
+ 240  PRINT "ALL RIGHTS RESERVED"</code>
+      <code> 1000  SPEED= 255
+ 1010  PRINT  CHR$ (13) CHR$ (4)"
+     BRUN BOOTER.OBJ,A$92D0"
+ 2000  END</code>
+    </div>
+    <p>My non-working copy gets as far as line 1010, so I'm guessing the problem is in BOOTER.OBJ.</p>
+    <div class="line_editing">
+      <code>]BLOAD BOOTER.OBJ,A$92D0
+]CALL -151
+*92D0L</code>
+    </div>
+    <div class="listing">
+      <code>92D0-   4C B7 93    JMP   $93B7</code>
+    </div>
+    <div class="line_editing">
+      <code>*93B7L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">push an address to the stack</p>
+      <code>93B7-   A9 93       LDA   #$93
+93B9-   48          PHA
+93BA-   A9 72       LDA   #$72
+93BC-   48          PHA</code>
+      <p class="comment">save some zero page values</p>
+      <code>93BD-   A5 08       LDA   $08
+93BF-   8D EC 93    STA   $93EC
+93C2-   A5 09       LDA   $09
+93C4-   8D ED 93    STA   $93ED</code>
+      <p class="comment">decryption loop of a page of code starting at $92D3</p>
+      <code>93C7-   A9 D3       LDA   #$D3
+93C9-   85 08       STA   $08
+93CB-   A9 92       LDA   #$92
+93CD-   85 09       STA   $09
+93CF-   A9 96       LDA   #$96
+93D1-   48          PHA
+93D2-   A0 00       LDY   #$00
+93D4-   68          PLA
+93D5-   51 08       EOR   ($08),Y
+93D7-   91 08       STA   ($08),Y
+93D9-   48          PHA
+93DA-   C8          INY
+93DB-   98          TYA
+93DC-   C9 FF       CMP   #$FF
+93DE-   D0 F4       BNE   $93D4
+93E0-   68          PLA</code>
+      <p class="comment">restore zero page</p>
+      <code>93E1-   AD EC 93    LDA   $93EC
+93E4-   85 08       STA   $08
+93E6-   AD ED 93    LDA   $93ED
+93E9-   85 09       STA   $09</code>
+      <p class="comment">and "return" to the address that was pushed earlier</p>
+      <code>93EB-   60          RTS</code>
+    </div>
+    <p>So, let's run the decryption without pushing the next address.</p>
+    <div class="line_editing">
+      <code>*93BDG</code>
+    </div>
+    <p>Here's the decrypted code:</p>
+    <div class="line_editing">
+      <code>*9373L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">push another address</p>
+      <code>9373-   A9 93       LDA   #$93
+9375-   48          PHA
+9376-   A9 FF       LDA   #$FF
+9378-   48          PHA
+9379-   20 F5 92    JSR   $92F5</code>
+    </div>
+    <div class="line_editing">
+      <code>*92F5L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">get RWTS parameter address</p>
+      <code>92F5-   20 E3 03    JSR   $03E3
+92F8-   8C 13 93    STY   $9313
+92FB-   8D 14 93    STA   $9314</code>
+      <p class="comment">set up some RWTS parameters</p>
+      <code>92FE-   A2 04       LDX   #$04
+9300-   18          CLC
+9301-   BD D3 92    LDA   $92D3,X
+9304-   6D 13 93    ADC   $9313
+9307-   8D 13 93    STA   $9313
+930A-   90 03       BCC   $930F
+930C-   EE 14 93    INC   $9314
+930F-   BD D8 92    LDA   $92D8,X
+9312-   8D 00 00    STA   $0000
+9315-   CA          DEX
+9316-   10 E8       BPL   $9300</code>
+      <p class="comment">call RWTS (I'm pretty sure this is a seek, not a read or write)</p>
+      <code>9318-   20 E3 03    JSR   $03E3
+931B-   20 D9 03    JSR   $03D9
+931E-   60          RTS</code>
+    </div>
+    <p>Continuing from the caller...</p>
+    <div class="line_editing">
+      <code>*937CL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">turn on the drive motor manually (highly suspicious)</p>
+      <code>937C-   AD EA C0    LDA   $C0EA
+937F-   AD E9 C0    LDA   $C0E9</code>
+      <p class="comment">some parameters (maybe nibbles?)</p>
+      <code>9382-   A9 AB       LDA   #$AB
+9384-   8D DF 92    STA   $92DF
+9387-   A9 AF       LDA   #$AF
+9389-   8D DE 92    STA   $92DE
+938C-   20 1F 93    JSR   $931F</code>
+    </div>
+    <div class="line_editing">
+      <code>*931FL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">look for self-sync bytes ($FF nibble)</p>
+      <code>931F-   AD EE C0    LDA   $C0EE
+9322-   AD EC C0    LDA   $C0EC
+9325-   10 FB       BPL   $9322
+9327-   C9 FF       CMP   #$FF
+9329-   D0 F7       BNE   $9322
+932B-   AD EC C0    LDA   $C0EC
+932E-   10 FB       BPL   $932B
+9330-   C9 FF       CMP   #$FF
+9332-   D0 EE       BNE   $9322
+9334-   AD EC C0    LDA   $C0EC
+9337-   10 FB       BPL   $9334
+9339-   C9 FF       CMP   #$FF
+933B-   F0 F7       BEQ   $9334</code>
+      <p class="comment">look for a specific nibble sequence (including the ones set at $9382)</p>
+      <code>933D-   A2 07       LDX   #$07
+933F-   10 05       BPL   $9346
+9341-   AD EC C0    LDA   $C0EC
+9344-   10 FB       BPL   $9341
+9346-   DD DF 92    CMP   $92DF,X
+9349-   D0 D7       BNE   $9322
+934B-   CA          DEX
+934C-   D0 F3       BNE   $9341
+934E-   A2 02       LDX   #$02
+9350-   AD EC C0    LDA   $C0EC
+9353-   10 FB       BPL   $9350
+9355-   DD DD 92    CMP   $92DD,X
+9358-   D0 C8       BNE   $9322
+935A-   CA          DEX
+935B-   D0 F3       BNE   $9350
+935D-   60          RTS</code>
+    </div>
+    <p class="seen">Popping the stack...</p>
+    <div class="listing">
+      <code>938F-   A9 01       LDA   #$01
+9391-   8D D9 92    STA   $92D9</code>
+      <p class="comment">set up another RWTS seek</p>
+      <code>9394-   20 F5 92    JSR   $92F5
+9397-   AD E9 C0    LDA   $C0E9</code>
+      <p class="comment">oh, this is sneaky</p>
+      <code>939A-   A9 04       LDA   #$04
+939C-   8D 59 93    STA   $9359</code>
+    </div>
+    <p>That looks like initialization of some sort of counter or something, but it's really self-modifying code. The address $9359 is part of this loop at the end of the subroutine at $931F:</p>
+    <div class="listing">
+      <code>934E-   A2 02       LDX   #$02
+9350-   AD EC C0    LDA   $C0EC
+9353-   10 FB       BPL   $9350
+9355-   DD DD 92    CMP   $92DD,X
+9358-   D0 C8       BNE   $9322
+           ^^
+           ++---- this is $9359</code>
+      <code>935A-   CA          DEX
+935B-   D0 F3       BNE   $9350</code>
+    </div>
+    <p>That means that, the second time $931F is called, the penalty for failing the comparison loop is that you get booted out to $935E. What's at 935E? I'm guessing the answer is "bad things."</p>
+    <div class="line_editing">
+      <code>*935EL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">not gonna return to the caller</p>
+      <code>935E-   68          PLA
+935F-   68          PLA</code>
+      <p class="comment">turn off drive motor manually</p>
+      <code>9360-   AD E8 C0    LDA   $C0E8
+9363-   78          SEI</code>
+      <p class="comment">wipe memory and hang</p>
+      <code>9364-   A9 00       LDA   #$00
+9366-   AA          TAX
+9367-   9D 73 93    STA   $9373,X
+936A-   E8          INX
+936B-   D0 FA       BNE   $9367
+936D-   EE 69 93    INC   $9369
+9370-   4C 67 93    JMP   $9367</code>
+    </div>
+    <p>Continuing (from $939F):</p>
+    <div class="listing">
+      <p class="comment">different parameters</p>
+      <code>939F-   A9 AB       LDA   #$AB
+93A1-   8D E0 92    STA   $92E0
+93A4-   A9 AB       LDA   #$AB
+93A6-   8D DF 92    STA   $92DF
+93A9-   A9 AB       LDA   #$AB
+93AB-   8D DE 92    STA   $92DE</code>
+      <p class="comment">call nibble check</p>
+      <code>93AE-   20 1F 93    JSR   $931F</code>
+      <p class="comment">turn off drive motor</p>
+      <code>93B1-   AD E8 C0    LDA   $C0E8</code>
+      <p class="comment">exit</p>
+      <code>93B4-   A9 00       LDA   #$00
+93B6-   60          RTS</code>
+    </div>
+    <p>But remember, we manually pushed an address to the stack at the beginning of this encrypted code:</p>
+    <div class="listing">
+      <code>9373-   A9 93       LDA   #$93
+9375-   48          PHA
+9376-   A9 FF       LDA   #$FF
+9378-   48          PHA</code>
+    </div>
+    <p>So execution continues at $9400.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Emerge From The Hellish Nightmare And Blink Our Eyes At The Simplicity Of The Solution</h3>
+
+    <div class="line_editing">
+      <code>*9400L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">machine identification</p>
+      <code>9400-   A0 00       LDY   #$00
+9402-   AD B3 FB    LDA   $FBB3
+9405-   C9 06       CMP   #$06
+9407-   D0 13       BNE   $941C
+9409-   AD C0 FB    LDA   $FBC0
+940C-   D0 0E       BNE   $941C
+940E-   98          TYA</code>
+      <p class="comment">print some stuff through the DOS output vector (this is probably executing DOS commands like BLOAD)</p>
+      <code>940F-   48          PHA
+9410-   B9 A1 94    LDA   $94A1,Y
+9413-   20 ED FD    JSR   $FDED
+9416-   68          PLA
+9417-   A8          TAY
+9418-   C8          INY
+9419-   4C 0E 94    JMP   $940E</code>
+    </div>
+    <div class="line_editing">
+      <code>*FC58G N 400<94A1.94FFM</code>
+    </div>
+    <div class="terminal_output">
+      <code>MDBLOAD IIC.DA1,A$800MDBLOAD IIC.DA2,A$2
+600MDBLOAD IIC.DA3,A$6600MDBLOAD SPRITPK
+G.IIC,A$7E00MDB</code>
+    </div>
+    <p>(The "M" and "D" are really control characters -- a carriage return and a</p>
+    <p>Ctrl-D. So I was right, this is a way to load other files and do legitimate stuff.)</p>
+    <p>I've reached the end of the copy protection and overshot a little bit.</p>
+    <p>If the protection check fails, it gets stuck in an infinite loop at $9367. If execution makes it to $9400, the game loads. There are no other side effects to the nibble check.</p>
+    <p>Furthermore, $9400 is not encrypted to begin with. Therefore, I can simply change the initial JMP instruction at $92D0 to jump to $9400 instead.</p>
+    <div class="curses_input">
+      <code>[Disk Fixer]
+  --> "D" for directory mode
+    --> select "BOOTER.OBJ"</code>
+    </div>
+    <p>T1E,S08,$05 change "B7 93" to "00 94"</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/260-championship-lode-runner.html">Championship Lode Runner</a></p>
+</body></html>

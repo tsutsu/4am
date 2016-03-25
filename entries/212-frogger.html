@@ -1,0 +1,467 @@
+<!doctype html>
+<html><head>
+<title>Frogger</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/211-ken-uston-s-professional-blackjack-v1-23.html">Ken Uston's Professional Blackjack v1.23</a></p>
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">unable to read any track</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p>read error on T0A but copy works anyway</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p>T00-T02 -> modified address epilogue (ED AA EB) T03-T22 -> modified address prologue (DB AA 96)</p>
+    <p class="seen">Disk Fixer</p>
+    <p>["O" -> "Input/Output Control"] set Address Epilogue to "ED AA EB" T00-T02 -> looks like DOS 3.3 T01,S09 -> startup program is FROGGER ["O" -> "Input/Output Control"] set Address Epilogue to "DE AA EB" set Address Prologue to "DB AA 96" T11 -> looks like disk catalog</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p>modified epilogues / prologues</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">ditto</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. capture RWTS with AUTOTRACE</p>
+    <p class="seen">2. convert disk to standard format with Advanced Demuffin</p>
+    <p class="seen">3. patch RWTS to read standard format (if necessary)</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which Things Don't Always Go According To Plan</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS
+SAVING IOB</code>
+      <code>]BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>[press "5" to switch to slot 5]</code>
+      <code>[press "R" to load a new RWTS module]
+  --> At $38, load "RWTS" from drive 1</code>
+      <code>[press "I" to load a new IOB module]
+  --> load "IOB" from drive 1</code>
+      <code>[press "6" to switch to slot 6]</code>
+      <code>[press "C" to convert disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC1:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC2:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC3:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC4:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC5:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC6:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC7:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC8:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SC9:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCA:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCB:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCC:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCD:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCE:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+SCF:...RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR
+=======================================
+16SC $00,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <p class="seen">Let's back up.</p>
+    <div class="line_editing">
+      <code>]PR#5
+]BLOAD BOOT1,A$3600
+]CALL -151</code>
+      <code>*3700L</code>
+    </div>
+    <div class="listing">
+      <code>3700-   8E E9 37    STX   $37E9
+3703-   8E F7 37    STX   $37F7
+3706-   A9 01       LDA   #$01
+3708-   8D F8 37    STA   $37F8
+370B-   8D EA 37    STA   $37EA
+370E-   AD E0 37    LDA   $37E0
+3711-   8D E1 37    STA   $37E1
+3714-   A9 02       LDA   #$02
+3716-   8D EC 37    STA   $37EC
+3719-   A9 04       LDA   #$04
+371B-   8D ED 37    STA   $37ED
+371E-   AC E7 37    LDY   $37E7
+3721-   88          DEY
+3722-   8C F1 37    STY   $37F1
+3725-   A9 01       LDA   #$01
+3727-   8D F4 37    STA   $37F4
+372A-   8A          TXA
+372B-   4A          LSR
+372C-   4A          LSR
+372D-   4A          LSR
+372E-   4A          LSR
+372F-   AA          TAX
+3730-   A9 00       LDA   #$00
+3732-   9D F8 04    STA   $04F8,X
+3735-   9D 78 04    STA   $0478,X
+3738-   20 93 37    JSR   $3793</code>
+    </div>
+    <p>$3793 is the multi-sector read routine that reads the rest of DOS backwards starting at T02,S04. The RWTS parameter table starts at $37E8.</p>
+    <div class="listing">
+      <code>373B-   A2 FF       LDX   #$FF
+373D-   9A          TXS
+373E-   8E EB 37    STX   $37EB
+3741-   4C C8 3F    JMP   $3FC8
+3744-   20 89 FE    JSR   $FE89
+3747-   4C 03 1B    JMP   $1B03</code>
+    </div>
+    <p class="seen">That last line looks suspicious, but it's actually not. So far, this code is identical to the DOS 3.3 master disk.</p>
+    <p class="seen">The routine at $1B03 is what figures out how much memory there is and moves DOS as high as possible.</p>
+    <p class="seen">It makes sense that I haven't found anything unusual yet. Evidence so far suggests that the RWTS on disk can read tracks 0-2 (which is where it's loading DOS), then it switches to a different RWTS that can read the rest of the disk. So whatever this disk is doing to modify its RWTS or load a new one, it's going to do it after loading DOS. And I need to find out where.</p>
+    <p class="seen">But that means I need to trace the boot even further.</p>
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up callback #1 after boot0 is loaded</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D 4A 08    STA   $084A
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D 4B 08    STA   $084B
+9702-   A9 97       LDA   #$97
+9704-   8D 4C 08    STA   $084C</code>
+      <p class="comment">start the boot</p>
+      <code>9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">callback #1 is here -- modify the boot1 code to reboot to my work disk after it loads DOS</p>
+      <code>970A-   A9 4C       LDA   #$4C
+970C-   8D 47 37    STA   $3747
+970F-   A9 00       LDA   #$00
+9711-   8D 48 37    STA   $3748
+9714-   A9 C5       LDA   #$C5
+9716-   8D 49 37    STA   $3749</code>
+      <p class="comment">continue the boot</p>
+      <code>9719-   6C FD 08    JMP   ($08FD)</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE2,A$9600,L$11C
+*9600G
+...reboots slot 6...
+...reboots slot 5...
+]BSAVE BOOT2,A$1B00,L$2500
+]CALL -151
+...</code>
+    </div>
+    <p class="seen">The routine at $1B03 seems unmodified (from the DOS 3.3 master disk). After it completes, it jumps to $1D84.</p>
+    <div class="line_editing">
+      <code>*1D84L</code>
+    </div>
+    <div class="listing">
+      <code>1D84-   4C BB B4    JMP   $B4BB</code>
+    </div>
+    <p class="seen">I'm pretty sure *that's* not normal.</p>
+    <p>But wait, I can't see what it is yet because I haven't run the routine at $1B03 to move DOS up to higher memory.</p>
+    <div class="line_editing">
+      <code>*1D84:4C 59 FF
+*1B03G
+<beep></code>
+    </div>
+    <p class="seen">Success! Let's see what's at $B4BB.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which It All Comes Down To Two Bytes</h3>
+
+    <div class="line_editing">
+      <code>*B4BBL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">overwriting the instruction that just called this routine -- highly suspect</p>
+      <code>B4BB-   A9 AD       LDA   #$AD
+B4BD-   8D 84 9D    STA   $9D84
+B4C0-   A9 E9       LDA   #$E9
+B4C2-   8D 85 9D    STA   $9D85
+B4C5-   A9 B7       LDA   #$B7
+B4C7-   8D 86 9D    STA   $9D86</code>
+      <p class="comment">overwriting most of the $B700 code? also suspicious</p>
+      <code>B4CA-   A2 00       LDX   #$00
+B4CC-   BD BB B3    LDA   $B3BB,X
+B4CF-   5E BB 33    LSR   $33BB,X
+B4D2-   1E BB B3    ASL   $B3BB,X
+B4D5-   9D 00 B7    STA   $B700,X
+B4D8-   E8          INX
+B4D9-   E0 B5       CPX   #$B5
+B4DB-   90 EF       BCC   $B4CC
+B4DD-   D8          CLD
+B4DE-   AD FF CF    LDA   $CFFF</code>
+      <p class="comment">overwriting the language card</p>
+      <code>B4E1-   AD 81 C0    LDA   $C081
+B4E4-   AD 81 C0    LDA   $C081
+B4E7-   A2 00       LDX   #$00
+B4E9-   BD 00 F8    LDA   $F800,X
+B4EC-   1E BB 34    ASL   $34BB,X
+B4EF-   9D 00 F8    STA   $F800,X
+B4F2-   E8          INX
+B4F3-   D0 F4       BNE   $B4E9
+B4F5-   EE EB B4    INC   $B4EB
+B4F8-   EE F1 B4    INC   $B4F1
+B4FB-   D0 EA       BNE   $B4E7</code>
+      <p class="comment">hmm</p>
+      <code>B4FD-   AD 00 B7    LDA   $B700
+B500-   F0 12       BEQ   $B514</code>
+    </div>
+    <p class="seen">OK, I need to know whether this branch is taken. Let's break here and see.</p>
+    <div class="line_editing">
+      <code>*B4FD:60
+*B4BBG
+*B700</code>
+    </div>
+    <div class="listing">
+      <code>B700- 00</code>
+    </div>
+    <p class="seen">OK, so we continue to $B514.</p>
+    <div class="line_editing">
+      <code>*B514L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set reset vector (both of them at $03F2 and $FFFC)</p>
+      <code>B514-   A9 00       LDA   #$00
+B516-   8D FC FF    STA   $FFFC
+B519-   8D F2 03    STA   $03F2
+B51C-   A9 BF       LDA   #$BF
+B51E-   8D F3 03    STA   $03F3
+B521-   8D FD FF    STA   $FFFD
+B524-   49 A5       EOR   #$A5
+B526-   8D F4 03    STA   $03F4</code>
+      <p class="comment">Aha! Fiddling with RWTS parameters!</p>
+      <code>B529-   AC 82 C0    LDY   $C082
+B52C-   A0 DE       LDY   #$DE
+B52E-   8C 91 B9    STY   $B991 <- RWTS
+B531-   20 5E B7    JSR   $B75E
+B534-   4C 6F B7    JMP   $B76F</code>
+    </div>
+    <p class="seen">The value at $B991 is one of the address epilogue bytes.</p>
+    <div class="line_editing">
+      <code>*B75EL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">Double aha! More RWTS fiddling!</p>
+      <code>B75E-   AE 07 B7    LDX   $B707
+B761-   8E 55 B9    STX   $B955 <- RWTS
+B764-   AD 97 A3    LDA   $A397
+B767-   C9 60       CMP   #$60
+B769-   D0 03       BNE   $B76E
+B76B-   8D 62 B7    STA   $B762
+B76E-   60          RTS</code>
+    </div>
+    <p class="seen">The value at $B955 is one of the address prologue bytes...</p>
+    <div class="line_editing">
+      <code>*B707</code>
+    </div>
+    <div class="listing">
+      <code>B707- DB</code>
+    </div>
+    <p>...and we're changing it to $DB.</p>
+    <p class="seen">Continuing...</p>
+    <div class="line_editing">
+      <code>*B76FL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">what have we here?</p>
+      <code>B76F-   2C 06 B7    BIT   $B706
+B772-   10 20       BPL   $B794
+B774-   AE 03 B7    LDX   $B703</code>
+      <p class="comment">1</p>
+      <code>B777-   20 37 B5    JSR   $B537
+B77A-   C9 06       CMP   #$06
+B77C-   B0 23       BCS   $B7A1
+B77E-   AE 04 B7    LDX   $B704</code>
+      <p class="comment">2</p>
+      <code>B781-   20 37 B5    JSR   $B537
+B784-   C9 06       CMP   #$06
+B786-   90 19       BCC   $B7A1
+B788-   AE 05 B7    LDX   $B705</code>
+      <p class="comment">3</p>
+      <code>B78B-   20 37 B5    JSR   $B537
+B78E-   C9 06       CMP   #$06
+B790-   B0 0F       BCS   $B7A1
+B792-   90 0A       BCC   $B79E
+B794-   AE 04 B7    LDX   $B704</code>
+      <p class="comment">4</p>
+      <code>B797-   20 37 B5    JSR   $B537
+B79A-   C9 02       CMP   #$02
+B79C-   D0 03       BNE   $B7A1</code>
+      <p class="comment">continue to normal boot</p>
+      <code>B79E-   4C 84 9D    JMP   $9D84</code>
+    </div>
+    <p class="seen">So what's at $B537 that's so important that we need to call it up to 4 times?</p>
+    <p class="seen">I'm guessing it's a nibble check.</p>
+    <div class="line_editing">
+      <code>*B537L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">seek to a track (given in X register, which is populated from $B704 or $B705, both of which are $0A -- the track that EDD 4 couldn't read)</p>
+      <code>B537-   8E EC B7    STX   $B7EC
+B53A-   A9 00       LDA   #$00
+B53C-   8D F4 B7    STA   $B7F4
+B53F-   A9 B7       LDA   #$B7
+B541-   A0 E8       LDY   #$E8
+B543-   20 B5 B7    JSR   $B7B5
+B546-   AE E9 B7    LDX   $B7E9</code>
+      <p class="comment">turn on drive motor manually (suspicious)</p>
+      <code>B549-   BD 89 C0    LDA   $C089,X
+B54C-   BD 8E C0    LDA   $C08E,X</code>
+      <p class="comment">set some counters</p>
+      <code>B54F-   A9 19       LDA   #$19
+B551-   85 0D       STA   $0D
+B553-   A0 00       LDY   #$00
+B555-   84 09       STY   $09
+B557-   A0 A0       LDY   #$A0</code>
+      <p class="comment">look for a self-sync byte ($FF)</p>
+      <code>B559-   BD 8C C0    LDA   $C08C,X
+B55C-   10 FB       BPL   $B559
+B55E-   49 FF       EOR   #$FF
+B560-   F0 16       BEQ   $B578
+B562-   E6 09       INC   $09
+B564-   F0 1E       BEQ   $B584</code>
+      <p class="comment">wait loop</p>
+      <code>B566-   8A          TXA
+B567-   48          PHA
+B568-   A2 10       LDX   #$10
+B56A-   CA          DEX
+B56B-   10 FD       BPL   $B56A
+B56D-   68          PLA
+B56E-   AA          TAX</code>
+      <p class="comment">look for something other than a self- sync byte</p>
+      <code>B56F-   BD 8C C0    LDA   $C08C,X
+B572-   10 FB       BPL   $B56F
+B574-   49 FF       EOR   #$FF
+B576-   D0 0C       BNE   $B584
+B578-   C8          INY
+B579-   D0 DE       BNE   $B559
+B57B-   C6 0D       DEC   $0D
+B57D-   D0 DA       BNE   $B559
+B57F-   A5 09       LDA   $09
+B581-   18          CLC
+B582-   90 02       BCC   $B586</code>
+      <p class="comment">success path is here (failure path skips over this and goes to $B586)</p>
+      <code>B584-   A9 FF       LDA   #$FF
+B586-   48          PHA
+B587-   BD 88 C0    LDA   $C088,X
+B58A-   68          PLA
+B58B-   60          RTS</code>
+    </div>
+    <p>OK, two things here. First of all, nothing happens if the nibble check succeeds. There are no long-term side effects. It just continues booting.</p>
+    <p class="seen">Second, I can create the RWTS I need to read the rest of the disk. I only need to change two bytes.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=demuffin'd disk with tracks 0-2]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>*C500G     ; because I destroyed DOS
+...
+]BLOAD RWTS,A$3800
+]CALL -151
+*3991:DE   ; was "ED"
+*3955:DB   ; was "D5"
+*BSAVE RWTS 3+,A$3800,L$800</code>
+      <code>]BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>[press "5" to switch to slot 5]</code>
+      <code>[press "R" to load a new RWTS module]
+  --> At $38, load "RWTS 3+" from drive 1</code>
+      <code>[press "I" to load a new IOB module]
+  --> load "IOB" from drive 1</code>
+      <code>[press "6" to switch to slot 6]</code>
+      <code>[press "C" to convert disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>--> CHANGE DEFAULT VALUES? Y</code>
+      <code>
+ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======================================</code>
+      <code>
+INPUT ALL VALUES IN HEX</code>
+      <code>
+SECTORS PER TRACK? (13/16) 16</code>
+    </div>
+    <p class="seen">START TRACK: $03</p>
+    <p class="seen">^^ ++-- we have tracks 0-2 already</p>
+    <div class="terminal_output">
+      <code>START SECTOR: $00</code>
+      <code>END TRACK: $22
+END SECTOR: $0F</code>
+      <code>INCREMENT: 1</code>
+      <code>MAX # OF RETRIES: 0</code>
+      <code>COPY FROM DRIVE 1
+TO DRIVE: 2
+=======================================
+16SC $03,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <p class="seen"></p>
+    <p class="seen">Now press RETURN to start the copy...</p>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:   .......R........................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:   .......R........................
+SC1:   .......R........................
+SC2:   .......R........................
+SC3:   .......R........................
+SC4:   .......R........................
+SC5:   .......R........................
+SC6:   .......R........................
+SC7:   .......R........................
+SC8:   .......R........................
+SC9:   .......R........................
+SCA:   .......R........................
+SCB:   .......R........................
+SCC:   .......R........................
+SCD:   .......R........................
+SCE:   .......R........................
+SCF:   .......R........................
+=======================================
+16SC $03,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <p>Now what? Wait, I remember EDD had problems on track $0A as well. And the nibble check did an RWTS seek to track $0A. I can't read it because there's nothing to read.</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which We Remove All Traces Of Copy Protection Using An Automated Tool That I Wrote For Just Such An Occasion</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+]BRUN PDP</code>
+    </div>
+    <p class="seen">T00,S03,$91 change ED to DE T00,S0C,$84 change 4CBBB4 to ADE937</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/213-charlie-brown-s-1-2-3s.html">Charlie Brown's 1-2-3s</a></p>
+</body></html>

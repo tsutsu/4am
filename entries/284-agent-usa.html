@@ -1,0 +1,725 @@
+<!doctype html>
+<html><head>
+<title>Agent USA</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/283-dig-dug-thunder-mountain.html">Dig Dug (Thunder Mountain)</a></p>
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">unable to read any track</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p>read errors on track $0B+ copy displays title screen then hangs</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p>tracks $00-$0A have modified address and data epilogues (FF FF FF) tracks $01+ have a corrupted address field that claim to be track $00 tracks $0B+ appear unformatted</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK: 01  START: 1800  LENGTH: 3DFF</code>
+    </div>
+    <div class="curses">
+      <code>3138: FF FF B2 B2 FF FF FF FF   VIEW
+3140: FF FF FF FF FF FF FF FF
+3148: FF FF FF FF FF FF FF D4
+3150: D4 FF FF FF FF FC FC FF
+3158: FF FF FF FF FF D5 AA 96  <-315D
+                     ^^^^^^^^
+                 address prologue</code>
+      <code>3160: AA AA AA AA AB AE AB AE
+      ^^^^^ ^^^^^ ^^^^^ ^^^^^
+       V=0   T=0   S=6  chksm</code>
+      <code>3168: FF FF FF E7 E7 F9 FE FF
+      ^^^^^^^^
+  address epilogue</code>
+    </div>
+    <div class="terminal_output">
+      <code>3170: FF D5 AA AD E5 EA FC F7
+3178: FC BA B4 F9 BE FF FA CE</code>
+      <code>---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">Disk Fixer</p>
+    <p>["O" -> "Input/Output Control"] set Address Epilogue to "FF FF FF" set Data Epilogue to "FF FF FF" T00 readable T00 -> custom bootloader nothing else readable</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">Why didn't my EDD copy work?</p>
+    <p>I don't know yet. I can see the raw nibbles on tracks $01+ (including the corrupted address field) but the disk just hangs.</p>
+    <p>The game is a single-load; it does not access the disk once it is running. It should be possible to capture the whole game in memory and recreate the boot experience with a custom bootloader.</p>
+    <p class="seen">Next steps:</p>
+    <p>1. Trace the boot</p>
+    <p>2. Capture the game in memory</p>
+    <p>3. Write it to a standard disk and build my own bootloader to load it</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Are Still Impressed By What An 8-Bit Computer Can Do</h3>
+
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0</code>
+      <code>]BLOAD BOOT0,A$800
+]CALL -151</code>
+      <code>*801L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set reset vector</p>
+      <code>0801-   8A          TXA
+0802-   4A          LSR
+0803-   4A          LSR
+0804-   4A          LSR
+0805-   4A          LSR
+0806-   09 C0       ORA   #$C0
+0808-   85 3F       STA   $3F
+080A-   8D F3 03    STA   $03F3
+080D-   49 A5       EOR   #$A5
+080F-   8D F4 03    STA   $03F4
+0812-   A9 00       LDA   #$00
+0814-   8D F2 03    STA   $03F2</code>
+      <p class="comment">hmm</p>
+      <code>0817-   A9 02       LDA   #$02
+0819-   48          PHA</code>
+      <p class="comment">machine initialization (memory banks, TEXT, HOME, IN#0, PR#0, &c.)</p>
+      <code>081A-   8D 81 C0    STA   $C081
+081D-   20 2F FB    JSR   $FB2F
+0820-   8D 52 C0    STA   $C052
+0823-   20 89 FE    JSR   $FE89
+0826-   20 93 FE    JSR   $FE93
+0829-   20 58 FC    JSR   $FC58
+082C-   8D 51 C0    STA   $C051
+082F-   8D 54 C0    STA   $C054
+0832-   8D 52 C0    STA   $C052</code>
+      <p class="comment">set up ($3E) vector to point to the sector read routine in the disk controller ROM</p>
+      <code>0835-   A9 5C       LDA   #$5C
+0837-   85 3E       STA   $3E</code>
+      <p class="comment">the disk controller ROM always exits via $0801, so set that to an RTS so we can JSR and not have to set up a loop</p>
+      <code>0839-   A9 60       LDA   #$60
+083B-   8D 01 08    STA   $0801</code>
+      <p class="comment">hmm</p>
+      <code>083E-   A9 72       LDA   #$72
+0840-   48          PHA</code>
+    </div>
+    <p>OK, we've now pushed $02/$72 on the stack. That's probably important.</p>
+    <div class="listing">
+      <p class="comment">multi-sector read</p>
+      <p class="comment">Y = start logical sector ($01)</p>
+      <p class="comment">X = end logical sector ($0E)</p>
+      <p class="comment">A = start address high byte ($09)</p>
+      <code>0841-   A0 00       LDY   #$00
+0843-   84 FC       STY   $FC
+0845-   C8          INY
+0846-   A9 09       LDA   #$09
+0848-   A2 0E       LDX   #$0E</code>
+      <p class="comment">multi-sector read routine</p>
+      <code>084A-   20 55 08    JSR   $0855</code>
+      <p class="comment">call the code we just read</p>
+      <code>084D-   20 00 09    JSR   $0900</code>
+      <p class="comment">another sector read, this time just sector $0F into $0200</p>
+      <code>0850-   A9 02       LDA   #$02
+0852-   A0 0F       LDY   #$0F
+0854-   AA          TAX</code>
+      <p class="comment">falls through to multi-sector read entry point (was also called earlier from $084A)</p>
+      <code>0855-   85 27       STA   $27
+0857-   E8          INX
+0858-   86 49       STX   $49
+085A-   84 F9       STY   $F9</code>
+      <p class="comment">map logical into physical sector</p>
+      <code>085C-   B9 73 08    LDA   $0873,Y
+085F-   85 3D       STA   $3D</code>
+      <p class="comment">read sector via disk controller ROM</p>
+      <code>0861-   20 6E 08    JSR   $086E</code>
+      <p class="comment">loop until done</p>
+      <code>0864-   A4 F9       LDY   $F9
+0866-   C8          INY
+0867-   C4 49       CPY   $49
+0869-   90 EF       BCC   $085A
+086B-   A5 27       LDA   $27
+086D-   60          RTS
+086E-   A6 2B       LDX   $2B
+0870-   6C 3E 00    JMP   ($003E)</code>
+    </div>
+    <p>That's it. Flexible but compact.</p>
+    <p>Just by listening to the original disk boot up, it displays the graphical title screen before it ever moves off track $00. So I'm betting that the routine at $900 is a graphics unpacker, and the rest of the data is the compressed title screen. 32 pages of data compressed into 14. Not too shabby for an 8-bit computer.</p>
+    <p>No idea what's at $0200 though. Let's find out.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Confront The Limits Of Our Expertise, And Expand Them</h3>
+
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up callback by changing the two bytes that are pushed to the stack</p>
+      <code>96F8-   A9 97       LDA   #$97
+96FA-   8D 18 08    STA   $0818
+96FD-   A9 04       LDA   #$04
+96FF-   8D 3F 08    STA   $083F</code>
+      <p class="comment">start the boot</p>
+      <code>9702-   4C 01 08    JMP   $0801</code>
+      <p class="comment">callback is here -- copy the code on page 2 to the graphics screen so it survives a reboot</p>
+      <code>9705-   A0 00       LDY   #$00
+9707-   B9 00 02    LDA   $0200,Y
+970A-   99 00 22    STA   $2200,Y
+970D-   C8          INY
+970E-   D0 F7       BNE   $9707</code>
+      <p class="comment">turn off slot 6 drive motor</p>
+      <code>9710-   AD E8 C0    LDA   $C0E8</code>
+      <p class="comment">reboot to my work disk</p>
+      <code>9713-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE,A$9600,L$116
+*9600G
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]BSAVE BOOT1 0200-02FF,A$2200,L$100
+]CALL -151
+*200<2200.22FFM</code>
+    </div>
+    <p>The original entry point was $0273, so let's start there.</p>
+    <div class="line_editing">
+      <code>*273L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">not sure what $4A is for yet</p>
+      <code>0273-   46 4A       LSR   $4A
+0275-   20 94 02    JSR   $0294</code>
+    </div>
+    <div class="line_editing">
+      <code>*294L</code>
+    </div>
+    <div class="listing">
+      <code>0294-   20 33 02    JSR   $0233</code>
+    </div>
+    <div class="line_editing">
+      <code>*233L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">call the following line (then fall through and do it again)</p>
+      <code>0233-   20 36 02    JSR   $0236</code>
+      <p class="comment">save A and Y</p>
+      <code>0236-   48          PHA
+0237-   98          TYA
+0238-   48          PHA</code>
+      <p class="comment">low-level disk stuff (see below)</p>
+      <code>0239-   A5 FC       LDA   $FC
+023B-   85 FD       STA   $FD
+023D-   E6 FC       INC   $FC
+023F-   A5 FC       LDA   $FC
+0241-   29 03       AND   #$03
+0243-   0A          ASL
+0244-   05 2B       ORA   $2B
+0246-   A8          TAY
+0247-   B9 81 C0    LDA   $C081,Y</code>
+      <p class="comment">wait loop</p>
+      <code>024A-   A9 30       LDA   #$30
+024C-   20 A8 FC    JSR   $FCA8</code>
+      <p class="comment">more low-level disk stuff</p>
+      <code>024F-   A5 FD       LDA   $FD
+0251-   29 03       AND   #$03
+0253-   0A          ASL
+0254-   05 2B       ORA   $2B
+0256-   A8          TAY
+0257-   B9 80 C0    LDA   $C080,Y</code>
+      <p class="comment">more waiting</p>
+      <code>025A-   A9 30       LDA   #$30
+025C-   20 A8 FC    JSR   $FCA8</code>
+      <p class="comment">restore A and Y</p>
+      <code>025F-   68          PLA
+0260-   A8          TAY
+0261-   68          PLA</code>
+      <p class="comment">exit via RTS</p>
+      <code>0262-   60          RTS</code>
+    </div>
+    <p>I'm afraid I'm not as familiar with the low-level disk motor control bits as I am with the higher level RWTS and DOS structure. So I went back to my dog- eared copy of "Beneath Apple DOS" and read through chapter 6 again ("Using DOS from Assembly Language"):</p>
+    <div class="curses">
+      <code>ADDR  LABEL     DESCRIPTION
+---------------------------------------
+$C080 PHASEOFF  Step motor phase 0 off
+$C081 PHASEON   Step motor phase 0 on
+$C082 PHASE1OFF Step motor phase 1 off
+$C083 PHASE1ON  Step motor phase 1 on
+$C084 PHASE2OFF Step motor phase 2 off
+$C085 PHASE2ON  Step motor phase 2 on
+$C086 PHASE3OFF Step motor phase 3 off
+$C087 PHASE3ON  Step motor phase 3 on</code>
+      <code>Basically, each of the four [stepper
+motor] phases (0-3) must be turned on
+and then off again. Done in ascending
+order, this moves the arm inward. In
+descending order, this moves the arm
+outward. The timing between accesses to
+these locations is critical, making
+this a non-trivial exercise.</code>
+    </div>
+    <p class="seen">Unsatisfied, I scoured the internet for some additional information to make sense of this. I found an archive of a single Usenet post from 1990 that explained how the stepper motors actually work.</p>
+    <div class="line_editing">
+      <code>macgui.com/usenet/?group=1&id=31160</code>
+    </div>
+    <div class="curses">
+      <code>Basically, each track (and half-track)
+may be considered to be "under" one of
+the four phases of the stepper motor.</code>
+      <code>    Track  Phase
+    -----  -----
+     0       0
+     0.5     1
+     1       2
+     1.5     3
+     2       0
+     2.5     1
+     3       2
+     3.5     3
+     &c.</code>
+      <code>To figure the phase for a given
+(half-)track, multiply the track number
+by 2, and keep only the two low-order
+bits.</code>
+      <code>Stepping from one track to another is
+simply a matter of stepping one track
+at a time from the original track to
+the destination track.  Thus, to step
+inward from track A to track B, first
+step to (half-)track A+0.5, then to
+(half-)track A+1, and so on, until you
+arrive at track B.  Likewise, to step
+outward from track B to track A, first
+step to (half-)track B-0.5, then to
+B-1, and so on until you arrive at
+track A.</code>
+      <code>An individual step (which must from the
+original half-track to one if its
+immediately neighboring half-tracks) is
+accomplished by turning on the
+appropriate phase, waiting, and turning
+off the phase. An appropriate wait may
+be obtained by loading the accumulator
+with #$56 and doing a JSR to the
+Monitor's WAIT routine ($FCA8). (DOS
+and ProDOS are able to obtain improved
+speed by taking into account the fact
+that once the head is moving, it takes
+less time to make subsequent steps.)</code>
+      <code>Note that this scheme requires DOS to
+keep track of which track it's on --
+there's no way to ask the drive where
+the head is. If the current track
+number is unknown, the head must be
+"recalibrated" by assuming that we're
+currently at track 35 (or beyond), and
+then seeking to track 0 (this is what
+causes that awful GRRRRRINDing sound
+when you boot a 5.25" disk).</code>
+    </div>
+    <p class="seen">So, to seek from the current track to the next half track, you need to</p>
+    <p>1. Set up the Y register to be a slot</p>
+    <p>number (x16) plus the appropriate phase (0-3, depending on which track the drive head is on)</p>
+    <p>2. LDA $C081,Y to turn on the</p>
+    <p>appropriate stepper motor</p>
+    <p>3. Wait exactly the right amount of</p>
+    <p>time (as measured in CPU cycles)</p>
+    <p>4. LDA $C080,Y to turn off the</p>
+    <p class="seen">appropriate stepper motor</p>
+    <p class="seen">5. Wait the right amount of time again</p>
+    <p>...which is exactly what this routine at $0236 is doing. And since $0233 "falls through" to $0236, it ends up doing this twice. Two half tracks equal one whole track, so calling the routine at $0233 will move the drive head to the next whole track. (By the way, this is why it initialized zero page $FC to $00 at $0841 -- because that's the "current" track where the drive head is at boot.)</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>Every Byte Is Sacred, Every Byte Is Great, If A Byte Gets Wasted, God Gets Quite Irate</h3>
+
+    <p>So far we've moved from track $00 to track $01. Continuing the trace...</p>
+    <div class="line_editing">
+      <code>*297L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">more zero page fiddling</p>
+      <code>0297-   A9 00       LDA   #$00
+0299-   85 41       STA   $41
+029B-   38          SEC
+029C-   66 4A       ROR   $4A</code>
+      <p class="comment">set up and call an important-looking routine</p>
+      <code>029E-   A9 41       LDA   #$41
+02A0-   A0 01       LDY   #$01
+02A2-   A2 05       LDX   #$05
+02A4-   20 15 02    JSR   $0215</code>
+    </div>
+    <div class="line_editing">
+      <code>*215L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">store A in zero page $27, used by the disk controller ROM routine as the target page to store sectors read from disk</p>
+      <code>0215-   85 27       STA   $27</code>
+      <p class="comment">X is the final sector to read</p>
+      <code>0217-   E8          INX
+0218-   86 49       STX   $49</code>
+      <p class="comment">Y is the current sector to read (starting with whatever was passed in and incrementing until it equals the value passed in the X register)</p>
+      <code>021A-   84 F9       STY   $F9
+021C-   98          TYA</code>
+      <p class="comment">But wait, there's more! Based on the high bit of zero page $4A, Y is either a logical sector (the map of logical->physical sectors is at $0263) or a physical sector</p>
+      <code>021D-   24 4A       BIT   $4A
+021F-   30 03       BMI   $0224
+0221-   B9 63 02    LDA   $0263,Y</code>
+      <p class="comment">store physical sector in $3D (again, used by the disk controller ROM)</p>
+      <code>0224-   85 3D       STA   $3D</code>
+      <p class="comment">read sector by jumping to ($003E), which points to $Cx5C (e.g. $C65C if booting from slot 6) and exit via $0801, which is an RTS by now, so this just continues to the next line</p>
+      <code>0226-   20 00 02    JSR   $0200</code>
+      <p class="comment">increment sector index</p>
+      <code>0229-   A4 F9       LDY   $F9
+022B-   C8          INY</code>
+      <p class="comment">are there more sectors to read?</p>
+      <code>022C-   C4 49       CPY   $49</code>
+      <p class="comment">yes, branch back and repeat</p>
+      <code>022E-   90 EA       BCC   $021A</code>
+      <p class="comment">no, exit with last page (+1) in A (disk controller ROM increments this after storing sector data, so on exit this will be the first page that was NOT filled with data in this loop)</p>
+      <code>0230-   A5 27       LDA   $27
+0232-   60          RTS</code>
+    </div>
+    <p>We called this routine at $029E with</p>
+    <p>A=$41, Y=$01, and X=$05, so that read sectors $01..$05 into $4100..$45FF.</p>
+    <p class="seen">Continuing...</p>
+    <div class="line_editing">
+      <code>*2A7L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">move the drive head one phase only, to the next HALF track</p>
+      <code>02A7-   20 36 02    JSR   $0236</code>
+      <p class="comment">read more sectors ($06..$0A) from track 1.5</p>
+      <code>02AA-   A2 0A       LDX   #$0A
+02AC-   20 15 02    JSR   $0215</code>
+      <p class="comment">advance another half track</p>
+      <code>02AF-   20 36 02    JSR   $0236</code>
+      <p class="comment">read more sectors ($0B..$0F) from track 2</p>
+      <code>02B2-   A2 0F       LDX   #$0F
+02B4-   20 15 02    JSR   $0215</code>
+      <p class="comment">fiddle with $4A again</p>
+      <code>02B7-   46 4A       LSR   $4A
+02B9-   60          RTS</code>
+    </div>
+    <p>So here's the deal with $4A: we initialized it at $0273 by a blind LSR, which clears the high bit. This tells the multi-sector read routine at $0215 to use logical sectors. Then we set the high bit at $029B with SEC + ROR, indicating we want $0215 to read physical sectors. Then we read a few sectors from track 1, a few from track</p>
+    <p>1.5, and a few from track 2. Then we reset $4A with another LSR, and we're back to using logical sectors.</p>
+    <p>This explains why my EDD bit copy failed. This disk is storing data on half tracks. Worse, it's storing data on *adjacent* half tracks -- a few from track 1, a few from track 1.5, and a few from track 2. Due to limitations of the Disk II drive mechanism, that would be virtually impossible for a generic bit copier to reproduce on a blank floppy disk.</p>
+    <p class="seen">Continuing...</p>
+    <div class="line_editing">
+      <code>*278L</code>
+    </div>
+    <div class="listing">
+      <code>0278-   A9 50       LDA   #$50
+027A-   20 05 02    JSR   $0205</code>
+    </div>
+    <div class="line_editing">
+      <code>*205L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">This is a fascinating and compact way to read multiple tracks -- just call one of these lines ($0205, $0208, or $020B) and have them call the "read entire track" routine at $020E (which itself falls through to the "read partial track" routine at $0215) and keep falling through until it finally hits the RTS at $0232 and returns to the caller.</p>
+      <code>0205-   20 0E 02    JSR   $020E
+0208-   20 0E 02    JSR   $020E
+020B-   20 0E 02    JSR   $020E
+020E-   20 33 02    JSR   $0233
+0211-   A2 0F       LDX   #$0F
+0213-   A0 00       LDY   #$00
+0215-   85 27       STA   $27
+0217-   E8          INX
+0218-   86 49       STX   $49
+021A-   84 F9       STY   $F9
+021C-   98          TYA
+021D-   24 4A       BIT   $4A
+021F-   30 03       BMI   $0224
+0221-   B9 63 02    LDA   $0263,Y
+0224-   85 3D       STA   $3D
+0226-   20 00 02    JSR   $0200
+0229-   A4 F9       LDY   $F9
+022B-   C8          INY
+022C-   C4 49       CPY   $49
+022E-   90 EA       BCC   $021A
+0230-   A5 27       LDA   $27
+0232-   60          RTS</code>
+    </div>
+    <p>So a call to $0205 will read 4 tracks into $5000..$8FFF. The accumulator holds the starting page on entry, and $0215 loads the accumulator with the next page on exit, so you can just chain calls as often as you like to read multiple tracks into consecutive memory.</p>
+    <p>Every part of this code is brilliant. AND it fits in a single sector in low memory. AND it's flexible enough to read from virtually uncopyable disks.</p>
+    <div class="line_editing">
+      <code>*27DL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">read three more tracks (into $9000.. $BFFF)</p>
+      <code>027D-   20 08 02    JSR   $0208</code>
+      <p class="comment">move drive head one more time (A is unused but preserved by this routine)</p>
+      <code>0280-   A9 40       LDA   #$40
+0282-   20 33 02    JSR   $0233</code>
+      <p class="comment">push $40 to the stack</p>
+      <code>0285-   48          PHA</code>
+      <p class="comment">read one sector (into $4000..$40FF)</p>
+      <code>0286-   A2 00       LDX   #$00
+0288-   20 13 02    JSR   $0213</code>
+      <p class="comment">turn off drive motor</p>
+      <code>028B-   A6 2B       LDX   $2B
+028D-   BD 88 C0    LDA   $C088,X</code>
+      <p class="comment">push $15 to the stack</p>
+      <code>0290-   A9 15       LDA   #$15
+0292-   48          PHA</code>
+      <p class="comment">exit via RTS</p>
+      <code>0293-   60          RTS</code>
+    </div>
+    <p>We pushed $40/$15 to the stack, so this will "return" to $4016, which is the game's entry point.</p>
+    <p>I can interrupt the boot at $028D and capture the entire game in memory.</p>
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up callback #1 (same as previous trace, by changing the values pushed on the stack)</p>
+      <code>96F8-   A9 97       LDA   #$97
+96FA-   8D 18 08    STA   $0818
+96FD-   A9 04       LDA   #$04
+96FF-   8D 3F 08    STA   $083F</code>
+      <p class="comment">start the boot</p>
+      <code>9702-   4C 01 08    JMP   $0801</code>
+      <p class="comment">callback #1 is here -- set up unconditional break after game is entirely loaded in memory</p>
+      <code>9705-   A9 4C       LDA   #$4C
+9707-   8D 8D 02    STA   $028D
+970A-   A9 59       LDA   #$59
+970C-   8D 8E 02    STA   $028E
+970F-   A9 FF       LDA   #$FF
+9711-   8D 8F 02    STA   $028F</code>
+      <p class="comment">continue the boot</p>
+      <code>9714-   4C 73 02    JMP   $0273</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE2,A$9600,L$117
+*9600G
+...reboots slot 6...
+<beep>
+*C0E8
+*C500G
+...
+]BSAVE OBJ.2000-7FFF,A$2000,L$6000
+]BRUN TRACE3
+...reboots slot 6...
+<beep>
+*C0E8
+*2000<8000.BFFFM
+*C500G
+...
+]BSAVE OBJ.8000-BFFF,A$2000,L$4000</code>
+    </div>
+</section>
+
+<section>
+  <h2>Chapter 4</h2>
+  <h3>If You Wish To Play A Game, You Must First Create The Universe</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...</code>
+    </div>
+    <p>The game occupies $2000..$BFFF, but for the sake of writing it to disk once, I will load it at $1000..$AFFF. (This doesn't interfere with DOS in memory because my work disk uses Diversi-DOS 64K, which relocates itself to the language card during boot. The only part of main memory still in use is $BF00..$BFFF.)</p>
+    <p>When I configure the bootloader on the new disk, it will load the game into $2000..$BFFF.</p>
+    <div class="line_editing">
+      <code>]BLOAD OBJ.2000-7FFF,A$1000
+]BLOAD OBJ.8000-BFFF,A$7000
+]CALL -151</code>
+    </div>
+    <div class="listing">
+      <p class="comment">page count (decremented)</p>
+      <code>0300-   A9 A0       LDA   #$A0
+0302-   85 FF       STA   $FF</code>
+      <p class="comment">logical sector (incremented)</p>
+      <code>0304-   A9 00       LDA   #$00
+0306-   85 FE       STA   $FE</code>
+      <p class="comment">call RWTS to write sector</p>
+      <code>0308-   A9 03       LDA   #$03
+030A-   A0 88       LDY   #$88
+030C-   20 D9 03    JSR   $03D9</code>
+      <p class="comment">increment logical sector, wrap around from $0F to $00 and increment track</p>
+      <code>030F-   E6 FE       INC   $FE
+0311-   A4 FE       LDY   $FE
+0313-   C0 10       CPY   #$10
+0315-   D0 07       BNE   $031E
+0317-   A0 00       LDY   #$00
+0319-   84 FE       STY   $FE
+031B-   EE 8C 03    INC   $038C</code>
+      <p class="comment">Convert logical to physical sector. 4boot reads tracks in physical sector order.</p>
+      <code>031E-   B9 40 03    LDA   $0340,Y
+0321-   8D 8D 03    STA   $038D</code>
+      <p class="comment">increment page to write</p>
+      <code>0324-   EE 91 03    INC   $0391
+0327-   C6 FF       DEC   $FF</code>
+      <p class="comment">loop until done with all pages</p>
+      <code>0329-   D0 DD       BNE   $0308
+032B-   60          RTS</code>
+    </div>
+    <div class="line_editing">
+      <p class="comment">logical to physical sector mapping</p>
+      <code>*340.34F</code>
+    </div>
+    <div class="listing">
+      <code>0340- 00 07 0E 06 0D 05 0C 04
+0348- 0B 03 0A 02 09 01 08 0F</code>
+    </div>
+    <div class="line_editing">
+      <p class="comment">RWTS parameter table, pre-initialized with slot 6, drive 1, track $01, sector $00, address $1000, and RWTS write command ($02)</p>
+      <code>*388.397</code>
+    </div>
+    <div class="listing">
+      <code>0388- 01 60 01 00 01 00 FB F7
+0390- 00 10 00 00 02 00 00 60</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE MAKE,A$300,L$98
+*300G
+...write write write...</code>
+    </div>
+    <p>Now I have the entire game on tracks $01-$0A of a standard format disk.</p>
+    <p>The bootloader (which I've named 4boot) lives on track $00. T00,S00 is boot0, which reuses the disk controller ROM routine to load boot1, which lives on sectors $0C-$0E and is loaded into $0900..$0B00.</p>
+    <p class="seen">Boot0 looks like this:</p>
+    <div class="listing">
+      <p class="comment">decrement sector count</p>
+      <code>0801-   CE 12 08    DEC   $0812</code>
+      <p class="comment">branch once we've read enough sectors</p>
+      <code>0804-   30 0B       BMI   $0811</code>
+      <p class="comment">increment physical sector to read</p>
+      <code>0806-   E6 3D       INC   $3D</code>
+      <p class="comment">$0880 is a sparse table of $C1..$C6, so this sets up the proper jump to the disk controller ROM based on the slot number</p>
+      <code>0808-   BD 80 08    LDA   $0880,X
+080B-   8D 10 08    STA   $0810</code>
+      <p class="comment">read a sector (exits via $0801)</p>
+      <code>080E-   4C 5C 00    JMP   $005C</code>
+      <p class="comment">sector read loop exits to here (from $0804) -- note: by the time execution reaches here, $0812 is $FF, so this just resets the stack</p>
+      <code>0811-   A2 03       LDX   #$03
+0813-   9A          TXS</code>
+      <p class="comment">set up zero page (used by RWTS) and push an array of addresses to the stack at the same time</p>
+      <code>0814-   A2 0F       LDX   #$0F
+0816-   BD 80 08    LDA   $0880,X
+0819-   95 F0       STA   $F0,X
+081B-   48          PHA
+081C-   CA          DEX
+081D-   D0 F7       BNE   $0816
+081F-   60          RTS</code>
+    </div>
+    <div class="line_editing">
+      <code>*881.88F</code>
+    </div>
+    <div class="listing">
+      <code>0880-    88 FE 92 FE 2E FB FF
+0888- 08 15 40 20 0A 00 00 00</code>
+    </div>
+    <p class="seen">These are pushed to the stack in reverse order, starting with $088F.</p>
+    <p>When we hit the "RTS" at $081F, it pops the stack and jumps to $FE89, $FE93, $FB2F, $0900, and $4016. (Each of these routines exits via RTS and "returns" to the next address (+1) that we pushed on the stack.)</p>
+    <p>- $FE89, $FE93, and $FB2F are in ROM (IN#0, PR#0, and TEXT) - $0900 is the RWTS entry point. It reads tracks $01..$0A into $2000.. $BFFF. (These values are stored in zero page, which we just set.) - $4016 is the game's entry point.</p>
+    <p>It never returns, so the other values on the stack are irrelevant.</p>
+    <p class="seen">The RWTS at $BD00 is derived from the ProDOS RWTS. It uses in-place nibble decoding to avoid extra memory copying, and it uses "scatter reads" to read whatever sector is under the drive head when it's ready to load something.</p>
+    <div class="line_editing">
+      <code>*900L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up some places later in the RWTS where we need to read from a slot- specific data latch</p>
+      <code>0900-   A6 2B       LDX   $2B
+0902-   8A          TXA
+0903-   09 8C       ORA   #$8C
+0905-   8D 96 09    STA   $0996
+0908-   8D AD 09    STA   $09AD
+090B-   8D C3 09    STA   $09C3
+090E-   8D D7 09    STA   $09D7
+0911-   8D EC 09    STA   $09EC</code>
+      <p class="comment">advance drive head to next track</p>
+      <code>0914-   20 7C 0A    JSR   $0A7C</code>
+      <p class="comment">sectors-left-to-read-on-this-track counter</p>
+      <code>0917-   A0 0F       LDY   #$0F
+0919-   84 F8       STY   $F8</code>
+      <p class="comment">Initialize array at $0100 that tracks which sectors we've read from the current track. The array is in physical sector order, thus the RWTS assumes data is stored in physical sector order on each track. Values are the actual pages in memory where that sector should go, and they get zeroed once the sector is read.</p>
+      <code>091B-   98          TYA
+091C-   18          CLC
+091D-   65 FB       ADC   $FB
+091F-   99 00 01    STA   $0100,Y
+0922-   88          DEY
+0923-   10 F6       BPL   $091B</code>
+      <p class="comment">find the next address prologue and store the address field in $2C..$2F, like DOS 3.3</p>
+      <code>0925-   20 0F 0A    JSR   $0A0F</code>
+      <p class="comment">check if this sector has been read</p>
+      <code>0928-   A4 2D       LDY   $2D
+092A-   B9 00 01    LDA   $0100,Y</code>
+      <p class="comment">if 0, we've read this sector already, so loop back and look for another</p>
+      <code>092D-   F0 F6       BEQ   $0925</code>
+      <p class="comment">if not 0, use the target page and set up some STA instructions in the RWTS so we write this sector directly to its intended page in memory</p>
+      <code>092F-   A8          TAY
+0930-   84 FF       STY   $FF
+0932-   8C EA 09    STY   $09EA
+0935-   A5 FE       LDA   $FE
+0937-   8D E9 09    STA   $09E9
+093A-   38          SEC
+093B-   E9 54       SBC   #$54
+093D-   8D D1 09    STA   $09D1
+0940-   B0 02       BCS   $0944
+0942-   88          DEY
+0943-   38          SEC
+0944-   8C D2 09    STY   $09D2
+0947-   E9 57       SBC   #$57
+0949-   8D AA 09    STA   $09AA
+094C-   B0 01       BCS   $094F
+094E-   88          DEY
+094F-   8C AB 09    STY   $09AB</code>
+      <p class="comment">read the sector into memory</p>
+      <code>0952-   20 6D 09    JSR   $096D</code>
+      <p class="comment">if that failed, just loop back and look for another sector</p>
+      <code>0955-   B0 CE       BCS   $0925</code>
+      <p class="comment">mark this sector as read</p>
+      <code>0957-   A4 2D       LDY   $2D
+0959-   A9 00       LDA   #$00
+095B-   99 00 01    STA   $0100,Y
+095E-   E6 FB       INC   $FB</code>
+      <p class="comment">decrement sectors-left-to-read-on- this-track counter</p>
+      <code>0960-   C6 F8       DEC   $F8</code>
+      <p class="comment">loop until we've read all the sectors on this track</p>
+      <code>0962-   10 C1       BPL   $0925</code>
+      <p class="comment">decrement tracks-left-to-read counter (set in boot0)</p>
+      <code>0964-   C6 FC       DEC   $FC</code>
+      <p class="comment">loop until we've read all the tracks</p>
+      <code>0966-   D0 AC       BNE   $0914</code>
+      <p class="comment">turn off drive motor and exit</p>
+      <code>0968-   09 88 C0    LDA   $C088,X
+096B-   38          SEC
+096C-   60          RTS</code>
+    </div>
+    <p>The routine at $0A7C checks the current track number (technically the phase, stored in zero page $FD). After reading track $02 (phase $04), it switches on the hi-res graphics screen. We just loaded $2000..$3FFF from tracks $01 and $02, so this shows the title page as soon as possible. (I did not retain the original compressed data on track 0.)</p>
+    <div class="line_editing">
+      <code>*A7CL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">check phase</p>
+      <code>0A7C-   A5 FD       LDA   $FD
+0A7E-   C9 04       CMP   #$04
+0A80-   D0 0C       BNE   $0A8E</code>
+      <p class="comment">switch to hi-res grpahics page 1</p>
+      <code>0A82-   2C 54 C0    BIT   $C054
+0A85-   2C 57 C0    BIT   $C057
+0A88-   2C 52 C0    BIT   $C052
+0A8B-   2C 50 C0    BIT   $C050</code>
+      <p class="comment">exit via drive head moving routine</p>
+      <code>0A8E-   4C 53 0A    JMP   $0A53</code>
+    </div>
+    <p>The combination of</p>
+    <p>- code on consecutive tracks starting on track $01 (minimizes drive head movement) - scatter reads (minimizes disk movement per track) - in-place denibblizing and no compressed graphics (minimizes memory copies)</p>
+    <p>means the entire boot process takes about three seconds.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/285-world-atlas-action.html">World Atlas Action</a></p>
+</body></html>

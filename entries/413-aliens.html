@@ -1,0 +1,403 @@
+<!doctype html>
+<html><head>
+<title>Aliens</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/412-murder-on-the-mississippi.html">Murder on the MIssissippi</a></p>
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">no errors, but copy hangs on boot (after showing DOS prompt)</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">ditto</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">ditto</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">nothing suspicious</p>
+    <p class="seen">Disk Fixer</p>
+    <p>looks like unmodified DOS 3.3 T11 -> regular disk catalog T01,S09 -> startup program is named "STARTUP"</p>
+    <p class="seen">Why didn't my copies work?</p>
+    <p class="seen">Probably a nibble check called by the startup program. Activision loves "invisible" nibble checks that don't fail immediately but have a side effect.</p>
+    <p class="seen">To verify my intuition that the DOS is unmodified (and the copy protection is self-contained somewhere else), I'll boot from a DOS 3.3 master disk and try to run the program.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S5,D1=DOS 3.3 master disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+]RUN STARTUP,S6
+...works...</code>
+    </div>
+    <div class="curses_input">
+      <code>[S6,D1=non-working copy]
+[S5,D1=DOS 3.3 master disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+]RUN STARTUP,S6
+...fails identically to booting the
+non-working copy directly...</code>
+    </div>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Trace the startup program</p>
+    <p class="seen">2. Find the nibble check and document any side effects</p>
+    <p class="seen">3. Disable the nibble check while maintaining the side effects</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which It All Starts So Innocently</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...
+[<Ctrl-C> immediately after prompt]</code>
+    </div>
+    <div class="terminal_output">
+      <code>BREAK
+]CATALOG</code>
+      <code>DISK VOLUME 254</code>
+      <code> A 002 STARTUP
+ B 031 ULTRA.OBJ
+ B 015 MAIN
+ B 009 SMALL.60
+ B 009 AL0.OBJ
+ B 028 TITLE.S
+ B 022 AL1.OBJ
+ B 019 SULACO.CMP
+ B 012 TAILS.S
+ B 008 EQUIP.CMP
+ B 004 EQUIP.S
+ B 013 AL2.OBJ
+ B 016 COCKPIT.CMP
+ B 024 AIRLOCK.DAT
+ B 009 CIRCLE
+ B 009 TUNNEL.TMP
+ B 010 AL7.OBJ
+ B 022 RIPLEY.CMP
+ B 004 DOOR.CMP
+ B 002 DECOMP2
+ B 035 ONEON.S
+ B 004 ONEON.TMP
+ B 042 LOADBAY.CMP
+ B 036 QUEEN.S
+ B 038 BISHOP.CMP
+ B 022 DREAM.CMP
+ B 043 ARMS.S
+ B 003 CHNGREY
+ B 004 ALIENS.MUS</code>
+    </div>
+    <div class="line_editing">
+      <code>]LIST</code>
+    </div>
+    <div class="terminal_output">
+      <code> 10  PRINT  CHR$ (4);"BLOAD MAIN,
+     A$4000": PRINT  CHR$ (4);"BR
+     UN ULTRA.OBJ": END</code>
+    </div>
+    <div class="line_editing">
+      <code>]BLOAD MAIN,A$4000
+]BLOAD ULTRA.OBJ
+]CALL -151</code>
+      <code>*AA72.AA73</code>
+    </div>
+    <div class="listing">
+      <code>AA72- 00 08</code>
+    </div>
+    <div class="line_editing">
+      <code>*800L</code>
+    </div>
+    <div class="listing">
+      <code>0800-   4C 03 22    JMP   $2203</code>
+    </div>
+    <div class="line_editing">
+      <code>*2203L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set reset vector</p>
+      <code>2203-   A9 12       LDA   #$12
+2205-   8D F2 03    STA   $03F2
+2208-   A9 24       LDA   #$24
+220A-   8D F3 03    STA   $03F3
+220D-   49 A5       EOR   #$A5
+220F-   8D F4 03    STA   $03F4</code>
+      <p class="comment">an address? ($FA) -> $2415</p>
+      <code>2212-   A9 15       LDA   #$15
+2214-   85 FA       STA   $FA
+2216-   A9 24       LDA   #$24
+2218-   85 FB       STA   $FB</code>
+      <p class="comment">suspicious</p>
+      <code>221A-   A9 C5       LDA   #$C5
+221C-   48          PHA</code>
+      <p class="comment">selective memory moves</p>
+      <code>221D-   A9 00       LDA   #$00
+221F-   85 FC       STA   $FC
+2221-   A2 03       LDX   #$03
+2223-   BC 40 22    LDY   $2240,X</code>
+      <p class="comment">ah, it was an address</p>
+      <code>2226-   91 FA       STA   ($FA),Y
+2228-   CA          DEX
+2229-   10 F8       BPL   $2223</code>
+      <p class="comment">suspicious</p>
+      <code>222B-   8A          TXA
+222C-   48          PHA</code>
+    </div>
+    <p class="seen">We've now pushed $C5/$FF to the stack, so an RTS right now would jump to $C600 and reboot slot 6. Let's try to avoid that.</p>
+    <div class="listing">
+      <code>222D-   20 44 22    JSR   $2244</code>
+    </div>
+    <div class="line_editing">
+      <code>*2244L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">ah, the memory moves we were doing around $2223 were setting values in an RWTS parameter table, which we are now using to position the drive head (not shown: it was a "seek" command)</p>
+      <code>2244-   A5 FB       LDA   $FB
+2246-   A4 FA       LDY   $FA
+2248-   20 B5 B7    JSR   $B7B5
+224B-   A9 00       LDA   #$00
+224D-   85 48       STA   $48
+224F-   90 02       BCC   $2253</code>
+      <p class="comment">if the RWTS command failed, pop the real return address and leave $C5/$FF at the top of the stack, then RTS to reboot</p>
+      <code>2251-   68          PLA
+2252-   68          PLA
+2253-   60          RTS</code>
+    </div>
+    <p class="seen">My non-working copy didn't reboot, so I guess it got past this.</p>
+    <p>Continuing from $2230...</p>
+    <div class="line_editing">
+      <code>*2230L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">get slot number (x16) into X</p>
+      <code>2230-   A0 01       LDY   #$01
+2232-   8C 21 24    STY   $2421
+2235-   B1 FA       LDA   ($FA),Y
+2237-   AA          TAX</code>
+      <p class="comment">here we go</p>
+      <code>2238-   20 54 22    JSR   $2254</code>
+    </div>
+    <p class="seen">We're closing in on the copy protection routine. Can you feel it? I swear I can feel it. The random PHA instructions are a good clue. Disk seeks for no apparent reason. The no-second-chances approach to error handling. This is unfriendly territory.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Forge Into Unfriendly Territory</h3>
+
+    <div class="line_editing">
+      <code>*2254L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">turn on drive motor manually (literally never not suspicious)</p>
+      <code>2254-   BD 89 C0    LDA   $C089,X</code>
+      <p class="comment">initialize Death Counters</p>
+      <code>2257-   A9 56       LDA   #$56
+2259-   85 FD       STA   $FD
+225B-   A9 08       LDA   #$08
+225D-   C6 FC       DEC   $FC
+225F-   D0 04       BNE   $2265
+2261-   C6 FD       DEC   $FD</code>
+      <p class="comment">if Death Counter hits 0, jump forward (more on this in a second)</p>
+      <code>2263-   F0 34       BEQ   $2299</code>
+      <p class="comment">look for a specific nibble ($FB)</p>
+      <code>2265-   BC 8C C0    LDY   $C08C,X
+2268-   10 FB       BPL   $2265
+226A-   C0 FB       CPY   #$FB
+226C-   D0 ED       BNE   $225B
+226E-   F0 00       BEQ   $2270</code>
+      <p class="comment">kill a few cycles (not pointless, because the disk spins independently of the CPU, so all of these low-level disk reads are highly time-sensitive)</p>
+      <code>2270-   EA          NOP
+2271-   EA          NOP</code>
+      <p class="comment">read data latch (note: no BPL loop here, we're just reading it once)</p>
+      <code>2272-   BC 8C C0    LDY   $C08C,X</code>
+      <p class="comment">do a compare to set or clear the carry bit (among other things, but it's the carry bit we care about)</p>
+      <code>2275-   C0 08       CPY   #$08</code>
+      <p class="comment">rotate the carry into the low bit of the accumulator</p>
+      <code>2277-   2A          ROL</code>
+      <p class="comment">if we just rolled a "1" bit out of the high bit of the accumulator, take this branch</p>
+      <code>2278-   B0 0B       BCS   $2285</code>
+      <p class="comment">next nibble needs to be $FF</p>
+      <code>227A-   BC 8C C0    LDY   $C08C,X
+227D-   10 FB       BPL   $227A</code>
+      <p class="comment">...otherwise we start over</p>
+      <code>227F-   C0 FF       CPY   #$FF
+2281-   D0 D8       BNE   $225B</code>
+      <p class="comment">loop back to get next nibble</p>
+      <code>2283-   F0 EB       BEQ   $2270</code>
+      <p class="comment">execution continues here (from $2278) get another nibble</p>
+      <code>2285-   BC 8C C0    LDY   $C08C,X
+2288-   10 FB       BPL   $2285</code>
+      <p class="comment">stash it in zero page</p>
+      <code>228A-   84 FC       STY   $FC</code>
+      <p class="comment">if the accumulator is anything but %00001010, start over</p>
+      <code>228C-   C9 0A       CMP   #$0A
+228E-   D0 CB       BNE   $225B</code>
+    </div>
+    <p class="seen">I got lost several times trying to follow this routine. I think the easiest way to explain it is to show the difference between the original disk and my non-working copy.</p>
+    <p class="seen">Here is the original disk, as seen by the Copy II+ nibble editor. Nibbles with extra "0" bits (timing bits) after them are displayed in inverse on an original machine, marked here with a "+" after the nibble.</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK:     START: 1B1E  LENGTH: 17C1</code>
+      <code>1C70: 9F EB E5 FC D7 D7 D7 EE   VIEW
+1C78: FA E6 E6 FF FE F2 ED FD
+1C80: FF EF ED BA BB DD AF E6
+1C88: B7 A7 CB B7 DE AA EB FF
+1C90: FF FF FF FB+FF FF+FF FF+
+1C98: FD FF+FF+FF+FF+FF+FF+FF+
+1CA0: FF+FF+D5 AA 96 AA AB AA
+1CA8: AA AA AB AA AA DE AA EB+
+1CB0: FF+FF+FF+FF+FF+FF D5 AA
+---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">It's easy to understand why a simple sector copy failed. The sequence that this code is looking for starts at offset $1C93, which is between the end of one sector and the beginning of the next. (The data epilogue is at $1C8C; the next address prologue is at $1CA2.)</p>
+    <p class="seen">Sector copiers discard everything between those delimiters and rebuild the track with a default pattern of sync bytes. That pattern doesn't include an $FB nibble, so the nibble check fails.</p>
+    <p class="seen">But the EDD bit copy also failed. Here is the original disk's pattern at offset $1C93:</p>
+    <p class="seen">- $FB + timing bit - $FF - $FF + timing bit - $FF - $FF + timing bit</p>
+    <p class="seen">And here is what the same part of the track looks like on my failed EDD copy:</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK:     START: 1B1E  LENGTH: 17C1</code>
+      <code>1C70: 9F EB E5 FC D7 D7 D7 EE   VIEW
+1C78: FA E6 E6 FF FE F2 ED FD
+1C80: FF EF ED BA BB DD AF E6
+1C88: B7 A7 CB B7 DE AA EB FF
+1C90: FF FF FF FB+FF FF FF+FF+
+1C98: FD FF+FF+FF+FF+FF+FF+FF+
+1CA0: FF+FF+D5 AA 96 AA AB AA
+1CA8: AA AA AB AA AA DE AA EB+
+1CB0: FF+FF+FF+FF+FF+FF D5 AA
+---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">A subtle difference! The sequence at offset $1C93 now looks like this:</p>
+    <p class="seen">- $FB + timing bit - $FF - $FF - $FF + timing bit - $FF + timing bit</p>
+    <p class="seen">This code is looking for $FF bytes with an alternating pattern of timing bit, no timing bit, timing bit, no timing bit. It doesn't find that on the bit copy, so it knows it's not running on an original disk.</p>
+    <p class="seen">Continuing the code listing...</p>
+    <div class="listing">
+      <p class="comment">get a nibble</p>
+      <code>2290-   BD 8C C0    LDA   $C08C,X
+2293-   10 FB       BPL   $2290</code>
+      <p class="comment">more bit twiddling</p>
+      <code>2295-   38          SEC
+2296-   2A          ROL</code>
+      <p class="comment">AND it with the previously stashed nibble</p>
+      <code>2297-   25 FC       AND   $FC</code>
+      <p class="comment">Success path falls through to here, but the failure path is also here (from $2263, when the Death Counters hit zero). In other words, we will always end up here regardless of whether the nibble check "passed," but the value in the accumulator will be wrong if the nibble check failed.</p>
+      <code>2299-   49 AA       EOR   #$AA</code>
+      <p class="comment">The difference between the original disk and my non-working copy is right here, in the value stored in $22C0.</p>
+      <p class="comment">It's not used right away, but I'll bet it will be used soon.</p>
+      <code>229B-   8D C0 22    STA   $22C0</code>
+      <p class="comment">"This nibble check will self-destruct in ten seconds..."</p>
+      <code>229E-   A9 00       LDA   #$00
+22A0-   A8          TAY
+22A1-   99 44 22    STA   $2244,Y
+22A4-   C8          INY
+22A5-   C0 5D       CPY   #$5D
+22A7-   D0 F8       BNE   $22A1
+22A9-   60          RTS</code>
+    </div>
+    <p>And that's it. Whether the nibble check succeeds or fails, this routine returns to the caller. It doesn't even set a flag. The only difference is the value of $22C0.</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which We See How It All Fits Together</h3>
+
+    <p>Continuing from $223B (the next instruction after calling the nibble check)...</p>
+    <div class="listing">
+      <p class="comment">pop $C5/$FF off the stack</p>
+      <code>223B-   68          PLA
+223C-   68          PLA</code>
+      <p class="comment">continue elsewhere</p>
+      <code>223D-   4C AA 22    JMP   $22AA</code>
+    </div>
+    <div class="line_editing">
+      <code>*22AAL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">a memory move</p>
+      <code>22AA-   A9 12       LDA   #$12
+22AC-   85 FA       STA   $FA
+22AE-   A9 22       LDA   #$22
+22B0-   85 FB       STA   $FB
+22B2-   A9 AA       LDA   #$AA
+22B4-   85 FC       STA   $FC
+22B6-   A9 22       LDA   #$22
+22B8-   85 FD       STA   $FD
+22BA-   20 FA 23    JSR   $23FA</code>
+      <p class="comment">continue elsewhere</p>
+      <code>22BD-   4C CF 22    JMP   $22CF</code>
+    </div>
+    <div class="line_editing">
+      <code>*22CFL</code>
+    </div>
+    <div class="listing">
+      <code>22CF-   AD CC 22    LDA   $22CC
+22D2-   18          CLC
+22D3-   6D C0 22    ADC   $22C0
+22D6-   85 02       STA   $02
+22D8-   AD CD 22    LDA   $22CD
+22DB-   38          SEC
+22DC-   ED C0 22    SBC   $22C0
+22DF-   85 03       STA   $03
+22E1-   AD CE 22    LDA   $22CE
+22E4-   4D C0 22    EOR   $22C0
+22E7-   85 04       STA   $04</code>
+    </div>
+    <p>There you go: three operations that rely on the correct value in $22C0.</p>
+    <p class="seen">Luckily, this code is not obfuscated or even difficult to patch. I can do it right now without rebooting.</p>
+    <div class="line_editing">
+      <p class="comment">break to monitor after we've stored the magic value in $22C0</p>
+      <code>*229E:4C 59 FF
+*800G
+<beep></code>
+      <code>*22C0</code>
+    </div>
+    <div class="listing">
+      <code>22C0- 55</code>
+    </div>
+    <p class="seen">The magic value is $55. Now I can write that value to disk.</p>
+    <div class="curses_input">
+      <code>[Disk Fixer]
+  --> "D" for directory mode
+    --> select file "ULTRA.OBJ"
+      --> arrows to follow the binary</code>
+    </div>
+    <p>T0B,S0E,$C4 change "00" to "55"</p>
+    <p>I'll skip the nibble check by changing the JMP at $0800 from $2203 (the nibble check) to $22AA (the post-check success path):</p>
+    <p>T11,S07,$05 change "03" to "AA"</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<section>
+  <h2>Changelog</h2>
+
+    <div class="terminal_output">
+      <code>2015-09-06</code>
+    </div>
+    <p class="seen">- Vastly improved explanation of the</p>
+    <p class="seen">actual protection routine. Thanks to qkumba for pointing out that my original explanation was inaccurate.</p>
+    <div class="terminal_output">
+      <code>2015-08-26</code>
+    </div>
+    <p class="seen">- initial release</p>
+</section>
+
+<p>Next: <a rel="next" href="output/414-hacker-ii.html">Hacker II</a></p>
+</body></html>

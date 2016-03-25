@@ -1,0 +1,188 @@
+<!doctype html>
+<html><head>
+<title>Game Frame One</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/485-think-quick-1-2.html">Think Quick 1.2</a></p>
+<section>
+
+    <p>The disks are unordered but labeled:</p>
+    <p>- "Shafts and Stairs" - "Tug-A-Grug" - "Smileage" - "Content Diskette" (not bootable)</p>
+    <p>The first three are bootable and appear to be independent of each other. I'll start with "Shafts and Stairs."</p>
+</section>
+
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p>no errors, but copy hangs during late boot, with the drive motor on</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">ditto</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">ditto</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">nothing suspicious</p>
+    <p class="seen">Disk Fixer</p>
+    <p>T00 -> Pascal 1.1 bootloader (strings at $AC = "MUST BOOT FROM SLOT 6", at $C1 = "NO FILE SYSTEM.APPLE") T00,S0B -> Pascal disk catalog</p>
+    <p class="seen">Why didn't my copies work?</p>
+    <p>probably a nibble check that fails in an infinite loop</p>
+    <p class="seen">The program appears to be written in</p>
+    <p class="seen">Apple Pascal. The boot process starts with several sequential disk reads, then clears the screen and displays a block cursor in the upper-left corner. (I also recognize the hi-res graphics font and the way the program draws it.</p>
+    <p class="seen">I'll take "Skills I Never Thought I'd</p>
+    <p class="seen">Use" for $200, Alex, but here we are.)</p>
+    <p>This is as far as my non-working copy gets; the original disk shows the title screen shortly thereafter.</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Use the tools on an Apple Pascal system disk to verify that this disk really uses Apple Pascal</p>
+    <p class="seen">2. Find the HELLO program (usually SYSTEM.STARTUP) and decompile it</p>
+    <p class="seen">3. Hack the p-code to disable the copy protection</p>
+    <p class="seen">But first, let me try a shortcut.</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Try A Shortcut</h3>
+
+    <p class="seen">Turning to my trusty sector editor, I do a quick scan for some common byte patterns of nibble checks. First, "LDA $C089,X" -- used by virtually every nibble check I've ever seen. (It turns on the drive motor manually, so you can read raw nibbles or whatever.)</p>
+    <div class="curses_input">
+      <code>[Disk Fixer]
+  ["F"ind]
+    ["H"ex]
+      "BD 89 C0"</code>
+    </div>
+    <p>Several matches:</p>
+    <p>T00,S02 - part of a legitimate RWTS T0E,S0D - ditto T18,S07 - highly suspicious T1B,S05 - potentially suspicious</p>
+    <div class="terminal_output">
+      <code>T18,S07
+----------- DISASSEMBLY MODE ----------</code>
+      <p class="comment">standard beginning of an external assembly language routine called from a Pascal program</p>
+      <code>009E:68             PLA
+009F:85 00          STA   $00
+00A1:68             PLA
+00A2:85 01          STA   $01
+00A4:68             PLA
+00A5:68             PLA
+00A6:68             PLA
+00A7:68             PLA
+00A8:68             PLA
+00A9:AA             TAX
+00AA:68             PLA</code>
+      <p class="comment">turn on drive motor manually (always suspicious)</p>
+      <code>00AB:BD 8E C0       LDA   $C08E,X
+00AE:BD 89 C0       LDA   $C089,X
+00B1:A9 00          LDA   #$00
+00B3:85 02          STA   $02</code>
+      <p class="comment">find an $A5 nibble</p>
+      <code>00B5:20 B4 00       JSR   $00B4
+00B8:C8             INY
+00B9:D0 07          BNE   $00C2
+00BB:E6 02          INC   $02
+00BD:D0 03          BNE   $00C2
+00BF:4C A5 00       JMP   $00A5
+00C2:C9 A5          CMP   #$A5
+00C4:D0 EF          BNE   $00B5</code>
+      <p class="comment">the next two nibbles are 4-4 encoded and the final value is stored in $03</p>
+      <code>00C6:20 B4 00       JSR   $00B4
+00C9:38             SEC
+00CA:2A             ROL
+00CB:85 04          STA   $04
+00CD:20 B4 00       JSR   $00B4
+00D0:25 04          AND   $04
+00D2:85 03          STA   $03</code>
+      <p class="comment">skip next 3 nibbles</p>
+      <code>00D4:20 B4 00       JSR   $00B4
+00D7:20 B4 00       JSR   $00B4
+00DA:20 B4 00       JSR   $00B4</code>
+      <p class="comment">find "D5 AA 96" (address prologue) while counting the number of nibbles it took to get there (in Y)</p>
+      <code>00DD:A9 10          LDA   #$10
+00DF:85 05          STA   $05
+00E1:A0 FD          LDY   #$FD
+00E3:20 B3 00       JSR   $00B3
+00E6:C9 D5          CMP   #$D5
+00E8:D0 F9          BNE   $00E3
+00EA:20 B3 00       JSR   $00B3
+00ED:C9 AA          CMP   #$AA
+00EF:D0 F5          BNE   $00E6
+00F1:20 B3 00       JSR   $00B3
+00F4:C9 96          CMP   #$96
+00F6:D0 EE          BNE   $00E6
+00F8:20 B4 00       JSR   $00B4</code>
+      <p class="comment">several values of Y are acceptable</p>
+      <code>00FB:C0 10          CPY   #$10
+00FD:F0 0A          BEQ   $0109
+00FF:C0 11          CPY   #$11</code>
+    </div>
+    <div class="curses">
+      <code>(code continues on T18,S06)</code>
+    </div>
+    <div class="terminal_output">
+      <code>0101:F0 06          BEQ   $0109
+0103:A5 05          LDA   $05
+0105:C9 0B          CMP   #$0B
+0107:D0 3A          BNE   $0143</code>
+      <p class="comment">now count the number of nibbles before "D5 AA AD" (data prologue)</p>
+      <code>0109:A0 FE          LDY   #$FE
+010B:20 B3 00       JSR   $00B3
+010E:C9 D5          CMP   #$D5
+0110:D0 F9          BNE   $010B
+0112:20 B3 00       JSR   $00B3
+0115:C9 AA          CMP   #$AA
+0117:D0 F5          BNE   $010E
+0119:20 B3 00       JSR   $00B3
+011C:C9 AD          CMP   #$AD
+011E:D0 EE          BNE   $010E</code>
+      <p class="comment">only one value is acceptable</p>
+      <code>0120:C0 12          CPY   #$12
+0122:D0 1F          BNE   $0143</code>
+      <p class="comment">skip nibbles until we find an $AA</p>
+      <code>0124:20 B4 00       JSR   $00B4
+0127:C9 AA          CMP   #$AA
+0129:D0 F9          BNE   $0124
+012B:20 B4 00       JSR   $00B4
+012E:C6 05          DEC   $05
+0130:D0 AF          BNE   $FFE1</code>
+      <p class="comment">count the number of nibbles until we find an $A5</p>
+      <code>0132:A0 FF          LDY   #$FF
+0134:20 B3 00       JSR   $00B3
+0137:C9 A5          CMP   #$A5
+0139:D0 F9          BNE   $0134</code>
+      <p class="comment">needs to match the 4-4 encoded value we decoded earlier</p>
+      <code>013B:C4 03          CPY   $03
+013D:D0 04          BNE   $0143</code>
+      <p class="comment">success path falls through to here</p>
+      <code>013F:A9 FF          LDA   #$FF
+0141:D0 02          BNE   $0145</code>
+      <p class="comment">failure path ends up here</p>
+      <code>0143:A9 00          LDA   #$00</code>
+      <p class="comment">pass return value (in accumulator) back to Pascal code</p>
+      <code>0145:48             PHA
+0146:48             PHA</code>
+      <p class="comment">turn off drive and prepare to return to the Pascal interpreter</p>
+      <code>0147:BD 88 C0       LDA   $C088,X
+014A:A5 01          LDA   $01
+014C:48             PHA
+014D:A5 00          LDA   $00
+014F:48             PHA
+0150:60             RTS</code>
+      <p class="comment">This is the code at $00B3. The first entry point increments Y before getting the next nibble; the second entry point (at $00B4) just gets the next nibble without changing Y.</p>
+      <code>0151:C8             INY
+0152:BD 8C C0       LDA   $C08C,X
+0155:10 FB          BPL   $0152
+0157:60             RTS</code>
+    </div>
+    <p>Changing the return value in failure path (at offset $0144) from $00 to $FF should be sufficient to trick the caller into thinking that the nibble check passed.</p>
+    <p>"Shafts and Stairs": T18,S06,$44 change 00 to FF</p>
+    <div class="line_editing">
+      <code>]PR#6
+...works...</code>
+    </div>
+    <p class="seen">So, yeah, we don't need to do anything crazy like decompiling or p-code hacking... this time.</p>
+    <p>The other two bootable disks have identical protection and require similar patches:</p>
+    <p>"Smileage": T1E,S0A,$44 change 00 to FF</p>
+    <p>"Tug-A-Grug": T1F,S02,$44 change 00 to FF</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/487-the-eating-machine.html">The Eating Machine</a></p>
+</body></html>

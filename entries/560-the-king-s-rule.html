@@ -1,0 +1,369 @@
+<!doctype html>
+<html><head>
+<title>The King's Rule</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/559-basic-electricity.html">Basic Electricity</a></p>
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">can't read any track</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">lots of read errors, copy just hangs</p>
+    <div class="terminal_output">
+      <code>       ESSENTIAL DATA DUPLICATOR 4
+    00000000001111111111222222222233333
+TRK:01234567890123456789012345678901234
+.00(...L...........RL.R.RR..RRRRRRRR...
+.25(
+.50(
+.75(
+    ORIGINAL:S=6,D=1  DUPLICATE:S=6,D=2</code>
+      <code>  TRACK START: (RAW DISK BYTES)
+   B5 D5 A9 A9 A9 A9 A9 A5 A9 A5 A5 A5
+   AE D7 D4 D7 D7 D7 D7 D7 D7 DE DE DE
+   DE DE DD DD DD CD DD D2 D2 D2 CA CA
+   CA CA CA D5 AB AD D2 D2 D2 D2 D2 D2
+   D2 D2 D2 D2 D2 D2 D2 D2 D2 D2 D2 D2</code>
+      <code>  END TRACK: (RAW DISK BYTES)
+   FF F5 E6 D9 FF FE BB AA 9A D7 DD C9
+   EE FD 96 96 9F FC FB FB F2 E7 D5 AA</code>
+      <code>      TRACK:34     TRACK LENGTH:$1940
+                     DIFFERENCE:>128</code>
+      <code>  PRESS <RETURN>, PROCESS IS FINISHED</code>
+    </div>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">epilogues are modified (or missing?)</p>
+    <p class="seen">both prologues are modified</p>
+    <p class="seen">Track | Address | Data ------+----------+---------- $00 | D5 AA 96 | D5 AA AD (normal) $01 | D5 AA 97 | D5 AA AE $02 | D5 AA 9A | D5 AA AF $03 | D5 AA 9B | D5 AA B2 $04 | D5 AA 9D | D5 AA B3</p>
+    <p class="seen">&c.</p>
+    <p class="seen">Disk Fixer</p>
+    <p class="seen">["O" -> "Input/Output Control"] - set prologues as per table above - set "CHECKSUM ENABLED" to "NO" due to lack of repeatable epilogues T00 -> looks like a DOS 3.3 RWTS T01-T02 -> DOS 3.3 T11 -> DOS 3.3 disk catalog T01,S09 -> startup program is "LOGO"</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p class="seen">modified prologues (every track)</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">modified prologues (every track)</p>
+    <p class="seen">Why couldn't EDD read some tracks?</p>
+    <p class="seen">I don't know. Analyzing them with the nibble editor yielded no recognizable pattern, but they appear to have data (i.e. not just unformatted)</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Try to capture RWTS with AUTOTRACE</p>
+    <p class="seen">2. Convert to standard format with</p>
+    <p class="seen">Advanced Demuffin</p>
+    <p class="seen">3. Patch RWTS to read standard format</p>
+    <p class="seen">4. Check for secondary protection</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Attempt To Use The Original Disk As A Weapon Against Itself</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+      <code>]BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>["5" to switch to slot 5]</code>
+      <code>["R" to load a new RWTS module]
+  --> At $B8, load "RWTS" from drive 1</code>
+      <code>["6" to switch to slot 6]</code>
+      <code>["C" to convert disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:.................R.................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:...................................
+SC1:...................................
+SC2:...................................
+SC3:...................................
+SC4:...................................
+SC5:...................................
+SC6:...................................
+SC7:...................................
+SC8:...................................
+SC9:...................................
+SCA:...................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:.................R.................
+=======================================
+16SC $00,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <p class="seen">Why can't the RWTS read T11,S0F?</p>
+    <p class="seen">I don't know.</p>
+    <div class="line_editing">
+      <code>]PR#5
+]CATALOG,S6,D2</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+023 FREE</code>
+    </div>
+    <div class="line_editing">
+      <code>*A 004 LOGO
+*B 012 CHARGEN.OBJ
+ B 033 PIC.CASTLE
+*A 028 MENU
+ B 002 RAKE.BIN
+*A 035 LEVEL TWO
+*A 036 LEVEL THREE
+*A 036 LEVEL FOUR
+*A 040 LEVEL FIVE
+*A 045 LEVEL SIX
+*A 037 LEVEL ONE
+*B 034 LOGO.BIN
+*B 020 LEVEL 1.BIN
+*B 002 CMS3.OBJ
+*B 002 STACKED.BIN
+*B 020 LEVEL 2.BIN
+*B 020 LEVEL 3.BIN
+*B 020 LEVEL 4.BIN
+*B 020 LEVEL 5.BIN
+*B 020 LEVEL 6.BIN
+*B 003 RETURN.IM
+*B 002 STATIC.BIN
+*B 002 WINK.BIN</code>
+      <code>]RUN LOGO
+...works...</code>
+    </div>
+    <p class="seen">OK, it works when booted from my work disk, which is good. The reason I do this is to check whether there are any runtime checks for subtle differences in the original DOS. If the program runs after booting from a third-party disk, I can eliminate a whole range of possible secondary protections.</p>
+    <p class="seen">More good news: whatever is up with T11,S0F, it doesn't affect CATALOGing the disk or running the program.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which The Disk Reveals Its Secrets One At A Time Like A Flower Bursting In The Sun</h3>
+
+    <div class="line_editing">
+      <code>]PR#5
+]BLOAD BOOT1,A$2600
+]CALL -151</code>
+      <code>*FE89G FE93G     ; disconnect DOS
+*B600<2600.2FFFM ; move RWTS into place</code>
+    </div>
+    <p class="seen">The RWTS is certainly shaped like a standard DOS 3.3 RWTS. Here's the code at $B94F, which is identical to the code I would find there on a freshly formatted DOS 3.3. (This is where it looks for the address prologue.)</p>
+    <div class="line_editing">
+      <code>*B94FL</code>
+    </div>
+    <div class="listing">
+      <code>B94F-   BD 8C C0    LDA   $C08C,X
+B952-   10 FB       BPL   $B94F
+B954-   C9 D5       CMP   #$D5
+B956-   D0 F0       BNE   $B948
+B958-   EA          NOP
+B959-   BD 8C C0    LDA   $C08C,X
+B95C-   10 FB       BPL   $B959
+B95E-   C9 AA       CMP   #$AA
+B960-   D0 F2       BNE   $B954
+B962-   A0 03       LDY   #$03
+B964-   BD 8C C0    LDA   $C08C,X
+B967-   10 FB       BPL   $B964
+B969-   C9 96       CMP   #$96
+B96B-   D0 E7       BNE   $B954</code>
+    </div>
+    <p class="seen">But each track uses a different address prologue. This code will only read T00.</p>
+    <p class="seen">Something is changing it on the fly.</p>
+    <p class="seen">Disk Fixer</p>
+    <p class="seen">--> Find --> Hex --> "6A B9"</p>
+    <p class="seen">One match on T00,S04, loaded at $BA00.</p>
+    <p class="seen">The routine appears to start at $BA69 (normally unused space).</p>
+    <div class="line_editing">
+      <code>]PR#5
+]BLOAD BOOT1,A$2600
+]CALL -151
+*FE89G FE93G
+*B600<2600.2FFFM
+*BA69L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">save accumulator</p>
+      <code>BA69-   48          PHA</code>
+      <p class="comment">phase number (track number x2)</p>
+      <code>BA6A-   A5 2A       LDA   $2A</code>
+      <p class="comment">divided by 2, so now just a track number</p>
+      <code>BA6C-   4A          LSR
+BA6D-   A8          TAY
+BA6E-   B9 29 BA    LDA   $BA29,Y</code>
+      <p class="comment">Aha! This is modifying the third byte of the address prologue, just as I suspected. And it's using the track number as an index into a table of some sort.</p>
+      <code>BA71-   8D 6A B9    STA   $B96A</code>
+      <p class="comment">also changes the third byte of the address prologue on write</p>
+      <code>BA74-   8D 84 BC    STA   $BC84</code>
+      <p class="comment">another table lookup</p>
+      <code>BA77-   B9 34 BA    LDA   $BA34,Y</code>
+      <p class="comment">changing the third byte of the data prologue (read)</p>
+      <code>BA7A-   8D FC B8    STA   $B8FC</code>
+      <p class="comment">...and write</p>
+      <code>BA7D-   8D 5D B8    STA   $B85D</code>
+    </div>
+    <p class="seen">But wait! There's more!</p>
+    <div class="listing">
+      <p class="comment">if track is $11...</p>
+      <code>BA80-   C0 11       CPY   #$11
+BA82-   D0 03       BNE   $BA87</code>
+      <p class="comment">then sector $0E is really sector $02</p>
+      <code>BA84-   A9 02       LDA   #$02</code>
+      <p class="comment">(dummy opcode to hide next 2 bytes)</p>
+      <code>BA86-   AC</code>
+      <p class="comment">otherwise sector $0E is itself</p>
+      <code>BA87-   A9 0E       LDA   #$0E
+BA89-   8D C0 BF    STA   $BFC0</code>
+    </div>
+    <div class="terminal_output">
+      <code>WTF.</code>
+    </div>
+    <p class="seen">In case you have no idea what's going on here (I've never seen anything like it)... The table from $BFB8..$BFC7 maps physical to logical sectors. This code changes that table based on the track number. On track $11, physical sector $08 is logical sector $02. On all other tracks, physical sector $08 is logical sector $0E.</p>
+    <p class="seen">Because f--- you, that's why.</p>
+    <p class="seen">Fun fact(*): the table at $BA29 is part of the nibblization process that turns values in memory into the nibbles that actually get written to the disk.</p>
+    <p class="seen">(*) not guaranteed, actual fun may vary</p>
+    <p class="seen">Turning back to Disk Fixer, I searched for "20 69 BA" (JSR $BA69) and found nothing. But searching for "4C 69 BA" (JMP $BA69) got two matches: one on T00,S00 and one on T00,S08. The one on T00,S08 looks more promising. That sector is loaded at $BE00.</p>
+    <p class="seen">"Beneath Apple DOS" (p. 8-39) says that the routine at $BE5A is "MYSEEK", and that it is called immediately before the RWTS moves the drive head to the appropriate track in preparation for a read or write. Furthermore, my sector search found the JMP instruction at $BE8B, which (according to "Beneath</p>
+    <p class="seen">Apple DOS") is the final instruction of the "MYSEEK" routine.</p>
+    <p class="seen">Looking at a freshly formatted DOS 3.3 disk, it appears that the proper JMP is to $B9A0, which (not coincidentally) is the final instruction of the custom routine at $BA69, after it restores all registers and flags:</p>
+    <div class="listing">
+      <code>BA8C-   68          PLA
+BA8D-   69 00       ADC   #$00
+BA8F-   48          PHA
+BA90-   AD 78 04    LDA   $0478
+BA93-   90 2B       BCC   $BAC0
+...
+BAC0-   C9 22       CMP   #$22
+BAC2-   69 00       ADC   #$00
+BAC4-   8D 78 04    STA   $0478
+BAC7-   68          PLA
+BAC8-   4C A0 B9    JMP   $B9A0   <-- !</code>
+    </div>
+    <p class="seen">This patch should restore order to the universe:</p>
+    <p class="seen">T00,S08,$8C change 69BA to A0B9</p>
+    <p class="seen">But wait, there's more! I also spotted this difference, in the beginning of the routine to write the address field:</p>
+    <div class="line_editing">
+      <code>*BC69L</code>
+    </div>
+    <div class="listing">
+      <code>BC69-   4C B8 B6    JMP   $B6B8   <-- !
+BC6C-   EA          NOP
+BC6D-   EA          NOP
+BC6E-   EA          NOP
+BC6F-   9D 8D C0    STA   $C08D,X
+BC72-   DD 8C C0    CMP   $C08C,X
+BC75-   EA          NOP
+BC76-   88          DEY
+BC77-   D0 F0       BNE   $BC69
+BC79-   A9 D5       LDA   #$D5
+BC7B-   20 D5 BC    JSR   $BCD5
+BC7E-   A9 AA       LDA   #$AA
+BC80-   20 D5 BC    JSR   $BCD5
+BC83-   A9 96       LDA   #$96
+BC85-   20 D5 BC    JSR   $BCD5</code>
+    </div>
+    <p class="seen">On a normal DOS 3.3 disk, the code at $BC69 and $BC6C looks like this:</p>
+    <div class="listing">
+      <code>BC69-   20 C3 BC    JSR   $BCC3
+BC6C-   20 C3 BC    JSR   $BCC3</code>
+    </div>
+    <p class="seen">$BCC3 is just an "RTS" instruction. The entire thing is a precise wait loop to write out self-sync bytes ($FF) before the address field. JSR always takes 6 cycles, and RTS also always takes 6 cycles. So the two instructions wait a total of 24 cycles before the "STA $C08D,X" instruction writes the sync byte to disk.</p>
+    <p class="seen">So what's at $B6B8?</p>
+    <div class="line_editing">
+      <code>*B6B8L
+                                cycles
+B6B8-   C0 05       CPY   #$05  ; 2
+B6BA-   A9 00       LDA   #$00  ; 2
+B6BC-   B0 06       BCS   $B6C4 ; 2(*)
+B6BE-   EA          NOP         ; 2
+B6BF-   A9 FF       LDA   #$FF  ; 2
+B6C1-   C5 00       CMP   $00   ; 3
+B6C3-   38          SEC         ; 2
+B6C4-   B0 00       BCS   $B6C6 ; 3
+B6C6-   4C 6F BC    JMP   $BC6F ; 3</code>
+    </div>
+    <p class="seen">(*) The Y register is 6 the first time through this loop, so the branch at $B6BC will be taken the first two times, then not taken afterwards. When the branch is taken, it requires 3 CPU cycles and continues at $B6C4, so the total time is 2+2+3+3+3=13 cycles. When that branch is not taken, it requires 2 CPU cycles, falls through to $B6BE, and the whole thing takes 2+2+2+2+2+3+2+3+3=21 cycles. Adding 3 for the initial JMP at $BC69, the whole thing (starting at $BC69, up to but not including the STA at $BC6F) burns either 16 or 24 cycles.</p>
+    <p class="seen">Low-level disk activity is highly dependent on cycle-accurate counting (since the physical floppy disk keeps spinning whether you write to it or not). In a normal DOS, this wait routine (two consecutive JSR and RTS instructions) always burns exactly 24 cycles. On these disks, it sometimes burns 16 cycles, sometimes 24. So this RWTS writes the first 2 sync bytes faster than usual, then 4 sync bytes at the usual speed.</p>
+    <p class="seen">Also, the first two times, it writes $00 instead of $FF. This is invalid in so many ways. First of all, all valid nibbles have the high bit set. Second, after two "0" bits in a row, an Apple II floppy drive will start returning "1" bits. So this may literally return a different random value every time it's read.</p>
+    <p class="seen">Maybe that's why EDD spit out so many read errors. It couldn't get a reliable (repeatable) read, and it probably thought my original disk was damaged beyond repair.</p>
+    <p class="seen">This patch should restore the original wait loop code at $BC69:</p>
+    <p class="seen">T00,S06,$69 change 4CB8B6EAEAEA</p>
+    <p class="seen">to 20C3BC20C3BC</p>
+    <p class="seen">All the other differences in this RWTS center around the address and data prologue and epilogue bytes. The RWTS apparently only uses a single epilogue byte ($97), so some of the branch instructions are subtly different. For example, checking the address epilogue:</p>
+    <div class="line_editing">
+      <code>*B98BL</code>
+    </div>
+    <div class="listing">
+      <code>B98B-   BD 8C C0    LDA   $C08C,X
+B98E-   10 FB       BPL   $B98B</code>
+      <p class="comment">usually $DE</p>
+      <code>B990-   C9 97       CMP   #$97
+B992-   D0 AE       BNE   $B942
+B994-   EA          NOP
+B995-   BD 8C C0    LDA   $C08C,X
+B998-   10 FB       BPL   $B995</code>
+      <p class="comment">usually $AA</p>
+      <code>B99A-   C9 00       CMP   #$00</code>
+      <p class="comment">usually BNE</p>
+      <code>B99C-   F0 A4       BEQ   $B942
+B99E-   18          CLC
+B99F-   60          RTS</code>
+    </div>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which We Remove All Traces Of Copy Protection Using An Automated Tool That I Wrote For Just Such An Occasion</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+]BRUN PDP</code>
+    </div>
+    <p class="seen">; fix non-standard branch instructions ; around the second epilogue</p>
+    <p class="seen">T00,S03,$40 change D0 to F0 T00,S03,$9C change F0 to D0</p>
+    <p class="seen">; the two patches I mentioned earlier</p>
+    <p class="seen">T00,S06,$69 change 4CB8B6EAEAEA</p>
+    <p class="seen">to 20C3BC20C3BC</p>
+    <p class="seen">T00,S08,$8C change 69BA to A0B9</p>
+    <p class="seen">; fix the RWTS so it can read and write ; a standard disk</p>
+    <p class="seen">T00,S03,$91 change 97 to DE T00,S03,$9B change 00 to AA T00,S03,$35 change D3 to DE T00,S03,$3F change 00 to AA T00,S06,$AE change 97 to DE T00,S06,$B3 change 00 to AA T00,S06,$B8 change 00 to EB T00,S02,$9E change D3 to DE T00,S02,$A3 change 00 to AA T00,S02,$A8 change 00 to EB T00,S02,$AD change 00 to FF</p>
+    <p class="seen">; replace some stray code that they ; stuck IN THE MIDDLE OF THE NIBBLE ; TABLE (technically these nibbles are ; unused, but Post-Demuffin Patcher now ; normalizes both the read and write ; translate tables, so OK)</p>
+    <p class="seen">T00,S04,$C0 change C9 to C0 T00,S04,$C1 change 22 to C1 T00,S04,$C2 change 69 to C2 T00,S04,$C3 change 00 to C3 T00,S04,$C4 change 8D to C4 T00,S04,$C5 change 78 to C5 T00,S04,$C6 change 04 to C6 T00,S04,$C7 change 68 to C7 T00,S04,$C8 change 4C to C8 T00,S04,$C9 change A0 to C9 T00,S04,$CA change B9 to CA</p>
+    <div class="line_editing">
+      <code>]PR#6
+...works...</code>
+    </div>
+    <p class="seen">So what about the unreadable T11,S0F?</p>
+    <p class="seen">It doesn't exist. That track only has 15 sectors on it. DOS still works because T11,S00 points to T11,S0D as the first directory sector. The sector's failure to exist is solely to trip up bit copiers. And meddling kids like me.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<section>
+  <h2>Acknowledgements</h2>
+
+    <p class="seen">Many thanks to LoGo for supplying the the original floppy disk.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/561-the-pond.html">The Pond</a></p>
+</body></html>

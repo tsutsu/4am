@@ -1,0 +1,226 @@
+<!doctype html>
+<html><head>
+<title>FixIt</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/511-introduction-to-counting.html">Introduction to Counting</a></p>
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">unable to read any track</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">copy works</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p class="seen">all tracks use standard prologues (address: D5 AA 96, data: D5 AA AD) but modified address epilogue (AA DE EB instead of DE AA EB)</p>
+    <p class="seen">Disk Fixer</p>
+    <p class="seen">["O" -> "Input/Output Control"] set Address Epilogue to "AA DE EB"</p>
+    <p class="seen">Success! All tracks readable! T00 -> looks like a DOS 3.3 RWTS T11 -> DOS 3.3 disk catalog T01,S09 -> startup program is "STEX"</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p class="seen">modified epilogue bytes (every track)</p>
+    <p class="seen">EDD worked. What does that tell us?</p>
+    <p class="seen">probably just structural protection (modified epilogue), no nibble check</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. capture RWTS with AUTOTRACE</p>
+    <p class="seen">2. convert disk to standard format with Advanced Demuffin</p>
+    <p class="seen">3. patch RWTS to read standard format</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which We Attempt To Use The Original Disk As A Weapon Against Itself</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+      <code>]BRUN ADVANCED DEMUFFIN 1.5</code>
+    </div>
+    <div class="curses_input">
+      <code>["5" to switch to slot 5]</code>
+      <code>["R" to load a new RWTS module]
+  --> At $B8, load "RWTS" from drive 1</code>
+      <code>["6" to switch to slot 6]</code>
+      <code>["C" to convert disk]</code>
+    </div>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.5    (C) 1983, 2014
+ORIGINAL BY THE STACK    UPDATES BY 4AM
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:...................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:...................................
+SC1:...................................
+SC2:...................................
+SC3:...................................
+SC4:...................................
+SC5:...................................
+SC6:...................................
+SC7:...................................
+SC8:...................................
+SC9:...................................
+SCA:...................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:...................................
+=======================================
+16SC $00,$00-$22,$0F BY1.0 S6,D1->S6,D2</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+]CATALOG,S6,D2</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+108 FREE</code>
+      <code> A 008 HELLO.BAS
+ B 010 HRCG
+ B 003 FIXIT.MUSIC
+ A 002 BOOT
+ A 004 PRI.LOAD
+ A 004 SEC.LOAD
+ B 042 COMCODE
+ B 035 S1CODE
+ B 002 STAT
+ A 004 THE END
+ A 003 GIVE DEMO
+ B 012 DEMOCODE
+ B 007 DEMOVOL1
+ B 007 DEMOVOL2
+ B 003 KITVOL1
+ B 003 KITVOL2
+ A 002 AVAILABLE 1
+ B 009 AVAILABLE 2
+ B 009 AVAILABLE 3
+ B 009 AVAILABLE 4
+ B 002 KIP
+ B 003 KSET.0
+ B 003 KSET.1
+ B 003 KSET.2
+ B 003 KSET.3
+ B 003 KSET.4
+ B 003 KSET.5
+ B 003 KSET.6
+ B 003 KSET.7
+ B 003 KSET.8
+ B 003 KSET.9
+ B 003 KSET.10
+ B 003 KSET.11
+ B 003 KSET.12
+ B 003 KSET.13
+ B 003 KSET.14
+ B 003 KSET.15
+ B 003 KSET.16
+ B 003 KSET.17
+ B 003 KSET.18
+ B 003 KSET.19
+ B 003 KSET.20
+ B 003 KSET.21
+ B 003 KSET.22
+ B 003 KSET.23
+ B 003 KSET.24
+ B 003 KSET.25
+ B 003 KSET.26
+ B 003 KSET.27
+ B 003 KSET.28
+ B 003 KSET.29
+ B 003 KSET.30
+ B 003 KSET.31
+ B 003 KSET.32
+ B 003 KSET.33
+ B 003 KSET.34
+ B 003 KSET.35
+ B 003 KSET.36
+ B 003 KSET.37
+ B 003 KSET.38
+ B 003 KSET.39
+ B 003 KSET.40
+ B 003 KSET.41
+ B 003 KSET.42
+ B 003 KSET.43
+ B 003 KSET.44
+ B 003 KSET.45
+ B 003 KSET.46
+ B 003 KSET.47
+ B 003 KSET.48
+ B 003 KSET.49
+ B 011 STEX
+ B 007 BPLATE.CPRS
+ B 008 TITLE
+ B 004 GREXPA
+ B 006 RH
+ B 003 FIXMUS
+ B 008 CREDITS.CPRS
+ A 008 HELLO
+ B 003 KSET.50</code>
+    </div>
+    <div class="line_editing">
+      <code>]BRUN STEX
+...crashes...</code>
+    </div>
+    <div class="curses_input">
+      <code>[S5,D1=DOS 3.3 master disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+]BRUN STEX,S6,D2
+...program loads and runs...</code>
+    </div>
+    <p class="seen">So it doesn't like Diversi-DOS 64K (the DOS on my work disk). It's probably accessing DOS functions directly or assuming the RWTS parameter table is at specific address, instead of using the vectors on page 3. But it works when I boot an unmodified DOS 3.3 first, so it isn't checking for its original DOS at runtime.</p>
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+...grinds then crashes...</code>
+    </div>
+    <p class="seen">The demuffin'd disk can't read itself.</p>
+    <p class="seen">This is not unusual.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which We Remove All Traces Of Copy Protection Using An Automated Tool That I Wrote For Just Such An Occasion</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=demuffin'd copy]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+]BRUN PDP</code>
+    </div>
+    <p class="seen">; fix epilogue byte checking in RWTS</p>
+    <p class="seen">T00,S03,$91 change AA to DE T00,S03,$9B change DE to AA T00,S06,$AE change AA to DE T00,S06,$B3 change DE to AA</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<section>
+  <h2>Epilogue</h2>
+
+    <p>On first boot, the game asks for your name and displays it on a "this disk belongs to" screen on each subsequent boot. This information is stored in T02,S09, along with a count of how many times you've booted the disk. Zeroing out the entire sector causes the disk to ask for your name again on the next boot.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/513-punctuation-ii-commas-commas-commas.html">Punctuation II - Commas, Commas, Commas</a></p>
+</body></html>

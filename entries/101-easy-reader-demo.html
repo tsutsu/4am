@@ -1,0 +1,191 @@
+<!doctype html>
+<html><head>
+<title>Easy Reader demo</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/100-computer-literacy.html">Computer Literacy</a></p>
+<section>
+
+    <p>"Easy Reader demo" is a 1983 sampler disk that demonstrates some of the educational games in the "Easy Reader" series. It is distributed by American</p>
+    <p>Educational Computer, Inc. It comes on two double-sided disks and uses all four sides. The four sides are labeled</p>
+    <p>Disk 1: Learn About Sounds</p>
+    <p>Disk 2: Learn About Words 1</p>
+    <p>Disk 3: Reading Comprehension Skills 1</p>
+    <p>Disk 4: Reading Comprehension Skills 3</p>
+    <p>All four sides are bootable, and independent of each other.</p>
+    <p>Starting with disk 1, COPYA fails miserably and immediately. EDD 4 bit copy works, and the copy boots and runs without complaint. This tells me that there is some structural protection (i.e. data is stored on the disk in a non-standard way) but probably no secondary protection (e.g. an assembly language routine that executes during the boot process to determine whether it's booting from the original disk).</p>
+    <p class="seen">The original disk appears to boot a modified DOS 3.3. Listening to the disk drive, it quickly moves out to track 2, then back to track 1, then track 0, then swings out to track $11 to read the disk catalog and load the startup program (HELLO or similar). You can hear a lot just by listening.</p>
+    <p class="seen">Let's see if my AUTOTRACE program can capture the RWTS of the original disk.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk ("disk 1")]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0
+CAPTURING BOOT1
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT1
+SAVING RWTS</code>
+    </div>
+    <p class="seen">Well, that worked flawlessly. My work disk first runs AUTOTRACE0, which sets up a minimal boot trace to capture the first sector of track 0 and saves it to the file "BOOT0" (on my work disk, not the original disk). If the first sector looks reasonably normal, it runs AUTOTRACE1, which sets up a more involved boot trace to capture the rest of track 0 and save it to the file "BOOT1". If *that* looks reasonably normal, it saves the RWTS to a file, unimaginatively named "RWTS", which can be loaded with Advanced Demuffin to copy each track of the original disk to a duplicate with standard address/data prologue/epilogue sequences.</p>
+    <p class="seen">For the longest time, I thought that</p>
+    <p>Advanced Demuffin would only load RWTS files from slot 6, drive 1. That's where the original disk was during boot tracing, and that's where it needs to be during demuffining (which is a real word that I totally just made up), and that means I ended up swapping floppy disks like some kind of pre-historic caveman.</p>
+    <p class="seen">Then I re-read the Advanced Demuffin tech notes (which I have included on almost every work disk I've ever produced, but apparently never read in their entirety). And I discovered that it's trivial to tell Advanced Demuffin to load RWTS files from slot 5. Note to self: read the fine manual.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk ("disk 1")]
+[S6,D2=blank disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#6
+]BRUN ADVANCED DEMUFFIN 1.1</code>
+    </div>
+    <div class="terminal_output">
+      <code>--> EXIT TO MONITOR</code>
+    </div>
+    <div class="line_editing">
+      <code>*F1F:50      ; use slot 5
+*800G        ; resume</code>
+    </div>
+    <p class="seen">--> LOAD NEW RWTS MODULE</p>
+    <p class="seen">At $B8, load "RWTS" from drive 1</p>
+    <div class="terminal_output">
+      <code>--> EXIT TO MONITOR</code>
+    </div>
+    <div class="line_editing">
+      <code>*F1F:60      ; use slot 6
+*800G        ; resume</code>
+    </div>
+    <div class="terminal_output">
+      <code>--> FORMAT TARGET DISK</code>
+    </div>
+    <p class="seen">...grind grind grind...</p>
+    <div class="terminal_output">
+      <code>--> CONVERT DISK</code>
+    </div>
+    <p class="seen">This disk is 16 sectors, and the default options (copy the entire disk, all tracks, all sectors) don't need to be changed.</p>
+    <div class="terminal_output">
+      <code>ADVANCED DEMUFFIN 1.1  - COPYRIGHT 1983
+WRITTEN BY THE STACK -CORRUPT COMPUTING
+=======PRESS ANY KEY TO CONTINUE=======
+TRK:...................................
++.5:
+    0123456789ABCDEF0123456789ABCDEF012
+SC0:...................................
+SC1:...................................
+SC2:...................................
+SC3:...................................
+SC4:...................................
+SC5:...................................
+SC6:...................................
+SC7:...................................
+SC8:...................................
+SC9:...................................
+SCA:...................................
+SCB:...................................
+SCC:...................................
+SCD:...................................
+SCE:...................................
+SCF:...................................
+=======================================
+16 SC $00,$00 TO $22,$0F BY $01 TO DRV2</code>
+    </div>
+    <p class="seen">The disk's own RWTS gave no read errors on any track. This is the power and the genius of Advanced Demuffin. Every disk must be able to read itself. So, let it read itself, then capture the data and write it out in a standard format.</p>
+    <div class="line_editing">
+      <code>]PR#5
+...
+]CATALOG,S6,D2</code>
+    </div>
+    <div class="terminal_output">
+      <code>C1983 DSR^C#254
+115 FREE</code>
+      <code> A 012 HELLOHI1
+ A 016 LESSONXX1
+ A 002 LESSONXX
+ B 005 I.BELL
+ A 012 SUBPROGRAM XX/1
+ A 012 SUBPROGRAM XX/2
+ A 012 SUBPROGRAM XX/3
+ A 012 SUBPROGRAM XX/4
+ A 012 SUBPROGRAM XX/5
+ B 005 I.BAT
+ B 005 I.FAN
+ B 005 I.LOCK
+ B 005 I.GRAPES
+ B 005 I.HAT
+ B 005 I.GLASS
+ B 005 I.MATCH
+ B 005 I.CAKE
+ B 005 I.MAN
+ B 004 I.BRICKS
+ B 004 I.BIKE
+ B 004 I.HILL
+ B 004 I.KITE
+ B 003 I.DESK
+ B 004 I.PEAS
+ B 004 I.NEST
+ B 004 I.NET
+ B 004 I.PIG
+ B 004 I.SHIP
+ B 005 I.TENT
+ B 004 I.SLED
+ B 004 I.WIG
+ B 004 I.TOP
+ B 004 I.FISH
+ B 004 I.CLOCK
+ B 004 I.BUG
+ B 004 I.BRUSH
+ B 004 I.BUGLE
+ B 003 I.CUP
+ B 004 I.DUCKS
+ B 003 I.FUSE
+ B 003 I.POT
+ B 003 I.ROPE
+ B 004 I.MOP
+ B 003 I.QUILT
+ B 004 I.NUTS
+ B 004 I.SOCKS
+ B 004 I.SMOKE
+ B 003 I.TRUCK
+ A 002 HELLO
+ A 009 HELLOHI
+ A 012 SRF DELETER
+ B 015 BACP800
+ B 030 BSYM-SYMTABS
+ B 006 I.SLOGO
+ B 004 I.FLAG
+ B 004 I.FLOWER
+ B 004 I.DUCK
+ B 003 I.CAKE-1
+ B 002 I.TRUCK-1
+ B 002 SRF-MICHELLE
+ B 034 TITLE</code>
+    </div>
+    <div class="line_editing">
+      <code>]RUN HELLO</code>
+    </div>
+    <p>Success! The program loads and runs without complaint. All further disk access is done through standard DOS functions. (It even runs from drive 2!)</p>
+    <p>While that's excellent progress, I'm not quite done yet. Booting the demuffin'd disk directly just grinds endlessly, because it still has the original RWTS on it. That is, it still assumes that the data on the disk is stored in a non-standard format. But that's not true anymore, because</p>
+    <p class="seen">Advanced Demuffin just normalized the disk format. So I need to patch the RWTS on my copy so it can read itself.</p>
+    <p class="seen">For future reference (mostly mine), here's a nice chart of the memory locations for all the prologues and epilogues in a DOS 3.3-shaped RWTS. If the RWTS stores $B700 in T00,S01 (most do), then $B8xx will be in T00,S02; $B9xx in T00,S03; and so on.</p>
+    <p class="seen"></p>
+    <p class="seen">0x | read | write</p>
+    <p class="seen">---------------+-------+------- D5 | $B955 | $BC7A prologue AA | $B95F | $BC7F / 96 | $B96A | $BC84 ADDRESS -------+-------+------- \ DE | $B991 | $BCAE epilogue AA | $B99B | $BCB3 EB | | $BCB8 ---------------+-------+------- D5 | $B8E7 | $B853 prologue AA | $B8F1 | $B858 / AD | $B8FC | $B85D DATA ----------+-------+------- \ DE | $B935 | $B89E epilogue AA | $B93F | $B8A3 EB | | $B8A8 ---------------+-------+-------</p>
+    <p class="seen">(Memorize that chart; it will be on the final exam.)</p>
+    <p>Using my trusty Copy ][+ sector editor, it appears there are only two bytes that are different from the values you would expect to find on a standard DOS</p>
+    <p class="seen">3.3 disk:</p>
+    <p>T00,S02,$9E change "BF" to "DE" T00,S03,$35 change "BF" to "DE"</p>
+    <p class="seen">Success! The disk boots and runs with no complaint. There doesn't appear to be any further copy protection.</p>
+    <p>Disks 2-4 use exactly the same non- standard disk structure. I literally just repeated this entire process three more times, and now I have four self- booting disks.</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/102-the-music-class.html">The Music Class</a></p>
+</body></html>

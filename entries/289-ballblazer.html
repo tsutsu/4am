@@ -1,0 +1,383 @@
+<!doctype html>
+<html><head>
+<title>Ballblazer</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/288-u-s-atlas-action.html">U.S. Atlas Action</a></p>
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">immediate disk read error</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p>unable to read T00,S0B; copy hangs on track $00</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p>no read errors, but copy reboots endlessly</p>
+    <p class="seen">Copy ][+ nibble editor</p>
+    <p>no recognizable structure in the missing sector</p>
+    <p class="seen">Disk Fixer</p>
+    <p>no recognizable code beyond track $00 (but all tracks are readable)</p>
+    <p class="seen">Why didn't COPYA work?</p>
+    <p>intentionally bad sector (T00,S0B)</p>
+    <p class="seen">Why didn't Locksmith FDB work?</p>
+    <p>nibble check that relies on the intentionally bad sector (probably)</p>
+    <p class="seen">Why didn't my EDD copy work?</p>
+    <p class="seen">ditto</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Trace the boot</p>
+    <p>2. Bypass the nibble check</p>
+    <p class="seen">3. There is no step 3 (I hope)</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>In Which Automation Inevitably Fails And Leaves Us Confused</h3>
+
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0</code>
+      <code>]BLOAD BOOT0,A$800
+]CALL -151</code>
+      <code>*801L</code>
+    </div>
+    <div class="listing">
+      <code>0801-   A2 00       LDX   #$00
+0803-   BD 70 09    LDA   $0970,X</code>
+    </div>
+    <p>Wait, what? $0900 isn't loaded yet.</p>
+    <p>Unless...</p>
+    <div class="line_editing">
+      <code>*800</code>
+    </div>
+    <div class="listing">
+      <code>0800- 04</code>
+    </div>
+    <p>Oooooh. This disk relies on a little- used (but fully supported) feature of the disk controller ROM that can load more than one sector from track $00 before transferring control to $0801.</p>
+    <p>My AUTOTRACE program doesn't notice this (note to self: fix that someday).</p>
+    <p>I'll need to write a custom boot tracer that captures all four sectors. (They load sequentially into $900, $A00, and $B00.)</p>
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">by the time this is called, all four sectors have been loaded, so copy all of them into the graphics page so they survive a reboot</p>
+      <code>96F8-   A2 04       LDX   #$04
+96FA-   A0 00       LDY   #$00
+96FC-   B9 00 08    LDA   $0800,Y
+96FF-   99 00 28    STA   $2800,Y
+9702-   C8          INY
+9703-   D0 F7       BNE   $96FC
+9705-   EE FE 96    INC   $96FE
+9708-   EE 01 97    INC   $9701
+970B-   CA          DEX
+970C-   D0 EE       BNE   $96FC</code>
+      <p class="comment">don't actually want to run anything yet, just turn off the slot 6 drive motor and reboot to my work disk</p>
+      <code>970E-   AD E8 C0    LDA   $C0E8
+9711-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE,A$9600,L$114
+*9600G
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]BSAVE BOOT0,A$2800,L$400</code>
+    </div>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>In Which All The Real Work Happens</h3>
+
+    <div class="line_editing">
+      <code>]BLOAD BOOT0,A$800
+]CALL -151</code>
+      <code>*801L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">move some code to $0100 -- could be part of the boot, but given that it's only $29 bytes, I'm guessing it's</p>
+      <p class="comment">The Badlands</p>
+      <code>0801-   A2 00       LDX   #$00
+0803-   BD 70 09    LDA   $0970,X
+0806-   9D 00 01    STA   $0100,X
+0809-   E8          INX
+080A-   E0 29       CPX   #$29
+080C-   D0 F5       BNE   $0803</code>
+    </div>
+    <div class="line_editing">
+      <code>*970L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">definitely The Badlands</p>
+      <code>0970-   A0 00       LDY   #$00
+0972-   99 00 08    STA   $0800,Y
+0975-   99 00 0A    STA   $0A00,Y
+0978-   99 00 BE    STA   $BE00,Y
+097B-   99 00 BF    STA   $BF00,Y
+097E-   C8          INY
+097F-   D0 F1       BNE   $0972
+0981-   A9 0A       LDA   #$0A
+0983-   85 F7       STA   $F7
+0985-   91 F6       STA   ($F6),Y
+0987-   E6 F7       INC   $F7
+0989-   A5 F7       LDA   $F7
+098B-   C9 BE       CMP   #$BE
+098D-   D0 F6       BNE   $0985
+098F-   A9 0A       LDA   #$0A
+0991-   85 F7       STA   $F7
+0993-   C8          INY
+0994-   D0 EF       BNE   $0985
+0996-   6C F4 00    JMP   ($00F4)</code>
+    </div>
+    <p class="seen">Continuing...</p>
+    <div class="line_editing">
+      <code>*80EL</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set all kinds of vectors (reset, BRK, &c.) to reboot the slot we booted</p>
+      <code>080E-   A5 2B       LDA   $2B
+0810-   4A          LSR
+0811-   4A          LSR
+0812-   4A          LSR
+0813-   4A          LSR
+0814-   09 C0       ORA   #$C0
+0816-   85 F5       STA   $F5
+0818-   A9 00       LDA   #$00
+081A-   85 F4       STA   $F4
+081C-   AD 83 C0    LDA   $C083
+081F-   AD 83 C0    LDA   $C083
+0822-   A9 00       LDA   #$00
+0824-   8D F0 03    STA   $03F0
+0827-   8D F2 03    STA   $03F2
+082A-   8D FC 03    STA   $03FC
+082D-   8D FE 03    STA   $03FE
+0830-   8D FA FF    STA   $FFFA
+0833-   8D FC FF    STA   $FFFC
+0836-   8D FE FF    STA   $FFFE
+0839-   A9 01       LDA   #$01
+083B-   8D F1 03    STA   $03F1
+083E-   8D F3 03    STA   $03F3
+0841-   8D FD 03    STA   $03FD
+0844-   8D FF 03    STA   $03FF
+0847-   8D FB FF    STA   $FFFB
+084A-   8D FD FF    STA   $FFFD
+084D-   8D FF FF    STA   $FFFF
+0850-   49 A5       EOR   #$A5
+0852-   8D F4 03    STA   $03F4</code>
+      <p class="comment">move the last two sectors we loaded to the top of main memory</p>
+      <code>0855-   A0 00       LDY   #$00
+0857-   B9 00 0A    LDA   $0A00,Y
+085A-   99 00 BE    STA   $BE00,Y
+085D-   B9 00 0B    LDA   $0B00,Y
+0860-   99 00 BF    STA   $BF00,Y
+0863-   C8          INY
+0864-   D0 F1       BNE   $0857
+0866-   84 F0       STY   $F0</code>
+      <p class="comment">get slot (x16)</p>
+      <code>0868-   A6 2B       LDX   $2B</code>
+      <p class="comment">some sort of death counter?</p>
+      <code>086A-   A9 10       LDA   #$10
+086C-   85 FF       STA   $FF
+086E-   C6 FF       DEC   $FF
+0870-   D0 03       BNE   $0875</code>
+      <p class="comment">when it hits 0, jump to The Badlands</p>
+      <code>0872-   4C 00 01    JMP   $0100</code>
+      <p class="comment">subroutine looks for next available address field and stores the field data (disk volume, track, sector) in zero page, exactly like DOS 3.3</p>
+      <code>0875-   20 24 09    JSR   $0924</code>
+      <p class="comment">if that didn't work, branch back and try again</p>
+      <code>0878-   B0 F4       BCS   $086E</code>
+      <p class="comment">is it sector $08?</p>
+      <code>087A-   A5 2D       LDA   $2D
+087C-   C9 08       CMP   #$08</code>
+      <p class="comment">no, branch back and try again</p>
+      <code>087E-   D0 F5       BNE   $0875</code>
+      <p class="comment">find a specific nibble sequence (given at $096C)</p>
+      <code>0880-   A0 00       LDY   #$00
+0882-   BD 8C C0    LDA   $C08C,X
+0885-   10 FB       BPL   $0882
+0887-   D9 6C 09    CMP   $096C,Y
+088A-   F0 08       BEQ   $0894
+088C-   C0 00       CPY   #$00
+088E-   F0 F2       BEQ   $0882
+0890-   A0 00       LDY   #$00
+0892-   F0 F3       BEQ   $0887
+0894-   C8          INY
+0895-   C0 04       CPY   #$04
+0897-   D0 E9       BNE   $0882</code>
+      <p class="comment">skip one more nibble</p>
+      <code>0899-   BD 8C C0    LDA   $C08C,X
+089C-   10 FB       BPL   $0899</code>
+      <p class="comment">crazy stuff (BMI instead of BPL here)</p>
+      <code>089E-   BD 8C C0    LDA   $C08C,X
+08A1-   30 FB       BMI   $089E</code>
+      <p class="comment">one more nibble</p>
+      <code>08A3-   BD 8C C0    LDA   $C08C,X
+08A6-   10 FB       BPL   $08A3</code>
+      <p class="comment">kill some time to get out of sync with the "proper" start of nibbles</p>
+      <code>08A8-   9D 8D C0    STA   $C08D,X
+08AB-   EA          NOP</code>
+      <p class="comment">more crazy stuff</p>
+      <code>08AC-   BD 8C C0    LDA   $C08C,X
+08AF-   30 FB       BMI   $08AC
+08B1-   BD 8C C0    LDA   $C08C,X
+08B4-   10 FB       BPL   $08B1
+08B6-   BD 8C C0    LDA   $C08C,X
+08B9-   30 FB       BMI   $08B6
+08BB-   BD 8C C0    LDA   $C08C,X
+08BE-   10 FB       BPL   $08BB</code>
+      <p class="comment">calculate a running checksum of the desynced nibbles (in $70/$71)</p>
+      <code>08C0-   A0 0F       LDY   #$0F
+08C2-   A9 00       LDA   #$00
+08C4-   85 70       STA   $70
+08C6-   85 71       STA   $71
+08C8-   18          CLC
+08C9-   BD 8C C0    LDA   $C08C,X
+08CC-   10 FB       BPL   $08C9
+08CE-   99 00 10    STA   $1000,Y
+08D1-   45 70       EOR   $70
+08D3-   85 70       STA   $70
+08D5-   65 71       ADC   $71
+08D7-   85 71       STA   $71
+08D9-   88          DEY
+08DA-   10 ED       BPL   $08C9</code>
+      <p class="comment">use part of this checksum as an index into the raw nibbles we stored at $1000</p>
+      <code>08DC-   A5 70       LDA   $70
+08DE-   29 0F       AND   #$0F
+08E0-   A8          TAY</code>
+      <p class="comment">store some magic number in page 3</p>
+      <code>08E1-   B9 00 10    LDA   $1000,Y
+08E4-   8D F0 03    STA   $03F0
+08E7-   C8          INY
+08E8-   98          TYA
+08E9-   29 0F       AND   #$0F
+08EB-   A8          TAY</code>
+      <p class="comment">store another magic number in page 3</p>
+      <code>08EC-   B9 00 10    LDA   $1000,Y
+08EF-   8D F1 03    STA   $03F1</code>
+      <p class="comment">verify other part of the checksum</p>
+      <code>08F2-   A5 71       LDA   $71
+08F4-   C9 02       CMP   #$02
+08F6-   F0 03       BEQ   $08FB</code>
+      <p class="comment">if checksum verification fails, start over</p>
+      <code>08F8-   4C 6E 08    JMP   $086E</code>
+      <p class="comment">execution continues here (from $08F6) clear all temporary storage</p>
+      <code>08FB-   A9 00       LDA   #$00
+08FD-   85 70       STA   $70
+08FF-   85 71       STA   $71
+0901-   A0 20       LDY   #$20
+0903-   99 00 10    STA   $1000,Y
+0906-   88          DEY
+0907-   10 FA       BPL   $0903</code>
+      <p class="comment">this appears to be real code (legit part of the RWTS, read from track $00 and moved to the top of main memory)</p>
+      <code>0909-   20 00 BF    JSR   $BF00
+090C-   A5 F0       LDA   $F0
+090E-   4A          LSR
+090F-   85 41       STA   $41
+0911-   A0 00       LDY   #$00
+0913-   84 F3       STY   $F3
+0915-   84 26       STY   $26
+0917-   A9 60       LDA   #$60
+0919-   85 27       STA   $27
+091B-   A9 00       LDA   #$00
+091D-   85 3D       STA   $3D
+091F-   A6 2B       LDX   $2B
+0921-   4C 00 BE    JMP   $BE00</code>
+    </div>
+    <p>If the nibble check passes, there are two side effects, magic numbers stored in $03F0 and $03F1. I'm guessing those are important. A quick scan through the RWTS confirms this.</p>
+    <div class="line_editing">
+      <code>*FE89G FE93G     ; disconnect DOS
+*BE00<A00.BFFM   ; move RWTS into place
+.
+. [manual scan looking for $03F0/$03F1]
+.
+*BE79L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">heart of nibble-to-byte conversion</p>
+      <code>BE79-   A0 00       LDY   #$00
+BE7B-   A2 56       LDX   #$56
+BE7D-   CA          DEX
+BE7E-   30 FB       BMI   $BE7B
+BE80-   B1 26       LDA   ($26),Y
+BE82-   5E 00 03    LSR   $0300,X
+BE85-   2A          ROL
+BE86-   5E 00 03    LSR   $0300,X
+BE89-   2A          ROL
+BE8A-   38          SEC
+BE8B-   ED F1 03    SBC   $03F1   <-- !
+BE8E-   4D F0 03    EOR   $03F0   <-- !
+BE91-   91 26       STA   ($26),Y
+BE93-   C8          INY
+BE94-   D0 E7       BNE   $BE7D</code>
+    </div>
+    <p>Wow, those magic numbers are embedded in the RWTS itself. Every byte of every sector is encrypted with a code that depends on those two magic numbers we calculated during the nibble check. (This explains why I didn't see any code on the rest of the disk -- it's all encrypted!)</p>
+    <p>Let's capture those values.</p>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>In Which We Capture The Flag And Hit The Home Stretch And Mix Metaphors But That's OK</h3>
+
+    <div class="line_editing">
+      <code>*C500G
+...
+]CALL -151
+*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">set up callback after nibble check succeeds</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D FB 08    STA   $08FB
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D FC 08    STA   $08FC
+9702-   A9 97       LDA   #$97
+9704-   8D FD 08    STA   $08FD</code>
+      <p class="comment">start the boot</p>
+      <code>9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">callback is here -- copy page 3 to graphics page so it survives a reboot</p>
+      <code>970A-   A0 00       LDY   #$00
+970C-   B9 00 03    LDA   $0300,Y
+970F-   99 00 23    STA   $2300,Y
+9712-   C8          INY
+9713-   D0 F7       BNE   $970C</code>
+      <p class="comment">switch back to ROM (this was switched while setting reset vectors and never switched back)</p>
+      <code>9715-   AD 82 C0    LDA   $C082</code>
+      <p class="comment">turn off slot 6 drive motor and reboot to my work disk</p>
+      <code>9718-   AD E8 C0    LDA   $C0E8
+971B-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE2,A$9600,L$11E
+*9600G
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]BSAVE BOOT1 0300-03FF,A$2300,L$100
+]CALL -151</code>
+      <code>*23F0.23F1</code>
+    </div>
+    <div class="listing">
+      <code>23F0- D7 F9</code>
+    </div>
+    <p>To bypass this, I can set those values unconditionally and jump over the nibble check. The hostile code starts at $086A, and the legitimate code at $0909. Thus:</p>
+    <div class="listing">
+      <code>086A-   A9 D7       LDA   #$D7
+086C-   8D F0 03    STA   $03F0
+086F-   A9 F9       LDA   #$F9
+0871-   8D F1 03    STA   $03F1
+0874-   4C 09 09    JMP   $0909</code>
+    </div>
+    <p>T00,S00,$6A change "A9 10 85 FF C6 FF D0 03 4C 00 01 4C"</p>
+    <p>to</p>
+    <p>"A9 D7 8D F0 A9 F9 8D F1 03 4C 09 09"</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/290-learn-about-words-in-reading-2.html">Learn About Words In Reading 2</a></p>
+</body></html>

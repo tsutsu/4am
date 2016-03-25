@@ -1,0 +1,236 @@
+<!doctype html>
+<html><head>
+<title>Video Vegas</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/067-take-1.html">Take 1</a></p>
+<section>
+
+    <p>"Video Vegas" is a 1984 casino simulation game by Baudville, Inc.</p>
+    <div class="curses_input">
+      <code>[The copy protection is identical to
+"Take 1," also by Baudville. This
+write-up is therefore quite similar to
+that one, with updated listings and a
+few corrections.]</code>
+    </div>
+    <p>COPYA gives no read errors, but the copy does not work. (EDD 4 bit copy fares no better.) It displays "12501" (a version number, I think), then grinds the disk in a most unusual fashion (hopping back and forth between two tracks? trying to read a quarter track? I've never heard anything like it) until I frantically power off in an attempt to save my 30 year old floppy drive from frog-stepping off my desk.</p>
+    <p class="seen">Time for boot tracing, I suppose.</p>
+    <div class="curses_input">
+      <code>[S6,D1=original disk]
+[S5,D1=my work disk]</code>
+    </div>
+    <div class="line_editing">
+      <code>]PR#5
+...
+CAPTURING BOOT0
+...reboots slot 6...
+...reboots slot 5...
+SAVING BOOT0</code>
+      <code>]BLOAD BOOT0,A$800
+]CALL -151</code>
+      <code>*801L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">starts off looking like DOS 3.3 boot0</p>
+      <code>0801-   A5 27       LDA   $27
+0803-   C9 09       CMP   #$09
+0805-   D0 34       BNE   $083B
+0807-   A5 2B       LDA   $2B
+0809-   4A          LSR
+080A-   4A          LSR
+080B-   4A          LSR
+080C-   4A          LSR
+080D-   09 C0       ORA   #$C0
+080F-   85 3F       STA   $3F
+0811-   A9 5C       LDA   #$5C
+0813-   85 3E       STA   $3E
+0815-   18          CLC</code>
+      <p class="comment">slightly unusual -- it appears to keep the target address and sector count in $0866/7 instead of $08FE/F</p>
+      <code>0816-   AD 66 08    LDA   $0866
+0819-   6D 67 08    ADC   $0867
+081C-   8D 66 08    STA   $0866</code>
+      <p class="comment">enable read/write on RAM bank 2 (at $D000..$FFFF)</p>
+      <code>081F-   AD 83 C0    LDA   $C083
+0822-   AD 83 C0    LDA   $C083</code>
+      <p class="comment">set low-level reset vector</p>
+      <code>0825-   A9 EF       LDA   #$EF
+0827-   8D FC FF    STA   $FFFC
+082A-   8D FE FF    STA   $FFFE
+082D-   8D FA FF    STA   $FFFA
+0830-   A9 08       LDA   #$08
+0832-   8D FD FF    STA   $FFFD
+0835-   8D FF FF    STA   $FFFF
+0838-   8D FB FF    STA   $FFFB</code>
+      <p class="comment">looks like a sector read loop</p>
+      <code>083B-   AE 67 08    LDX   $0867</code>
+      <p class="comment">jump out of the read loop here</p>
+      <code>083E-   30 28       BMI   $0868
+0840-   BD 55 08    LDA   $0855,X
+0843-   85 3D       STA   $3D
+0845-   CE 67 08    DEC   $0867
+0848-   AD 66 08    LDA   $0866
+084B-   85 27       STA   $27
+084D-   CE 66 08    DEC   $0866
+0850-   A6 2B       LDX   $2B</code>
+      <p class="comment">jump to disk controller ROM routine to read sectors</p>
+      <code>0852-   6C 3E 00    JMP   ($003E)
+.
+.
+.
+; looks like the loop above will read
+; 7 sectors into $DA00..$E0FF
+0866-   DA
+0867-   07</code>
+      <p class="comment">out of the sector read loop -- switch back to ROM, initialize keyboard/video/text mode/screen</p>
+      <code>0868-   AD 82 C0    LDA   $C082
+086B-   20 93 FE    JSR   $FE93
+086E-   20 89 FE    JSR   $FE89
+0871-   20 2F FB    JSR   $FB2F
+0874-   20 58 FC    JSR   $FC58</code>
+      <p class="comment">display the version number</p>
+      <code>0877-   A0 00       LDY   #$00
+0879-   20 A5 08    JSR   $08A5</code>
+      <p class="comment">check for Applesoft in ROM, display error message if not found</p>
+      <code>087C-   AD 00 E0    LDA   $E000
+087F-   C9 4C       CMP   #$4C
+0881-   D0 13       BNE   $0896</code>
+      <p class="comment">switch back to RAM bank 2</p>
+      <code>0883-   AD 83 C0    LDA   $C083
+0886-   AD 83 C0    LDA   $C083</code>
+      <p class="comment">push ($E000) to the stack, then "return" to that address (+1)</p>
+      <code>0889-   AD 00 E0    LDA   $E000
+088C-   C9 E0       CMP   #$E0
+088E-   D0 06       BNE   $0896
+0890-   48          PHA
+0891-   AD 01 E0    LDA   $E001
+0894-   48          PHA
+0895-   60          RTS
+0896-   AD 82 C0    LDA   $C082</code>
+    </div>
+    <p class="seen">Since this boot0 code bears little resemblance to DOS 3.3, I'll need a custom trace routine to capture the code it loads into $DA00..$E0FF.</p>
+    <div class="line_editing">
+      <code>*9600<C600.C6FFM</code>
+    </div>
+    <div class="listing">
+      <p class="comment">Interrupt boot at $086B, immediately after the sector read loop. Set up a callback to a routine under my control so I can capture the code in RAM bank 2.</p>
+      <code>96F8-   A9 4C       LDA   #$4C
+96FA-   8D 68 08    STA   $0868
+96FD-   A9 0A       LDA   #$0A
+96FF-   8D 69 08    STA   $0869
+9702-   A9 97       LDA   #$97
+9704-   8D 6A 08    STA   $086A</code>
+      <p class="comment">start the boot</p>
+      <code>9707-   4C 01 08    JMP   $0801</code>
+      <p class="comment">callback is here -- copy $DA00..$E0FF to main memory so it will survive a reboot (RAM bank 2 is read/write at this point)</p>
+      <code>970A-   A2 07       LDX   #$07
+970C-   A0 00       LDY   #$00
+970E-   B9 00 DA    LDA   $DA00,Y
+9711-   99 00 2A    STA   $2A00,Y
+9714-   C8          INY
+9715-   D0 F7       BNE   $970E
+9717-   EE 10 97    INC   $9710
+971A-   EE 13 97    INC   $9713
+971D-   CA          DEX
+971E-   D0 EE       BNE   $970E</code>
+      <p class="comment">switch back from RAM bank 2 to ROM</p>
+      <code>9720-   AD 82 C0    LDA   $C082</code>
+      <p class="comment">turn off slot 6 drive motor</p>
+      <code>9723-   AD E8 C0    LDA   $C0E8</code>
+      <p class="comment">reboot to my work disk</p>
+      <code>9726-   4C 00 C5    JMP   $C500</code>
+    </div>
+    <div class="line_editing">
+      <code>*BSAVE TRACE1,A$9600,L$129</code>
+      <code>*9600G
+...reboots slot 6...
+...reboots slot 5...</code>
+      <code>]BSAVE BOOT1 DA00-E0FF,A$2A00,L$700
+]CALL -151</code>
+    </div>
+    <p class="seen">(The code at $DA00..$E0FF is loaded in $2A00..$30FF, so everything is off by $B000. Relative branches will look correct, but absolute addresses will be off by $B000.)</p>
+    <p class="seen">First, let's see what would be at $E000 and $E001, which the boot0 code pushes to the stack.</p>
+    <div class="line_editing">
+      <code>*3000.3001</code>
+    </div>
+    <div class="listing">
+      <code>3000- E0 02</code>
+    </div>
+    <p class="seen">OK, so execution continues at $E003 (the address pushed to the stack, +1).</p>
+    <div class="line_editing">
+      <code>*3003L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">seek to track 0</p>
+      <code>3003-   A6 2B       LDX   $2B
+3005-   A9 00       LDA   #$00
+3007-   20 A0 DC    JSR   $DCA0</code>
+      <p class="comment">read the next available address field</p>
+      <code>300A-   20 44 DC    JSR   $DC44</code>
+      <p class="comment">Zero page $2D is part of the scratch space used by the RWTS to verify the address field checksum. (The routine is at $B962..$B98A, in a regular DOS</p>
+      <p class="comment">3.3 RWTS. Zero page $2F holds the disk volume number; $2E holds the track number; $2D holds the sector number; $2C holds the checksum.)</p>
+      <code>300D-   A5 2D       LDA   $2D
+300F-   C9 00       CMP   #$00</code>
+      <p class="comment">keep reading address fields until we find sector 0</p>
+      <code>3011-   D0 F7       BNE   $300A</code>
+      <p class="comment">this subroutine is just a wait loop</p>
+      <code>3013-   20 BF E0    JSR   $E0BF</code>
+      <p class="comment">now seek to track 1</p>
+      <code>3016-   A0 01       LDY   #$01
+3018-   8C CD E0    STY   $E0CD
+301B-   98          TYA
+301C-   0A          ASL
+301D-   20 A0 DC    JSR   $DCA0</code>
+      <p class="comment">and read the address field of the next available sector (without any regard for which sector it is)</p>
+      <code>3020-   20 44 DC    JSR   $DC44</code>
+      <p class="comment">and wait again</p>
+      <code>3023-   20 BF E0    JSR   $E0BF</code>
+      <p class="comment">now compare the sector number we actually found to a predetermined list of expected sector numbers)</p>
+      <code>3026-   A5 2D       LDA   $2D
+3028-   AC CD E0    LDY   $E0CD
+302B-   D9 CE E0    CMP   $E0CE,Y</code>
+      <p class="comment">if we didn't find the "right" sector, jump back to the beginning and start again (which explains why my copy makes that unique grinding sound forever)</p>
+      <code>302E-   D0 D5       BNE   $3005
+3030-   C8          INY
+3031-   C0 08       CPY   #$08
+3033-   90 E3       BCC   $3018</code>
+      <p class="comment">seek back to track 0</p>
+      <code>3035-   A9 00       LDA   #$00
+3037-   20 A0 DC    JSR   $DCA0</code>
+      <p class="comment">the rest of this looks like normal initialization of the RWTS parameter table (albeit shifted)</p>
+      <code>303A-   A5 2B       LDA   $2B
+303C-   8D D0 DF    STA   $DFD0
+303F-   8D DE DF    STA   $DFDE
+3042-   8D F2 DF    STA   $DFF2
+3045-   4A          LSR
+3046-   4A          LSR
+3047-   4A          LSR
+3048-   4A          LSR
+3049-   AA          TAX
+304A-   A9 00       LDA   #$00
+304C-   8D 79 DD    STA   $DD79
+304F-   0A          ASL
+3050-   9D 79 DD    STA   $DD79,X
+3053-   A9 01       LDA   #$01
+3055-   8D DF DF    STA   $DFDF
+3058-   8D D1 DF    STA   $DFD1
+.
+.
+.     ; array of expected sectors
+30CF-   05 0A 0F 04 09 0E 03 08
+30D7-   0D 02 07 0C 01 06 0B 00</code>
+    </div>
+    <p class="seen">That is a fascinating form of copy protection. It relies on tracks 0 and 1 being synchronized on the physical disk in such a way that blindly jumping between the tracks finds sectors in a specific order as the disk is rotating in the drive. It's theoretically possible to defeat this copy protection with a bit copy that maintains that synchronization (the so-called "sync tracks" option in most copiers), but even then it probably wouldn't work in an emulator. For example, the AppleWin emulator offers an "enhanced speed" option which ignores sector skew to get standard DOS 3.3 disks to load faster.</p>
+    <p class="seen">So even if I did manage to create a perfectly synchronized copy of this disk, emulators would just ignore it.</p>
+    <p class="seen">Emulating copy protection is A Hard</p>
+    <p class="seen">Problem(tm).</p>
+    <p class="seen">Anyway, this copy protection routine doesn't seem to have any side effects.</p>
+    <p class="seen">If it succeeds, execution continues at $E03A. If it fails, it keeps trying until it succeeds (or until it destroys your disk drive).</p>
+    <p class="seen">Thus, I can change the jump address at $E000 to point to the first instruction after the copy protection (minus 1, due to how pushing addresses to the stack works).</p>
+    <p class="seen">T00,S06,$01 change "02" to "39"</p>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<p>Next: <a rel="next" href="output/069-dunzhin.html">Dunzhin</a></p>
+</body></html>

@@ -1,0 +1,311 @@
+<!doctype html>
+<html><head>
+<title>Microzine 24</title>
+<link rel="Stylesheet" type="text/css" href="../site.css">
+</head><body>
+
+<p>Previous: <a rel="previous" href="output/417-microzine-21.html">Microzine 21</a></p>
+<section>
+  <h2>Chapter 0</h2>
+  <h3>In Which Various Automated Tools Fail In Interesting Ways</h3>
+
+    <p class="seen">COPYA</p>
+    <p class="seen">no errors, but copy loads DOS, swings to a high-numbered track, and reboots</p>
+    <p class="seen">Locksmith Fast Disk Backup</p>
+    <p class="seen">ditto</p>
+    <p class="seen">EDD 4 bit copy (no sync, no count)</p>
+    <p class="seen">ditto</p>
+    <p class="seen">In my experience, computers do not spontaneously reboot unless someone tells them to.</p>
+    <p class="seen">Disk Fixer</p>
+    <p>T00 -> looks like DOS 3.3 RWTS T00-T02 -> looks like full DOS 3.3 T01,S09 -> startup program is "HELLO"</p>
+    <p class="seen">Why didn't any of my copies work?</p>
+    <p class="seen">probably a nibble check in the startup program</p>
+    <p class="seen">Next steps:</p>
+    <p class="seen">1. Load and trace the startup program</p>
+    <p class="seen">2. Find and disable the nibble check</p>
+    <p class="seen">3. There is no step 3 (I hope)</p>
+</section>
+
+<section>
+  <h2>Chapter 1</h2>
+  <h3>Hide Your BASIC Program Listing With This One Weird Trick! Crackers Hate It!</h3>
+
+    <p>Booting my non-working copy, I can press <Ctrl-C> to break to the BASIC prompt with the HELLO program in memory.</p>
+    <div class="line_editing">
+      <code>]LIST</code>
+    </div>
+    <div class="terminal_output">
+      <code>0 REM</code>
+    </div>
+    <p class="seen"></p>
+    <p class="seen">Hmm.</p>
+    <div class="line_editing">
+      <code>]LIST</code>
+    </div>
+    <p>(nothing)</p>
+    <p>Lovely. Annoying BASIC tricks from the 1980s are still annoying.</p>
+    <div class="line_editing">
+      <code>]LOAD HELLO
+]LIST1,</code>
+    </div>
+    <div class="terminal_output">
+      <code> 2  ONERR  GOTO 500
+ 3  PRINT  CHR$ (4);"BRUN CP.OPTI
+     ONS"
+ 7  HOME :D$ =  CHR$ (4): PRINT D
+     $;"MAXFILES 1"
+ 10  REM  IF PEEK (28676) = 39 TH
+     EN POKE 767,1
+ 12  IF  PEEK (766) = 4 THEN  GOTO
+     600
+ 13  REM  767 = FLAG THAT TITLE H
+     AS BEEN SHOWN
+ 14  IF  PEEK (767) = 1 THEN  GOTO
+     30
+ 15  POKE  - 16302,0
+ 16  PRINT D$;"BLOAD PACK.MICRO7,
+     A$7000"
+ 17  PRINT D$;"BLOAD UNPACKDATA.1
+     ,A$1000"
+ 18  POKE (4098),39: POKE (4099),
+     192: POKE (252),0: POKE (253
+     ),16: CALL 4168
+ 23  POKE  - 16304,0: POKE  - 162
+BREAK</code>
+    </div>
+    <p>There we go. Let's start with line 3, which runs an external program.</p>
+</section>
+
+<section>
+  <h2>Chapter 2</h2>
+  <h3>Detect Extra Timing Bits With This One Weird Trick! Crackers Hate It!</h3>
+
+    <div class="line_editing">
+      <code>]BLOAD CP.OPTIONS
+]CALL -151</code>
+      <code>*AA72.AA73     ; location of last BLOAD</code>
+    </div>
+    <div class="listing">
+      <code>AA72- 00 90</code>
+    </div>
+    <div class="line_editing">
+      <code>*9000L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">get RWTS parameter table address and store it</p>
+      <code>9000-   20 E3 03    JSR   $03E3
+9003-   85 FB       STA   $FB
+9005-   84 FA       STY   $FA</code>
+      <p class="comment">pushing bytes to the stack out of nowhere is a little suspicious</p>
+      <code>9007-   A9 C5       LDA   #$C5
+9009-   48          PHA</code>
+      <p class="comment">copy some local values into the RWTS parameter table</p>
+      <code>900A-   A9 00       LDA   #$00
+900C-   85 FC       STA   $FC
+900E-   A2 03       LDX   #$03
+9010-   BC 35 90    LDY   $9035,X
+9013-   91 FA       STA   ($FA),Y
+9015-   CA          DEX
+9016-   10 F8       BPL   $9010</code>
+      <p class="comment">more stack fiddling</p>
+      <code>9018-   8A          TXA
+9019-   48          PHA</code>
+    </div>
+    <p>The X register will be $FF after the loop, so this means we've pushed $C5FF to the stack. At this point, a bare RTS will "return" to $C5FF+1, i.e. reboot.</p>
+    <div class="listing">
+      <code>901A-   20 28 90    JSR   $9028</code>
+    </div>
+    <div class="line_editing">
+      <code>*9028L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">call the RWTS (most likely just to move the drive head to the proper position for an impending nibble check)</p>
+      <code>9028-   20 E3 03    JSR   $03E3
+902B-   20 D9 03    JSR   $03D9
+902E-   A9 00       LDA   #$00
+9030-   85 48       STA   $48</code>
+      <p class="comment">if that fails, off to The Badlands</p>
+      <code>9032-   B0 52       BCS   $9086
+9034-   60          RTS</code>
+    </div>
+    <p class="seen">Caller was $901A, so resuming at $901D:</p>
+    <div class="line_editing">
+      <code>*901DL</code>
+    </div>
+    <div class="listing">
+      <code>901D-   A0 01       LDY   #$01
+901F-   B1 FA       LDA   ($FA),Y
+9021-   AA          TAX
+9022-   20 39 90    JSR   $9039</code>
+    </div>
+    <div class="line_editing">
+      <code>*9039L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">turning on the drive motor manually is always suspicious</p>
+      <code>9039-   BD 89 C0    LDA   $C089,X</code>
+      <p class="comment">set up a Death Counter</p>
+      <code>903C-   A9 56       LDA   #$56
+903E-   85 FD       STA   $FD
+9040-   A9 08       LDA   #$08
+9042-   C6 FC       DEC   $FC
+9044-   D0 04       BNE   $904A
+9046-   C6 FD       DEC   $FD</code>
+      <p class="comment">if zero page $FD hits 0, give up</p>
+      <code>9048-   F0 3C       BEQ   $9086</code>
+      <p class="comment">look for a specific nibble ($FB)</p>
+      <code>904A-   BC 8C C0    LDY   $C08C,X
+904D-   10 FB       BPL   $904A
+904F-   C0 FB       CPY   #$FB
+9051-   D0 ED       BNE   $9040
+9053-   F0 00       BEQ   $9055</code>
+      <p class="comment">kill a few cycles (not pointless, because the disk spins independently of the CPU, so all of these low-level disk reads are highly time-sensitive)</p>
+      <code>9055-   EA          NOP
+9056-   EA          NOP</code>
+      <p class="comment">read data latch (note: no BPL loop here, we're just reading it once)</p>
+      <code>9057-   BC 8C C0    LDY   $C08C,X</code>
+      <p class="comment">do a compare to set or clear the carry bit (among other things, but it's the carry bit we care about)</p>
+      <code>905A-   C0 08       CPY   #$08</code>
+      <p class="comment">rotate the carry into the low bit of the accumulator</p>
+      <code>905C-   2A          ROL</code>
+      <p class="comment">if we just rolled a "1" bit out of the high bit of the accumulator, take this branch</p>
+      <code>905D-   B0 0B       BCS   $906A</code>
+      <p class="comment">next nibble needs to be $FF</p>
+      <code>905F-   BC 8C C0    LDY   $C08C,X
+9062-   10 FB       BPL   $905F</code>
+      <p class="comment">...otherwise we start over</p>
+      <code>9064-   C0 FF       CPY   #$FF
+9066-   D0 D8       BNE   $9040</code>
+      <p class="comment">loop back to get next nibble</p>
+      <code>9068-   F0 EB       BEQ   $9055</code>
+      <p class="comment">execution continues here (from $905D) get another nibble</p>
+      <code>906A-   BC 8C C0    LDY   $C08C,X
+906D-   10 FB       BPL   $906A</code>
+      <p class="comment">stash it in zero page</p>
+      <code>906F-   84 FC       STY   $FC</code>
+      <p class="comment">if the accumulator is anything but %00001010, start over</p>
+      <code>9071-   C9 0A       CMP   #$0A
+9073-   D0 CB       BNE   $9040</code>
+    </div>
+    <p class="seen">I got lost several times trying to follow this routine. I think the easiest way to explain it is to show the difference between the original disk and my non-working copy.</p>
+    <p class="seen">Here is the original disk, as seen by the Copy II+ nibble editor. Nibbles with extra "0" bits (timing bits) after them are displayed in inverse on an original machine, marked here with a "+" after the nibble.</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK:     START: 1B1E  LENGTH: 17C1</code>
+      <code>1C70: 9F EB E5 FC D7 D7 D7 EE   VIEW
+1C78: FA E6 E6 FF FE F2 ED FD
+1C80: FF EF ED BA BB DD AF E6
+1C88: B7 A7 CB B7 DE AA EB FF
+1C90: FF FF FF FB+FF FF+FF FF+
+1C98: FD FF+FF+FF+FF+FF+FF+FF+
+1CA0: FF+FF+D5 AA 96 AA AB AA
+1CA8: AA AA AB AA AA DE AA EB+
+1CB0: FF+FF+FF+FF+FF+FF D5 AA
+---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">It's easy to understand why a simple sector copy failed. The sequence that this code is looking for starts at offset $1C93, which is between the end of one sector and the beginning of the next. (The data epilogue is at $1C8C; the next address prologue is at $1CA2.)</p>
+    <p class="seen">Sector copiers discard everything between those delimiters and rebuild the track with a default pattern of sync bytes. That pattern doesn't include an $FB nibble, so the nibble check fails.</p>
+    <p class="seen">But the EDD bit copy also failed. Here is the original disk's pattern at offset $1C93:</p>
+    <p class="seen">- $FB + timing bit - $FF - $FF + timing bit - $FF - $FF + timing bit</p>
+    <p class="seen">And here is what the same part of the track looks like on my failed EDD copy:</p>
+    <div class="terminal_output">
+      <code>   COPY ][ PLUS BIT COPY PROGRAM 8.4
+(C) 1982-9 CENTRAL POINT SOFTWARE, INC.
+---------------------------------------</code>
+      <code>TRACK:     START: 1B1E  LENGTH: 17C1</code>
+      <code>1C70: 9F EB E5 FC D7 D7 D7 EE   VIEW
+1C78: FA E6 E6 FF FE F2 ED FD
+1C80: FF EF ED BA BB DD AF E6
+1C88: B7 A7 CB B7 DE AA EB FF
+1C90: FF FF FF FB+FF FF FF+FF+
+1C98: FD FF+FF+FF+FF+FF+FF+FF+
+1CA0: FF+FF+D5 AA 96 AA AB AA
+1CA8: AA AA AB AA AA DE AA EB+
+1CB0: FF+FF+FF+FF+FF+FF D5 AA
+---------------------------------------</code>
+      <code>  A  TO ANALYZE DATA  ESC TO QUIT</code>
+      <code>  ?  FOR HELP SCREEN  /  CHANGE PARMS</code>
+      <code>  Q  FOR NEXT TRACK   SPACE TO RE-READ</code>
+    </div>
+    <p class="seen">A subtle difference! The sequence at offset $1C93 now looks like this:</p>
+    <p class="seen">- $FB + timing bit - $FF - $FF - $FF + timing bit - $FF + timing bit</p>
+    <p class="seen">This code is looking for $FF bytes with an alternating pattern of timing bit, no timing bit, timing bit, no timing bit. It doesn't find that on the bit copy, so it knows it's not running on an original disk.</p>
+    <p class="seen">Continuing the code listing...</p>
+    <div class="listing">
+      <p class="comment">get a nibble</p>
+      <code>9075-   BD 8C C0    LDA   $C08C,X
+9078-   10 FB       BPL   $9075</code>
+      <p class="comment">more bit twiddling</p>
+      <code>907A-   38          SEC
+907B-   2A          ROL</code>
+      <p class="comment">AND it with the previously stashed nibble</p>
+      <code>907C-   25 FC       AND   $FC
+907E-   49 FF       EOR   #$FF</code>
+      <p class="comment">branch to failure path</p>
+      <code>9080-   D0 04       BNE   $9086</code>
+      <p class="comment">success path is here -- just turn off the drive motor and return to the immediate caller</p>
+      <code>9082-   DD 88 C0    CMP   $C088,X
+9085-   60          RTS</code>
+      <p class="comment">failure path (a.k.a. "The Badlands", from which there is no return)</p>
+      <code>9086-   A8          TAY
+9087-   DD 88 C0    CMP   $C088,X</code>
+      <p class="comment">manually pop the return address of the immediate caller (which leaves the manually pushed $C5FF address on the top of the stack to "return" to)</p>
+      <code>908A-   68          PLA
+908B-   68          PLA</code>
+      <p class="comment">destroy all trace of this program in memory</p>
+      <code>908C-   99 00 90    STA   $9000,Y
+908F-   C8          INY
+9090-   C0 8B       CPY   #$8B
+9092-   D0 F8       BNE   $908C</code>
+      <p class="comment">"return" to $C5FF+1, i.e. reboot</p>
+      <code>9094-   60          RTS</code>
+    </div>
+    <p class="seen">That explains the behavior that I saw on my non-working copy (endlessly rebooting).</p>
+    <p>This was called from $9022, so let's continue from $9025.</p>
+    <div class="line_editing">
+      <code>*9025L</code>
+    </div>
+    <div class="listing">
+      <p class="comment">remove the dummy address that we manually pushed to the stack earlier (which would reboot if "returned" to)</p>
+      <code>9025-   68          PLA
+9026-   68          PLA
+9027-   60          RTS</code>
+    </div>
+</section>
+
+<section>
+  <h2>Chapter 3</h2>
+  <h3>Title Your Chapters With This One Weird Trope! Everyone Hates It!</h3>
+
+    <p>This "CP.OPTIONS" program literally does nothing I want. I could probably just delete the line in HELLO that BRUNs it, except I'm afraid to disturb a BASIC program by modifying it and re-saving it. (I've seen other disks where the HELLO program fakes its own size and hides some critical assembly language routine in the free space that follows. I'm not saying that that's happening here, but life is short and re-saving a BASIC program can be surprisingly invasive.)</p>
+    <p>Instead, I turn to my trusty Disk Fixer sector editor, press "D" to get a directory listing, select "CP.OPTIONS", and I find the first sector on T0A,S06.</p>
+    <p>The first four bytes are the address and length (as with any DOS 3.3 binary file), so the fifth byte is where I need to put an "RTS".</p>
+    <p>T0A,S06,$04 change "20" to "60"</p>
+    <div class="line_editing">
+      <code>]PR#6
+...works...</code>
+    </div>
+    <p class="seen">Quod erat liberandum.</p>
+</section>
+
+<section>
+  <h2>Changelog</h2>
+
+    <div class="terminal_output">
+      <code>2015-09-06</code>
+    </div>
+    <p class="seen">- Vastly improved explanation of the</p>
+    <p class="seen">actual protection routine. Thanks to qkumba for pointing out that my original explanation was inaccurate.</p>
+    <div class="terminal_output">
+      <code>2015-08-03</code>
+    </div>
+    <p class="seen">- initial release</p>
+</section>
+
+<p>Next: <a rel="next" href="output/419-alpine-tram-ride.html">Alpine Tram Ride</a></p>
+</body></html>
