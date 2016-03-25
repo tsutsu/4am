@@ -134,6 +134,8 @@ p {
   white-space: pre;
   font-family: monospace;
   font-size: 12pt;
+  max-width: 40rem;
+  overflow: scroll;
 }
 
 .seen {
