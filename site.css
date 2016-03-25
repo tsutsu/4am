@@ -131,11 +131,12 @@ p {
 
 
 .listing code, .terminal_output code, .curses code, .curses_input code, .line_editing code {
+  display: block;
   white-space: pre;
   font-family: monospace;
   font-size: 12pt;
   max-width: 40rem;
-  overflow: scroll;
+  overflow: hidden;
 }
 
 .seen {
